@@ -1,0 +1,20 @@
+{
+  "name": "qctl",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "qctl:host": "bun run --filter @qctl/host start",
+    "qctl:guest": "bun run --filter @qctl/guest start",
+    "compile": "bun run ci/compile.ts",
+    "compile:host": "bun run ci/compile.ts host",
+    "compile:guest": "bun run ci/compile.ts guest",
+    "compile:platform": "bun run ci/compile.ts platform-rocky",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "citty": "^0.2.2",
+    "typescript": "^5"
+  }
+}

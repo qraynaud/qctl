@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        with:
+          mise_toml: mise.toml
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Compile linux-x64 binaries
+        run: bun run compile
+
+      - name: Smoke --help
+        run: |
+          ./dist/qctl-host --help
+          ./dist/qctl --help
+          ./dist/qctl-platform-rocky --help
+          ./dist/qctl-platform-rocky list
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum qctl-host qctl qctl-platform-rocky | tee SHA256SUMS
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qctl-linux-x64
+          path: |
+            dist/qctl-host
+            dist/qctl
+            dist/qctl-platform-rocky
+            dist/SHA256SUMS

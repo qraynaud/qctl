@@ -1,0 +1,16 @@
+{
+  "name": "@qctl/host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "qctl": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "@qctl/shared": "workspace:*",
+    "citty": "^0.2.2"
+  }
+}
