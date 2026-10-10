@@ -1,0 +1,48 @@
+---
+description: .ts type-only files — import type / export type only, no runtime code
+globs: **/*.ts
+alwaysApply: false
+---
+
+# Type-only `.ts` files
+
+Type-only modules contain **no runtime code**. Only type syntax and ambient declarations.
+
+## Allowed
+
+- `import type { … } from '…'`
+- `export type { … }` and `export type Name = …`
+- `declare module '…' { … }` and `declare global { … }` (augmentations)
+- Type operators: `ReturnType<typeof fn>`, unions, `Pick`, etc. — when `fn` is imported with `import type`
+
+## Not allowed
+
+- `import { … }` (value import)
+- `export { … }` (value export)
+- `export const` / `let` / `function` / `class` / runtime `enum`
+- `Object.freeze`, side-effect `import 'pkg'`
+
+## Pattern
+
+```ts
+import type { findInstanceRoot } from '@qctl/shared'
+
+export type InstanceRoot = NonNullable<ReturnType<typeof findInstanceRoot>>
+
+export type SyncResult = {
+  synced: number
+  skipped: number
+}
+```
+
+## Module augmentation
+
+```ts
+declare module 'yargs' {
+  interface Argv {
+    // …
+  }
+}
+```
+
+In `.js` (checkJs), `@import` only brings **named types** into JSDoc — it cannot load `declare module` side effects. Keep augmentations in `.ts` files listed in `tsconfig` `include`.

@@ -1,0 +1,23 @@
+[Unit]
+Description=Rocky appliance first-boot (qctl init)
+After=network-online.target local-fs.target rocky-tier0-seal.service
+Wants=network-online.target rocky-tier0-seal.service
+# Skip once the ready-stamp stage has succeeded
+ConditionPathExists=!/var/lib/rocky/first-boot.done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Seed-baked: QCTL_ENV, optional ROCKY_HG_BRANCH (see 91-rocky-env.conf).
+EnvironmentFile=-/etc/environment.d/91-rocky-env.conf
+EnvironmentFile=-/etc/environment.d/90-qctl-platform.conf
+# Tier-0: LoadCredentialEncrypted via rocky-first-boot.service.d/tier0.conf
+# (files in /etc/credstore.encrypted/, sealed by rocky-tier0-seal.service)
+# qctl init stops at the first failing stage, so the stamp is never written mid-failure.
+# Mirror to serial — lab VMs often have no SSH until start-services (after admin keys).
+StandardOutput=journal+console
+StandardError=journal+console
+ExecStart=/usr/local/bin/qctl init
+
+[Install]
+WantedBy=multi-user.target

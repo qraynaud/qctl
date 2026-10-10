@@ -1,0 +1,101 @@
+name: release
+
+# Manual publish of GitHub release (linux-x64 binaries + checksums).
+# Skips entirely when tag v$version already exists.
+# Plugin npm stage publish is a separate workflow: release-plugin.yml
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Resolve version
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(bun ci/check-version.js)"
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${TAG} already exists — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Will publish ${TAG}"
+          fi
+
+      - name: Typecheck
+        if: steps.ver.outputs.exists != 'true'
+        run: bun run typecheck
+
+      - name: Test
+        if: steps.ver.outputs.exists != 'true'
+        run: bun test
+
+      - name: Compile linux-x64 binaries
+        if: steps.ver.outputs.exists != 'true'
+        run: bun run compile
+
+      - name: Package release assets
+        if: steps.ver.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp dist/qctl-host dist/qctl-guest dist/qctl-platform-rocky.mjs dist/varlock-local-encrypt release/
+          chmod +x release/qctl-host release/qctl-guest release/varlock-local-encrypt
+          # Seed kit is embedded in qctl-host (`seed-kit path` / `export` / `vm seed`).
+          (
+            cd release
+            sha256sum qctl-host qctl-guest qctl-platform-rocky.mjs varlock-local-encrypt | tee SHA256SUMS
+          )
+
+      - name: Create GitHub release
+        if: steps.ver.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes "qctl ${VERSION}
+
+          ## Assets
+          - \`qctl-host\` — workstation CLI (seed kit + \`vm\`; install/rename to \`qctl\` on PATH)
+          - \`qctl-guest\` — appliance CLI (stages / quadlet / secret; seed installs as \`/usr/local/bin/qctl\`)
+          - \`qctl-platform-rocky.mjs\` — thin Rocky platform module (guest \`import()\`; exports \`CLOUD_IMAGE\` pin for host \`vm download\`)
+          - \`varlock-local-encrypt\` — native helper staged next to binaries
+          - \`SHA256SUMS\`
+
+          Pin in \`provision/<env>.yaml\`:
+          \`\`\`yaml
+          qctl:
+            tooling:
+              host: \"${VERSION}\"
+              guest: \"${VERSION}\"
+              platform: \"rocky@${VERSION}\"
+          \`\`\`
+
+          Vaultwarden plugin is staged separately on npm (\`release-plugin\` workflow → \`npm stage approve\`).
+          " \
+            release/qctl-host \
+            release/qctl-guest \
+            release/qctl-platform-rocky.mjs \
+            release/varlock-local-encrypt \
+            release/SHA256SUMS

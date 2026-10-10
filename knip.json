@@ -1,0 +1,41 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": [
+    "qemu-img",
+    "virsh",
+    "truncate",
+    "mkfs.vfat",
+    "mcopy",
+    "xorriso",
+    "genisoimage",
+    "mkisofs"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["ci/**/*.{js,ts}", "tooling/**/*.{js,ts}", "bin/**/*"],
+      "project": ["ci/**/*.{js,ts}", "tooling/**/*.{js,ts}", "bin/**/*"],
+      "ignoreDependencies": ["@biomejs/biome"]
+    },
+    "packages/host": {
+      "entry": ["src/**/*.test.{js,ts}"],
+      "project": ["src/**/*.{js,ts}"]
+    },
+    "packages/guest": {
+      "entry": ["src/**/*.test.{js,ts}"],
+      "project": ["src/**/*.{js,ts}"]
+    },
+    "packages/shared": {
+      "entry": ["src/**/*.test.{js,ts}"],
+      "project": ["src/**/*.{js,ts}"]
+    },
+    "packages/platform-rocky": {
+      "entry": ["src/**/*.test.{js,ts}"],
+      "project": ["src/**/*.{js,ts}"]
+    },
+    "packages/vaultwarden-plugin": {
+      "entry": ["src/plugin.js", "src/**/*.test.{js,ts}"],
+      "project": ["src/**/*.{js,ts}"]
+    }
+  }
+}

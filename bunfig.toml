@@ -1,0 +1,5 @@
+[test]
+# Colocated *.test.js next to sources (Bun default discovery).
+root = "."
+# Keep per-test budget tight; CLI smokes should finish quickly.
+timeout = 10000

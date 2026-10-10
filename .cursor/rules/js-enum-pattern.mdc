@@ -1,0 +1,24 @@
+---
+description: JS enums — frozen const object + derived @typedef union
+globs: **/*.js
+alwaysApply: false
+---
+
+# Enum pattern (checkJs)
+
+Use `Object.freeze` with inline literal values. Derive the union type from the object — no `/** @type {const} */`, no TypeScript `enum`, no hand-written `'a' | 'b'` unions.
+
+```js
+export const INIT_PROFILE = Object.freeze({
+  DEFAULT: 'default',
+  INIT_TANK: 'init-tank',
+})
+
+/** @typedef {typeof INIT_PROFILE[keyof typeof INIT_PROFILE]} InitProfile */
+```
+
+- **Keys:** `SCREAMING_SNAKE` — use `INIT_PROFILE.DEFAULT` at runtime
+- **Values:** inline string/number literals (the persisted or API value)
+- **Type:** `PascalCase` — use `InitProfile` in JSDoc
+
+Values must be inline literals in the frozen object, not variables typed as `string`.

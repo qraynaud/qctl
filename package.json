@@ -1,20 +1,36 @@
 {
   "name": "qctl",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "qctl:host": "bun run --filter @qctl/host start",
     "qctl:guest": "bun run --filter @qctl/guest start",
-    "compile": "bun run ci/compile.ts",
-    "compile:host": "bun run ci/compile.ts host",
-    "compile:guest": "bun run ci/compile.ts guest",
-    "compile:platform": "bun run ci/compile.ts platform-rocky",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "compile": "bun run ci/compile.js",
+    "compile:host": "bun run ci/compile.js host",
+    "compile:guest": "bun run ci/compile.js guest",
+    "compile:platform": "bun run ci/compile.js platform-rocky",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:lint": "bunx zx tooling/lint.js",
+    "test:knip": "knip",
+    "check-version": "bun run ci/check-version.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/bun": "latest",
-    "citty": "^0.2.2",
-    "typescript": "^5"
+    "@types/yargs": "^17.0.35",
+    "comment-parser": "^1.4.9",
+    "knip": "^6.41.0",
+    "typescript": "^7.0.2",
+    "yargs": "^18.2.0",
+    "zx": "^8.8.5"
+  },
+  "patchedDependencies": {
+    "varlock@1.22.0": "patches/varlock@1.22.0.patch"
   }
 }

@@ -1,0 +1,59 @@
+---
+description: JSDoc type imports in .js — use top @import comments, not inline import()
+globs: **/*.js
+alwaysApply: false
+---
+
+# JSDoc type imports (checkJs)
+
+Runtime code is plain `.js` with `checkJs`. Import types for JSDoc **once at the top** of the file — never inline `import('…')` inside `@typedef`, `@param`, `@property`, or `@type`.
+
+## Pattern
+
+```js
+import { loadEnvGraphForDir } from '@qctl/shared'
+
+/** @import { EnvGraph } from '@qctl/shared' */
+/** @import { Argv } from 'yargs' */
+
+/** @typedef {ReturnType<typeof loadEnvGraphForDir>} LoadedGraph */
+```
+
+Place `@import` comments immediately after runtime `import` statements (before `@typedef` blocks and implementation).
+
+## One `@import` per module
+
+When several types come from the **same module**, use a **single** `@import` comment — not multiple comments for the same `from '…'`.
+
+Named imports inside the braces are **lexicographically sorted** (ASCII, case-sensitive).
+
+```js
+// GOOD — merged, sorted
+/** @import { InitProfile, PlatformStage, QctlRole } from '@qctl/shared' */
+
+// BAD — split across duplicate module specifiers
+/** @import { InitProfile } from '@qctl/shared' */
+/** @import { PlatformStage } from '@qctl/shared' */
+```
+
+Sort `@import` blocks themselves by Biome `organizeImports` groups (`node:` → packages → `@qctl/*` → `#` → relative), then specifier localeCompare.
+
+Use a multiline `@import` when the sorted list exceeds the line width (100).
+
+## Do
+
+- `/** @import { SyncOptions } from './sync.js' */` then use `SyncOptions` in JSDoc
+- `ReturnType<typeof fn>` when `fn` is a **runtime** import
+- Local `@typedef` only for aliases composed from imported names
+
+## Don't
+
+```js
+// BAD — inline import() in JSDoc
+/** @typedef {import('./sync.js').SyncOptions} SyncOptions */
+/** @param {import('yargs').Argv} argv */
+```
+
+## Runtime dynamic import()
+
+`await import('module')` for lazy loading is fine — this rule applies only to **type-only** JSDoc annotations, not runtime imports.

@@ -1,26 +1,42 @@
 name: ci
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v2
-        with:
-          mise_toml: mise.toml
 
       - name: Install
         run: bun install --frozen-lockfile
 
+      - name: Versions aligned
+        run: bun ci/check-version.js
+
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Lint
+        run: bun run test:lint
+
+      - name: Knip
+        run: bun run test:knip
+
+      - name: Test
+        run: bun test
+
+      - name: Build vaultwarden plugin
+        run: bun run --filter @qctl/vaultwarden-plugin build
 
       - name: Compile linux-x64 binaries
         run: bun run compile
@@ -28,21 +44,15 @@ jobs:
       - name: Smoke --help
         run: |
           ./dist/qctl-host --help
-          ./dist/qctl --help
-          ./dist/qctl-platform-rocky --help
-          ./dist/qctl-platform-rocky list
-
-      - name: Checksums
-        run: |
-          cd dist
-          sha256sum qctl-host qctl qctl-platform-rocky | tee SHA256SUMS
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: qctl-linux-x64
-          path: |
-            dist/qctl-host
-            dist/qctl
-            dist/qctl-platform-rocky
-            dist/SHA256SUMS
+          ./dist/qctl-guest --help
+          ./dist/qctl-guest list
+          # Seed kit is embedded in qctl-host — path/export must work without dist/rocky-seed/
+          test ! -d ./dist/rocky-seed
+          test -f ./dist/qctl-platform-rocky.mjs
+          kit=$(./dist/qctl-host seed-kit path)
+          test -f "$kit/cloud-init/user-data.yaml"
+          rm -rf /tmp/qctl-seed-export-smoke
+          ./dist/qctl-host seed-kit export /tmp/qctl-seed-export-smoke
+          test -f /tmp/qctl-seed-export-smoke/cloud-init/user-data.yaml
+          test -x ./dist/varlock-local-encrypt
+          test -f ./packages/vaultwarden-plugin/dist/vaultwarden.cjs

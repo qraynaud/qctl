@@ -1,0 +1,65 @@
+---
+description: JSDoc on functions — use multiline block comments, one tag per line
+globs: **/*.js
+alwaysApply: false
+---
+
+# Multiline JSDoc for functions (checkJs)
+
+Document **functions, methods, and constructors** with a **multiline** `/** … */` block. Put each `@param`, `@returns`, and description line on its own ` * …` line.
+
+Single-line `/** @param … @returns … */` is for **variables and properties only** (`@type`, `@typedef`, `@import`), not for callable signatures.
+
+## Pattern
+
+```js
+/**
+ * @param {string} root
+ * @returns {Promise<void>}
+ */
+export async function runSecretSync(root) { ... }
+
+/**
+ * @param {string} message
+ */
+function die(message) { ... }
+```
+
+Optional description before tags:
+
+```js
+/**
+ * Podman secret name = schema key as-is.
+ * @param {string} key
+ * @returns {string}
+ */
+export function podmanSecretName(key) { ... }
+```
+
+## Do
+
+- One tag per line; align `@param` / `@returns` blocks
+- Multiline blocks for arrow functions, `async` callbacks, class methods, and `constructor`
+- Keep `@import` / `@typedef` / `@type` on their own single-line comments when they are not function docs
+
+## Don't
+
+```js
+// BAD — function docs crammed on one line
+/** @param {string} root @returns {Promise<void>} */
+export async function runSecretSync(root) { ... }
+```
+
+## Arrow callbacks
+
+When typing an inline callback, use a multiline block directly above it:
+
+```js
+items.map(
+  /**
+   * @param {{ key: string }} item
+   * @returns {string}
+   */
+  (item) => item.key,
+)
+```
