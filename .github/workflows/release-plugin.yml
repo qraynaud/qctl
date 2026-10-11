@@ -4,6 +4,7 @@ name: release-plugin
 # qctl binaries). CI runs `npm stage publish` (OIDC, no 2FA); a maintainer then
 # approves with 2FA via `npm stage approve` or npmjs.com → Staged Packages.
 # Skips when that exact version is already published or already staged.
+# Tooling comes from mise.toml (`npm = "latest"` — needs npm ≥11.15 for `npm stage`).
 on:
   workflow_dispatch:
 
@@ -15,19 +16,13 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # npm ≥11.15.0 for `npm stage`; ≥11.5.1 for OIDC trusted publishing
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false
+      - uses: jdx/mise-action@v5
 
-      - name: Ensure npm supports staged publishing
+      - name: Check npm stage support
         run: |
           set -euo pipefail
-          npm install -g npm@latest
           npm --version
           npm stage --help >/dev/null
 
@@ -36,7 +31,7 @@ jobs:
         working-directory: packages/vaultwarden-plugin
         run: |
           set -euo pipefail
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="$(bun -e 'console.log(require("./package.json").version)')"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "invalid plugin version: ${VERSION}" >&2
             exit 1
