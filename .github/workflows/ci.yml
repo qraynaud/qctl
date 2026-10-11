@@ -17,6 +17,13 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
+      - name: Host seed tools
+        run: |
+          set -euo pipefail
+          # `vm seed` prefers ISO (genisoimage); FAT fallback needs mtools + dosfstools.
+          sudo apt-get update
+          sudo apt-get install -y genisoimage mtools dosfstools
+
       - name: Install
         run: bun install --frozen-lockfile
 
