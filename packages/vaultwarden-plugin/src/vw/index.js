@@ -22,7 +22,6 @@ module.exports = {
   isInvalidSessionError: runner.isInvalidSessionError,
   isBadPasswordText: runner.isBadPasswordText,
   formatUnlockError: runner.formatUnlockError,
-  promptMasterPassword: runner.promptMasterPassword,
   extractItemField: items.extractItemField,
   pickAttachment: items.pickAttachment,
   VwClient,

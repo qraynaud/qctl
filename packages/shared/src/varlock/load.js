@@ -91,33 +91,16 @@ function missingGuestCredentialLines(graph) {
 }
 
 /**
- * Resolve graph values with interactive-safe ordering.
- *
- * Varlock resolves keys in parallel by default, so `varlock(prompt)` / local-encrypt
- * and `vw()` master-password unlock can both read stdin at once (garbled input,
- * repeated unlock prompts). Resolve everything except `vw()` first, then `vw()`.
- *
  * @param {EnvGraph} graph
  * @param {string[]} [onlyKeys]  when set, only these keys (+ their deps) are resolved
  * @returns {Promise<void>}
  */
-export async function resolveEnvValuesPhased(graph, onlyKeys) {
-  const keys = onlyKeys ?? Object.keys(graph.configSchema)
-  /** @type {string[]} */
-  const vwKeys = []
-  /** @type {string[]} */
-  const otherKeys = []
-  for (const key of keys) {
-    const item = graph.configSchema[key]
-    if (item?.valueResolver?.fnName === 'vw') vwKeys.push(key)
-    else otherKeys.push(key)
+async function resolveEnvValues(graph, onlyKeys) {
+  if (onlyKeys) {
+    await graph.resolveEnvValues([...graph.expandKeysWithTransitiveDeps(onlyKeys)])
+    return
   }
-  if (otherKeys.length > 0) {
-    await graph.resolveEnvValues([...graph.expandKeysWithTransitiveDeps(otherKeys)])
-  }
-  if (vwKeys.length > 0) {
-    await graph.resolveEnvValues([...graph.expandKeysWithTransitiveDeps(vwKeys)])
-  }
+  await graph.resolveEnvValues()
 }
 
 /**
@@ -183,9 +166,9 @@ export async function loadEnvGraphForDir(dir, opts = {}) {
       const keys = Object.entries(graph.configSchema)
         .filter(([, item]) => !declaresSensitive(item))
         .map(([key]) => key)
-      await resolveEnvValuesPhased(graph, keys)
+      await resolveEnvValues(graph, keys)
     } else {
-      await resolveEnvValuesPhased(graph)
+      await resolveEnvValues(graph)
     }
   } catch (err) {
     throw new Error(`varlock resolve failed for ${dir}: ${errMessage(err)}`)

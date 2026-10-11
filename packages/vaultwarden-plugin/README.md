@@ -78,7 +78,7 @@ VW_CLIENT_SECRET=
 VW_MASTER_PASSWORD=
 ```
 
-Interactive unlock (prompt for master password, cache session) works when you omit API-key args and rely on an existing `bw` login — same idea as bare `@initBwp()`. For non-interactive use, pass `sessionToken=` and/or `clientId` / `clientSecret` / `masterPassword`.
+Interactive unlock uses `bw unlock --raw` (TTY; session cached) — same idea as bare `@initBwp()`. For non-interactive use, pass `sessionToken=` and/or `clientId` / `clientSecret` / `masterPassword`.
 
 ## `@initVw(…)`
 

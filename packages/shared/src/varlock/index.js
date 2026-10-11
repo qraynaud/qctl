@@ -1,6 +1,6 @@
 export { loadEnvGraph, registerVarlockBuiltins } from './builtins.js'
 export { hydrateSystemdCredentials } from './hydrate.js'
-export { loadEnvGraphForDir, resolveEnvValuesPhased } from './load.js'
+export { loadEnvGraphForDir } from './load.js'
 export {
   collectNpmPluginPins,
   collectNpmPluginPinsFromDir,

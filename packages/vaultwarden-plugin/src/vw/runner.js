@@ -168,76 +168,6 @@ function formatUnlockError(stderr, code) {
   return `bw unlock failed: ${text || `exit ${code}`}`
 }
 
-/** @type {Promise<void>} */
-let stdinLock = Promise.resolve()
-
-/**
- * Serialize interactive stdin readers (VW unlock must not overlap other prompts).
- * @template T
- * @param {() => Promise<T>} fn
- * @returns {Promise<T>}
- */
-function withStdinLock(fn) {
-  const prev = stdinLock
-  /** @type {() => void} */
-  let release = () => {}
-  stdinLock = new Promise((resolve) => {
-    release = resolve
-  })
-  return prev.then(fn).finally(release)
-}
-
-/**
- * Read a password from stdin without echoing (TTY).
- * One prompt — avoids `bw unlock --raw`'s 3 retries.
- * @param {string} [label]
- * @returns {Promise<string>}
- */
-function promptMasterPassword(label = 'Master password: ') {
-  return withStdinLock(async () => {
-    const stdin = process.stdin
-    const stderr = process.stderr
-    if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
-      throw new Error('Cannot prompt for master password without a TTY')
-    }
-    stderr.write(label)
-    stdin.setRawMode(true)
-    stdin.resume()
-    stdin.setEncoding('utf8')
-
-    return await new Promise((resolve, reject) => {
-      let buf = ''
-      /** @param {string} key */
-      const onData = (key) => {
-        if (key === '\u0003') {
-          cleanup()
-          stderr.write('\n')
-          reject(new Error('Interrupted'))
-          return
-        }
-        if (key === '\r' || key === '\n') {
-          cleanup()
-          stderr.write('\n')
-          resolve(buf)
-          return
-        }
-        if (key === '\u007f' || key === '\b') {
-          buf = buf.slice(0, -1)
-          return
-        }
-        if (key.startsWith('\x1b')) return
-        if (key >= ' ') buf += key
-      }
-      const cleanup = () => {
-        stdin.off('data', onData)
-        stdin.setRawMode(false)
-        stdin.pause()
-      }
-      stdin.on('data', onData)
-    })
-  })
-}
-
 module.exports = {
   defaultRunner,
   accountIdKey,
@@ -248,5 +178,4 @@ module.exports = {
   isInvalidSessionError,
   isBadPasswordText,
   formatUnlockError,
-  promptMasterPassword,
 }
