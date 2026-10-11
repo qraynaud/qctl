@@ -9,7 +9,6 @@ import {
   isSensitiveItem,
   keysWithTag,
   loadEnvGraphForDir,
-  resolveEnvValuesPhased,
   resolvedNonSensitive,
   resolvedSensitive,
   sensitiveKeys,
@@ -96,31 +95,6 @@ function makeTree() {
   )
   return root
 }
-
-describe('resolveEnvValuesPhased', () => {
-  test('resolves non-vw keys before vw()', async () => {
-    /** @type {string[]} */
-    const order = []
-    /** @type {any} */
-    const graph = {
-      configSchema: {
-        A: { valueResolver: { fnName: 'varlock' } },
-        B: { valueResolver: { fnName: 'vw' } },
-        C: { valueResolver: { fnName: 'ref' } },
-      },
-      /** @param {string[]} keys */
-      expandKeysWithTransitiveDeps(keys) {
-        return keys
-      },
-      /** @param {string[]} keys */
-      async resolveEnvValues(keys) {
-        order.push(keys.join(','))
-      },
-    }
-    await resolveEnvValuesPhased(graph)
-    expect(order).toEqual(['A,C', 'B'])
-  })
-})
 
 describe('loadEnvGraphForDir', () => {
   test('registers varlock() and keychain() builtins', async () => {

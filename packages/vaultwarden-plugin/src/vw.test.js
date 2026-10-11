@@ -189,13 +189,12 @@ describe('VwClient', () => {
     const c = new VwClient({
       env: {},
       isTTY: () => true,
-      promptPassword: async () => 'secret',
       runner: mockRunner({}, calls),
     })
     expect(await c.session()).toBe('SESS')
-    expect(calls.at(-1)?.args).toEqual(['unlock', '--passwordenv', 'QCTL_VW_MASTER', '--raw'])
-    expect(calls.at(-1)?.env.QCTL_VW_MASTER).toBe('secret')
-    expect(calls.at(-1)?.stdio).toEqual(['ignore', 'pipe', 'pipe'])
+    expect(calls.at(-1)?.args).toEqual(['unlock', '--raw'])
+    expect(calls.at(-1)?.stdio).toEqual(['inherit', 'pipe', 'pipe'])
+    expect(calls.at(-1)?.teeStderr).toBe(true)
     expect(calls.some((x) => x.args[0] === 'status')).toBe(true)
 
     const headless = new VwClient({
@@ -204,6 +203,32 @@ describe('VwClient', () => {
       runner: mockRunner({}, calls),
     })
     await expect(headless.session()).rejects.toThrow(/TTY/)
+  })
+
+  test('interactive unlock maps bad-password stderr cleanly', async () => {
+    const c = new VwClient({
+      env: {},
+      isTTY: () => true,
+      runner: async (_cmd, args) => {
+        if (args[0] === 'status') {
+          return {
+            code: 0,
+            stdout: Buffer.from(JSON.stringify({ status: 'locked' })),
+            stderr: '',
+          }
+        }
+        if (args[0] === 'unlock') {
+          return {
+            code: 1,
+            stdout: Buffer.alloc(0),
+            stderr: `${'Cryptography error: Decryption operation failed.\n'.repeat(3)}Mac failed.\n`,
+          }
+        }
+        return { code: 1, stdout: Buffer.alloc(0), stderr: 'unexpected' }
+      },
+    })
+    await expect(c.session()).rejects.toThrow('invalid master password')
+    await expect(c.session()).rejects.not.toThrow(/Cryptography|Decryption/)
   })
 
   test('invalid master password is a clear error (no crypto dump)', async () => {
@@ -316,7 +341,6 @@ describe('VwClient', () => {
       serverUrl: 'https://vw.example/',
       env: {},
       isTTY: () => true,
-      promptPassword: async () => 'pw',
       runner: async (_cmd, args) => {
         loggedCalls.push({ cmd: _cmd, args })
         if (args[0] === 'status') {
@@ -389,7 +413,6 @@ describe('VwClient', () => {
       appDataDir: '/vw',
       env: {},
       isTTY: () => true,
-      promptPassword: async () => 'pw',
       cache,
       runner: mockRunner({}, calls),
     })
@@ -439,7 +462,6 @@ describe('VwClient', () => {
     const c = new VwClient({
       env: {},
       isTTY: () => true,
-      promptPassword: async () => 'pw',
       cache,
       runner,
     })

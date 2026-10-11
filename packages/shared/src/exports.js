@@ -76,7 +76,6 @@ export {
   loadEnvGraphForDir,
   prefetchNpmPlugins,
   registerVarlockBuiltins,
-  resolveEnvValuesPhased,
   resolvedNonSensitive,
   resolvedSensitive,
   sensitiveKeys,

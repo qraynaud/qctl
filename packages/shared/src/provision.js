@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 
 import { deepMerge } from './merge.js'
-import { GUEST_TAG, keysWithTag, loadEnvGraph, resolveEnvValuesPhased } from './varlock-graph.js'
+import { GUEST_TAG, keysWithTag, loadEnvGraph } from './varlock-graph.js'
 /** @import { ScalarTag } from 'yaml' */
 /** @import { YamlMapping, YamlValue } from './yaml.js' */
 
@@ -352,7 +352,7 @@ export async function loadHostEnvDetailed(root, processEnv = process.env) {
   }
 
   try {
-    await resolveEnvValuesPhased(graph)
+    await graph.resolveEnvValues()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`${label} resolve failed: ${msg}`)

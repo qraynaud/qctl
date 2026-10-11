@@ -9,7 +9,6 @@ const {
   formatUnlockError,
   isInvalidSessionError,
   isNotLoggedInError,
-  promptMasterPassword,
   sessionCacheKey,
 } = require('./runner.js')
 
@@ -76,8 +75,6 @@ function syncTtlToMs(ttl) {
  *   `"forever"` disables sync entirely.
  * @property {SessionCache} [cache]  varlock `plugin.cache` (optional).
  * @property {() => boolean} [isTTY]  Override TTY check (tests).
- * @property {(label?: string) => Promise<string>} [promptPassword]
- *   Interactive unlock prompt (tests / custom UX).
  * @property {string} [bin]  `bw` executable (default `bw`).
  * @property {Runner} [runner]
  * @property {Record<string, string | undefined>} [env]
@@ -280,7 +277,7 @@ class VwClient {
   }
 
   /**
-   * Single-attempt unlock via `--passwordenv` (no `bw unlock --raw` multi-retry prompts).
+   * Unlock via `--passwordenv` (non-interactive / `masterPassword=`).
    * @param {string} password
    * @returns {Promise<string>}
    */
@@ -304,9 +301,28 @@ class VwClient {
   }
 
   /**
-   * Ensure login, then unlock — interactive (TTY, one prompt) or `--passwordenv`
-   * when masterPassword is set. Skips unlock when interactive `bw login --raw`
-   * already returned a session.
+   * Interactive `bw unlock --raw` — stdin inherited for prompts; stderr piped +
+   * teed so we can still classify failures (bad password, etc.).
+   * @returns {Promise<string>}
+   */
+  async unlockInteractive() {
+    const res = await this.runner(this.bin, ['unlock', '--raw'], {
+      env: this.childEnv(),
+      stdio: ['inherit', 'pipe', 'pipe'],
+      teeStderr: true,
+    })
+    if (res.code !== 0) {
+      throw new Error(formatUnlockError(res.stderr, res.code))
+    }
+    const token = res.stdout.toString('utf8').trim()
+    if (!token) throw new Error('bw unlock returned an empty session token')
+    return token
+  }
+
+  /**
+   * Ensure login, then unlock — interactive `bw unlock --raw` on TTY, or
+   * `--passwordenv` when masterPassword is set. Skips unlock when interactive
+   * `bw login --raw` already returned a session.
    * @returns {Promise<string>}
    */
   async unlock() {
@@ -321,14 +337,7 @@ class VwClient {
           + 'Pass sessionToken=$BW_SESSION or masterPassword=…, or run once in a terminal so the session can be cached.',
       )
     }
-    // Own single prompt + passwordenv: `bw unlock --raw` would ask up to 3
-    // times and spam crypto errors.
-    const prompt = this.opts.promptPassword ?? promptMasterPassword
-    const password = await prompt('Master password: ')
-    if (!password) {
-      throw new Error('Master password is required to unlock Vaultwarden')
-    }
-    return await this.unlockWithPassword(password)
+    return await this.unlockInteractive()
   }
 
   /**
