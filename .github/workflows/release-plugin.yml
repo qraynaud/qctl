@@ -20,6 +20,9 @@ jobs:
 
       - uses: jdx/mise-action@v5
 
+      - name: Install
+        run: bun install --frozen-lockfile
+
       - name: Check npm stage support
         run: |
           set -euo pipefail
@@ -58,6 +61,7 @@ jobs:
           # Prefer stage-only permissions on the trusted publisher so direct
           # `npm publish` from CI is rejected. Provenance is automatic.
           # Workflow filename must remain release-plugin.yml.
+          # prepublishOnly → bun run build needs workspace deps (zod) from Install.
           npm stage publish --access public
           echo "Staged @qctl/vaultwarden-plugin@${{ steps.ver.outputs.version }}"
           echo "Approve (2FA): npm stage approve @qctl/vaultwarden-plugin@${{ steps.ver.outputs.version }}"
