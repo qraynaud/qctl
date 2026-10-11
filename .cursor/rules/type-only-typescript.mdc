@@ -1,0 +1,34 @@
+---
+description: Type-only modules — use .ts, not checkJs JSDoc stubs
+alwaysApply: true
+---
+
+# Type-only modules → TypeScript
+
+Files that **only define types** (no runtime values, no enums, no `Object.freeze` data) belong in **`.ts`**, not `.js` with `@typedef` + `export {}`.
+
+Pair with [`typescript-types-only.mdc`](typescript-types-only.mdc) for what is allowed inside those files.
+
+## Use `.ts` when
+
+- Shared context / DTO shapes with no runtime
+- Module augmentations (`declare module '…'`)
+- Package-facing `export type` barrels when needed
+
+## Stay in `.js` when
+
+- Enums / constants — see [`js-enum-pattern.mdc`](js-enum-pattern.mdc)
+- Runtime logic, CLIs, stages, varlock helpers
+
+## Don't
+
+```js
+// BAD — type-only stub in .js
+/** @typedef {object} SyncResult */
+export {}
+```
+
+```ts
+// GOOD
+export type SyncResult = { synced: number; skipped: number }
+```

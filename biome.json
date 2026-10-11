@@ -1,0 +1,66 @@
+{
+  "root": true,
+  "files": {
+    "includes": ["{tooling,ci,.github}/**/*.{js,ts,json}", "*.{js,ts,json}"]
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noTemplateCurlyInString": "off"
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "identifierOrder": "lexicographic",
+            "groups": [
+              ":NODE:",
+              ":BLANK_LINE:",
+              [":PACKAGE:", "!@qctl/**/*"],
+              ":BLANK_LINE:",
+              "@qctl/**/*",
+              ":BLANK_LINE:",
+              "#*/**",
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "operatorLinebreak": "before"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.{js,ts}", "**/*.spec.{js,ts}"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
+}

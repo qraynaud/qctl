@@ -1,9 +1,27 @@
 {
   "name": "@qctl/shared",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.js"
+    },
+    "./packages/mercurial": {
+      "types": "./src/packages/mercurial.js",
+      "default": "./src/packages/mercurial.js"
+    }
+  },
+  "dependencies": {
+    "varlock": "1.22.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "optionalDependencies": {
+    "@varlock/native-helper-darwin": "1.22.0",
+    "@varlock/native-helper-linux-arm64": "1.22.0",
+    "@varlock/native-helper-linux-x64": "1.22.0",
+    "@varlock/native-helper-win32-x64": "1.22.0"
   }
 }

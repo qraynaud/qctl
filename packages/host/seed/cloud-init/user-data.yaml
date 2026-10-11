@@ -1,0 +1,246 @@
+#cloud-config
+# Shared seed for `vm up` (appliance) and `vm init-tank`.
+# Tags (resolved at seed build; cloud-init never sees them):
+#   !template "…" — inline Nunjucks (secrets.* = YAML; env / instance_id / profile / …)
+#   !file path    — embed seed-kit/<path> (Nunjucks only if file has {{ or {%)
+# Empty !template / !file result drops that write_files entry.
+#
+# `profile` is `appliance` (default) or `init-tank`. Tier-0 pending files
+# (including TANK_PASSPHRASE from provision tank.passphrase) are injected by
+# `qctl vm seed` into /var/lib/rocky/tier0-pending/<KEY>, sealed by
+# rocky-tier0-seal / `qctl stage tier0-seal`, then LoadCredentialEncrypted into
+# the init unit.
+
+hostname: rocky
+manage_etc_hosts: true
+timezone: Europe/Paris
+
+bootcmd:
+  - [systemctl, mask, NetworkManager-wait-online.service]
+  # Appliance: mask until first-boot stamp. init-tank: always mask (no SSH).
+  - !template |
+      {% if is_init_tank %}
+      systemctl mask sshd.service sshd.socket
+      {% else %}
+      if [ ! -f /var/lib/rocky/first-boot.done ]; then systemctl mask sshd.service sshd.socket firewalld.service cockpit.socket qemu-guest-agent.service; fi
+      {% endif %}
+  - !template |
+      {% if secrets.networking.vlans %}
+      {% for v in secrets.networking.vlans -%}
+      ip link del {{ v.name }} 2>/dev/null || true
+      ip link add {{ v.name }} type dummy
+      ip link set {{ v.name }} up || true
+      {% endfor -%}
+      {% else %}
+      true
+      {% endif %}
+  - [sh, -c, "nmcli networking on || true; nmcli device connect eth0 || true; dhclient -1 eth0 || true"]
+  - [sh, -c, "for i in $(seq 1 90); do ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'rocky bootcmd: no egress yet' >&2; exit 0"]
+
+users:
+  - name: apps
+    uid: 900
+    gid: 900
+    system: true
+    homedir: /home/apps
+    no_create_home: false
+    shell: /bin/bash
+    lock_passwd: true
+    groups: [systemd-journal]
+  - name: root
+    lock_passwd: true
+
+disable_root: true
+ssh_pwauth: false
+ssh_deletekeys: false
+
+package_update: false
+package_upgrade: false
+packages: []
+
+write_files:
+  - path: /etc/cloud/cloud.cfg.d/99-rocky-network-renderer.cfg
+    owner: root:root
+    permissions: "0644"
+    content: |
+      system_info:
+        network:
+          renderers: ['network-manager', 'sysconfig', 'netplan', 'networkd', 'eni']
+
+  - path: /etc/modules-load.d/zfs.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      zfs
+
+  - path: /etc/profile.d/rocky-umask.sh
+    owner: root:root
+    permissions: "0644"
+    content: |
+      umask 022
+
+  - path: /etc/environment.d/91-rocky-env.conf
+    owner: root:root
+    permissions: "0644"
+    content: !template |
+      QCTL_ENV={{ env }}
+      ROCKY_REPO_VCS={{ secrets.repo.vcs or 'git' }}
+      {%- if secrets.repo.url %}
+      ROCKY_HG_URL={{ secrets.repo.url }}
+      ROCKY_REPO_URL={{ secrets.repo.url }}
+      {%- endif %}
+      {%- if secrets.repo.dir %}
+      ROCKY_REPO_DIR={{ secrets.repo.dir }}
+      {%- endif %}
+      {%- if secrets.repo.branch %}
+      ROCKY_REPO_BRANCH={{ secrets.repo.branch }}
+      ROCKY_HG_BRANCH={{ secrets.repo.branch }}
+      {%- endif %}
+
+  - path: /usr/local/lib/rocky/caddy-publish.env
+    owner: root:root
+    permissions: "0644"
+    content: !template |
+      {%- set http = secrets.networking.ports | named('http') -%}
+      {%- set https = secrets.networking.ports | named('https') -%}
+      CADDY_PUBLISH_HTTP={{ http.dnat if http and http.dnat else 8088 }}
+      CADDY_PUBLISH_HTTPS={{ https.dnat if https and https.dnat else 8443 }}
+
+  - path: /usr/local/lib/rocky/vlan-parents.env
+    owner: root:root
+    permissions: "0644"
+    content: !template "{{ vlan_parent_env }}"
+
+  - path: /usr/local/lib/rocky/install-qctl-guest.sh
+    owner: root:root
+    permissions: "0755"
+    content: !file lib/install-qctl-guest.sh
+
+  - path: /usr/local/lib/rocky/dnat-apply.sh
+    owner: root:root
+    permissions: "0755"
+    content: !file lib/dnat-apply.sh
+
+  - path: /usr/local/lib/rocky/install-packages.sh
+    owner: root:root
+    permissions: "0755"
+    content: !file lib/install-packages.sh
+
+  - path: /usr/local/lib/rocky/wait-qctl-init.sh
+    owner: root:root
+    permissions: "0755"
+    content: !file lib/wait-qctl-init.sh
+
+  - path: /var/lib/cloud/scripts/per-boot/90-rocky-wait-qctl-init.sh
+    owner: root:root
+    permissions: "0755"
+    content: !file lib/wait-qctl-init.sh
+
+  - path: /etc/rocky/admin_ssh_authorized_keys
+    owner: root:root
+    permissions: "0644"
+    content: !template "{{ admin_ssh_authorized_keys }}"
+
+  - path: /etc/ssh/sshd_config.d/50-rocky-no-root.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+
+  - path: /etc/ssh/sshd_config.d/00-rocky-lab-ssh.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      GSSAPIAuthentication no
+
+  - path: /etc/systemd/system/rocky-first-boot.service
+    owner: root:root
+    permissions: "0644"
+    content: !file first-boot/rocky-first-boot.service
+
+  - path: /etc/systemd/system/rocky-init-tank-prep.service
+    owner: root:root
+    permissions: "0644"
+    content: !file first-boot/rocky-init-tank-prep.service
+
+  - path: /etc/systemd/system/rocky-tier0-seal.service
+    owner: root:root
+    permissions: "0644"
+    content: !file first-boot/rocky-tier0-seal.service
+
+  # Tier-0 pending injected by seed → /var/lib/rocky/tier0-pending/<KEY>
+  # (includes TANK_PASSPHRASE from provision tank.passphrase).
+
+  - path: /etc/systemd/system/rocky-first-boot.service.d/tier0.conf
+    owner: root:root
+    permissions: "0644"
+    content: !file lib/tier0-loadcredential.conf
+
+  - path: /etc/systemd/system/rocky-init-tank-prep.service.d/tier0.conf
+    owner: root:root
+    permissions: "0644"
+    content: !file lib/tier0-loadcredential.conf
+
+runcmd:
+  - !template |
+      set -euo pipefail
+      /usr/local/lib/rocky/install-qctl-guest.sh
+      systemctl daemon-reload
+      {% if is_init_tank %}
+      # init-tank: minimal packages; ZoL; provision packages.*; seal + prep (no SSH wait).
+      dnf install -y epel-release
+      dnf install -y dnf-plugins-core python3 curl jq unzip tar xfsprogs
+      if ! command -v zpool >/dev/null 2>&1; then
+        dnf install -y "https://zfsonlinux.org/epel/zfs-release-3-0$(rpm --eval '%{dist}').noarch.rpm" || \
+          dnf install -y "https://zfsonlinux.org/epel/zfs-release-2-3$(rpm --eval '%{dist}').noarch.rpm"
+        dnf config-manager --disable zfs || true
+        dnf config-manager --enable zfs-kmod
+        dnf install -y zfs
+      fi
+      modprobe zfs
+      /usr/local/lib/rocky/install-packages.sh
+      systemctl enable --now rocky-tier0-seal.service
+      systemctl enable rocky-init-tank-prep.service
+      systemctl start rocky-init-tank-prep.service
+      {% else %}
+      loginctl enable-linger apps
+      dnf -y upgrade --refresh
+      dnf install -y epel-release
+      dnf install -y dnf-plugins-core python3 curl jq unzip tar bash-completion \
+        podman cockpit cockpit-podman cockpit-packagekit cockpit-system firewalld \
+        qemu-guest-agent policycoreutils-python-utils python3-dateutil sqlite
+      if ! command -v zpool >/dev/null 2>&1; then
+        dnf install -y "https://zfsonlinux.org/epel/zfs-release-3-0$(rpm --eval '%{dist}').noarch.rpm" || \
+          dnf install -y "https://zfsonlinux.org/epel/zfs-release-2-3$(rpm --eval '%{dist}').noarch.rpm"
+        dnf config-manager --disable zfs || true
+        dnf config-manager --enable zfs-kmod
+        dnf install -y zfs
+      fi
+      modprobe zfs
+      if ! rpm -q cockpit-zfs >/dev/null 2>&1; then
+        curl -fsSL https://repo.45drives.com/repofiles/rocky/45drives-enterprise.repo \
+          -o /etc/yum.repos.d/45drives-enterprise.repo
+        dnf config-manager --save \
+          --setopt=45drives_enterprise.excludepkgs=zfs*,libzfs*,kmod-zfs*,zfs-dkms* \
+          --setopt=45drives_enterprise.skip_if_unavailable=1 || true
+        if ! dnf install -y cockpit-zfs; then
+          echo "WARN: cockpit-zfs install failed (often python3-libzfs vs ZoL libzfs ABI); continuing" >&2
+        fi
+      fi
+      /usr/local/lib/rocky/install-packages.sh
+      systemctl enable zfs-import-cache.service zfs-import-scan.service zfs-mount.service zfs-zed.service
+      systemctl enable rocky-tier0-seal.service
+      systemctl enable rocky-first-boot.service
+      /usr/local/lib/rocky/wait-qctl-init.sh
+      {% endif %}
+
+final_message: !template |
+  {% if is_init_tank %}
+  Rocky init-tank: prep will create tank, export, and power off. No SSH.
+  {% else %}
+  Rocky cloud-init OK — qctl init stamped (/var/lib/rocky/first-boot.done).
+  Tank unlock: keylocation=file:///etc/credstore/rocky/tank_passphrase
+  Expect disks: OS + /vw + 5 data (raidz2) + 2 special (mirror).
+  {% endif %}

@@ -3,14 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "qctl-platform-rocky": "./src/cli.ts"
-  },
-  "scripts": {
-    "start": "bun run src/cli.ts"
+  "exports": {
+    ".": "./src/platform.js",
+    "./cloud-image": "./src/cloud-image.js"
   },
   "dependencies": {
-    "@qctl/shared": "workspace:*",
-    "citty": "^0.2.2"
+    "@qctl/shared": "workspace:*"
   }
 }

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# mise `path:../qctl` install entry — prefer compiled host binary, else bun.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -x "$ROOT/dist/qctl-host" ]]; then
+  exec "$ROOT/dist/qctl-host" "$@"
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  cd "$ROOT"
+  exec mise exec -- bun run "$ROOT/packages/host/src/cli.js" "$@"
+fi
+
+if command -v bun >/dev/null 2>&1; then
+  exec bun run "$ROOT/packages/host/src/cli.js" "$@"
+fi
+
+echo "qctl: need dist/qctl-host (bun run compile) or bun on PATH" >&2
+exit 127

@@ -1,0 +1,59 @@
+---
+description: JSDoc typing in .js — avoid any, unknown, and bare object; use concrete types
+globs: **/*.js
+alwaysApply: false
+---
+
+# Avoid `any`, `unknown`, and bare `object` in JSDoc (checkJs)
+
+Runtime code is plain `.js` with `checkJs`. **Do not use `any`, `unknown`, or bare `object` / `Object` as lazy escape hatches** in `@param`, `@returns`, `@property`, or `@type`. Name the real shape.
+
+Pair with [`jsdoc-import-types.mdc`](jsdoc-import-types.mdc) — import types at the top with `@import`, not inline `import()`.
+
+## Prefer
+
+- **Shared typedefs** — co-located `*-types.js` or exported shapes from `@qctl/shared`
+- **`@import`** then compose with `Pick`, `Omit`, `ReturnType`, unions, literals
+- **Parse / narrow at boundaries** — YAML, env, subprocess stdout → validate once, then pass concrete types inward
+- **Type guards** — `isFoo(value): value is Foo` instead of `/** @param {unknown} */`
+
+## Don't
+
+```js
+// BAD — erases type safety
+/** @param {any} payload */
+/** @param {unknown} value */
+/** @param {object} doc */
+/** @returns {Record<string, unknown>} */
+/** @type {unknown} */
+/** @type {object} */
+function handle(data) { ... }
+```
+
+## Named shapes vs bare `object`
+
+`@typedef {object} Foo` **with** `@property` lines is fine — that *defines* a concrete named type:
+
+```js
+/**
+ * @typedef {object} SyncOptions
+ * @property {string} root
+ * @property {boolean} [dryRun]
+ */
+```
+
+Never use bare `{object}` alone as a parameter or return type.
+
+## When `unknown` is acceptable
+
+Use sparingly and **only at the outer edge** — never as the main type for domain objects:
+
+| Case | Pattern |
+|------|---------|
+| `catch` | `catch (error)` then narrow (`error instanceof Error`) |
+| Third-party / opaque blob before parse | Local variable, immediately validated; don't export `unknown` APIs |
+| Truly opaque external value | One-line cast **after** a guard, with a short comment explaining why |
+
+Bare `object` is **not** an acceptable substitute — still name the fields or use a typedef.
+
+If you reach for `any` / `unknown` / bare `object`, stop: add or reuse a typedef or guard instead.

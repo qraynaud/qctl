@@ -1,0 +1,4 @@
+*
+!dist/
+!dist/vaultwarden.cjs
+!README.md

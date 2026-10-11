@@ -1,0 +1,30 @@
+{
+  "name": "@qctl/vaultwarden-plugin",
+  "version": "0.1.4",
+  "description": "Varlock plugin: Vaultwarden (bw CLI) via vw(field=|attachment=)",
+  "type": "commonjs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qraynaud/qctl.git",
+    "directory": "packages/vaultwarden-plugin"
+  },
+  "exports": {
+    ".": "./dist/vaultwarden.cjs",
+    "./plugin": "./dist/vaultwarden.cjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "varlock": "^1.22.0"
+  },
+  "devDependencies": {
+    "varlock": "^1.22.0",
+    "zod": "^4.6.5"
+  },
+  "scripts": {
+    "build": "bun run build.js",
+    "prepublishOnly": "bun run build"
+  }
+}
