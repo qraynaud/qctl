@@ -6,6 +6,12 @@ out
 dist
 *.tgz
 
+# Staged for bun --asset embed (from @varlock/native-helper-*)
+packages/host/varlock-local-encrypt
+packages/host/varlock-local-encrypt.exe
+packages/guest/varlock-local-encrypt
+packages/guest/varlock-local-encrypt.exe
+
 # coverage
 coverage
 *.lcov

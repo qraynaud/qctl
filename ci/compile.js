@@ -1,12 +1,10 @@
 #!/usr/bin/env bun
-import { existsSync } from 'node:fs'
-import { chmod, cp, mkdir } from 'node:fs/promises'
 /**
  * Compile qctl binaries with `bun build --compile`.
  *
- * Also stages `varlock-local-encrypt` next to the binaries so varlock's SEA
- * sibling resolver finds a native encryption backend (disk cache by default).
- * Without it, varlock falls back to file encryption + in-memory cache.
+ * Embeds `varlock-local-encrypt` into host/guest via `--asset` (materialized at
+ * runtime beside the binary for varlock's SEA sibling resolver). Also stages a
+ * copy under `dist/` for local checkout use. Not a separate GitHub release asset.
  *
  * Usage:
  *   bun run ci/compile.js              # all targets
@@ -14,12 +12,18 @@ import { chmod, cp, mkdir } from 'node:fs/promises'
  *   bun run ci/compile.js guest
  *   bun run ci/compile.js platform-rocky   # ESM module only
  */
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { chmod, cp, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+
+import {
+  resolveNativeHelperFromNpm,
+  varlockLocalEncryptName,
+} from '../packages/shared/src/varlock/native-helper.js'
 
 const ROOT = join(import.meta.dir, '..')
 const OUT = join(ROOT, 'dist')
-const require = createRequire(import.meta.url)
+const HELPER_NAME = varlockLocalEncryptName()
 
 /**
  * @typedef {object} Target
@@ -36,93 +40,53 @@ const TARGETS = [
     id: 'host',
     entry: 'src/cli.js',
     cwd: 'packages/host',
-    assets: ['seed'],
+    assets: ['seed', HELPER_NAME],
     outfile: 'qctl-host',
   },
   {
     id: 'guest',
     entry: 'src/cli.js',
     cwd: 'packages/guest',
+    assets: [HELPER_NAME],
     outfile: 'qctl-guest',
   },
 ]
 
 /**
- * Platform package name for `@varlock/native-helper-*` (matches varlock's resolver).
- * @returns {string | undefined}
- */
-function nativeHelperPackageName() {
-  if (process.platform === 'darwin') return '@varlock/native-helper-darwin'
-  if (process.platform === 'win32') return `@varlock/native-helper-win32-${process.arch}`
-  if (process.platform === 'linux') return `@varlock/native-helper-linux-${process.arch}`
-  return undefined
-}
-
-/**
- * Resolve `varlock-local-encrypt` from an installed `@varlock/native-helper-*` package.
+ * Resolve helper from npm optionalDep (re-export for tests / compile staging).
  * @returns {string | undefined}
  */
 export function resolveNativeHelperBinary() {
-  const pkgName = nativeHelperPackageName()
-  if (!pkgName) return undefined
-  /** @type {string[]} */
-  const fromFiles = [
-    join(ROOT, 'packages/shared/src/index.js'),
-    join(ROOT, 'packages/vaultwarden-plugin/src/plugin.js'),
-    join(ROOT, 'ci/compile.js'),
-  ]
-  for (const from of fromFiles) {
-    try {
-      const req = createRequire(from)
-      const pkgJson = req.resolve(`${pkgName}/package.json`)
-      const binName =
-        process.platform === 'win32' ? 'varlock-local-encrypt.exe' : 'varlock-local-encrypt'
-      const bin = join(dirname(pkgJson), binName)
-      if (existsSync(bin)) return bin
-      const appBin = join(
-        dirname(pkgJson),
-        'VarlockEnclave.app',
-        'Contents',
-        'MacOS',
-        'varlock-local-encrypt',
-      )
-      if (existsSync(appBin)) return appBin
-    } catch {
-      // try next base
-    }
-  }
-  try {
-    const pkgJson = require.resolve(`${pkgName}/package.json`)
-    const binName =
-      process.platform === 'win32' ? 'varlock-local-encrypt.exe' : 'varlock-local-encrypt'
-    const bin = join(dirname(pkgJson), binName)
-    if (existsSync(bin)) return bin
-  } catch {
-    // absent
-  }
-  return undefined
+  return resolveNativeHelperFromNpm()
 }
 
 /**
- * Copy the native helper next to compiled binaries (`process.execPath` sibling).
- * @returns {Promise<string | undefined>} destination path when staged
+ * Copy helper into package dirs for `--asset` and into `dist/` for checkout runs.
+ * @returns {Promise<string | undefined>}
  */
 export async function stageNativeHelper() {
   const src = resolveNativeHelperBinary()
   if (!src) {
     console.warn(
-      'warn: @varlock/native-helper-* not found — varlock will use file/memory cache fallback.\n'
+      'warn: @varlock/native-helper-* not found — compile will omit the helper asset.\n'
         + '      Run `bun install` in qctl (optionalDeps) or install the platform helper package.',
     )
     return undefined
   }
-  const destName =
-    process.platform === 'win32' ? 'varlock-local-encrypt.exe' : 'varlock-local-encrypt'
-  const dest = join(OUT, destName)
-  await cp(src, dest)
-  if (process.platform !== 'win32') await chmod(dest, 0o755)
-  console.log(`staged ${dest} ← ${src}`)
-  return dest
+
+  for (const pkg of ['host', 'guest']) {
+    const dest = join(ROOT, 'packages', pkg, HELPER_NAME)
+    await cp(src, dest)
+    if (process.platform !== 'win32') await chmod(dest, 0o755)
+    console.log(`staged ${dest} ← ${src}`)
+  }
+
+  const distDest = join(OUT, HELPER_NAME)
+  await mkdir(OUT, { recursive: true })
+  await cp(src, distDest)
+  if (process.platform !== 'win32') await chmod(distDest, 0o755)
+  console.log(`staged ${distDest} ← ${src}`)
+  return distDest
 }
 
 /**
@@ -137,6 +101,12 @@ async function compileOne(target) {
     if (!existsSync(join(seedRoot, 'cloud-init', 'user-data.yaml'))) {
       throw new Error(`host seed missing at ${seedRoot}`)
     }
+  }
+  const helperAsset = join(cwd, HELPER_NAME)
+  if ((target.assets ?? []).includes(HELPER_NAME) && !existsSync(helperAsset)) {
+    throw new Error(
+      `missing ${helperAsset} — run stageNativeHelper / bun install for @varlock/native-helper-*`,
+    )
   }
   /** @type {string[]} */
   const args = ['bun', 'build', '--compile', entry, `--outfile=${outPath}`]
@@ -171,8 +141,6 @@ async function bundlePlatformModule() {
   })
   const code = await proc.exited
   if (code !== 0) throw new Error(`platform module bundle failed (exit ${code})`)
-  // Host reads CLOUD_IMAGE from the downloaded plugin; JSON is also staged for
-  // sync resolvers / release asset parity with the source pin.
   const pinSrc = join(ROOT, 'packages/platform-rocky/cloud-image.json')
   if (existsSync(pinSrc)) {
     await cp(pinSrc, join(OUT, 'cloud-image.json'))
@@ -199,14 +167,13 @@ async function main() {
   }
 
   await mkdir(OUT, { recursive: true })
+  await stageNativeHelper()
   for (const target of selected) {
     await compileOne(target)
   }
-  // Platform ESM is staged beside guest for appliance install / sync --include-tooling.
   if (!only || only === 'guest') {
     await bundlePlatformModule()
   }
-  await stageNativeHelper()
   console.log('done')
 }
 

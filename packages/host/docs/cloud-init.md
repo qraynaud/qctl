@@ -188,5 +188,6 @@ Tier-0 / provision secrets are declared in `provision/.env.schema` (scaffold via
 
 Guest tooling is staged into `qctl-guest/` on that ISO from, in order:
 `QCTL_GUEST_DIST`, the local qctl checkout’s `dist/` (when the host is running from
-that repo), otherwise the GitHub release matching `qctl.platform` / the host version
-(`qctl-guest`, `qctl-platform-*.mjs`, `varlock-local-encrypt`).
+that repo), otherwise the GitHub release (`qctl-guest`, `qctl-platform-*.mjs`).
+`varlock-local-encrypt` is embedded in `qctl-host` and copied onto the seed from the
+host materialize path (not a separate release asset).

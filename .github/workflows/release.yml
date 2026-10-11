@@ -4,6 +4,7 @@ name: release
 # Skips entirely when tag v$version already exists.
 # Quality gates live in ci.yml — this workflow only packages what CI already validated on main.
 # Plugin npm stage publish is a separate workflow: release-plugin.yml
+# `varlock-local-encrypt` is embedded in qctl-host/qctl-guest (not a separate asset).
 on:
   workflow_dispatch:
 
@@ -48,12 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp dist/qctl-host dist/qctl-guest dist/qctl-platform-rocky.mjs dist/varlock-local-encrypt release/
-          chmod +x release/qctl-host release/qctl-guest release/varlock-local-encrypt
-          # Seed kit is embedded in qctl-host (`seed-kit path` / `export` / `vm seed`).
+          cp dist/qctl-host dist/qctl-guest dist/qctl-platform-rocky.mjs release/
+          chmod +x release/qctl-host release/qctl-guest
           (
             cd release
-            sha256sum qctl-host qctl-guest qctl-platform-rocky.mjs varlock-local-encrypt | tee SHA256SUMS
+            sha256sum qctl-host qctl-guest qctl-platform-rocky.mjs | tee SHA256SUMS
           )
 
       - name: Create GitHub release
@@ -70,14 +70,14 @@ jobs:
             --notes "qctl ${VERSION}
 
           ## Assets
-          - \`qctl-host\` — workstation CLI (seed kit + \`vm\`; install/rename to \`qctl\` on PATH)
-          - \`qctl-guest\` — appliance CLI (stages / quadlet / secret; seed installs as \`/usr/local/bin/qctl\`)
+          - \`qctl-host\` — workstation CLI (seed kit + embedded \`varlock-local-encrypt\`; install/rename to \`qctl\` on PATH)
+          - \`qctl-guest\` — appliance CLI (stages / quadlet / secret; seed installs as \`/usr/local/bin/qctl\`; embeds \`varlock-local-encrypt\`)
           - \`qctl-platform-rocky.mjs\` — thin Rocky platform module (guest \`import()\`; exports \`CLOUD_IMAGE\` pin for host \`vm download\`)
-          - \`varlock-local-encrypt\` — native helper staged next to binaries
           - \`SHA256SUMS\`
 
-          Host downloads \`qctl-guest\`, \`qctl-platform-rocky.mjs\`, and \`varlock-local-encrypt\`
-          from this release when seeding / \`sync --include-tooling\` (override with \`QCTL_GUEST_DIST\`).
+          Host downloads \`qctl-guest\` and \`qctl-platform-rocky.mjs\` from this release when seeding /
+          \`sync --include-tooling\` (override with \`QCTL_GUEST_DIST\`). The encrypt helper is
+          embedded in the host binary (materialized beside it at runtime).
 
           Pin platform in \`provision/<env>.yaml\` (version defaults to the running host):
           \`\`\`yaml
@@ -90,5 +90,4 @@ jobs:
             release/qctl-host \
             release/qctl-guest \
             release/qctl-platform-rocky.mjs \
-            release/varlock-local-encrypt \
             release/SHA256SUMS

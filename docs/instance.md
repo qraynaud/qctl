@@ -106,11 +106,12 @@ Guest never installs mise.
 
 ## Seed
 
-`qctl vm seed` stages `qctl-guest`, `qctl-platform-rocky.mjs`, and
-`varlock-local-encrypt` from checkout `dist/` when the host runs from a qctl repo,
-otherwise from the GitHub release (host/`qctl.platform` version). Override with
+`qctl vm seed` stages `qctl-guest` and `qctl-platform-rocky.mjs` from checkout
+`dist/` when the host runs from a qctl repo, otherwise from the GitHub release.
+`varlock-local-encrypt` comes from the host embed (materialized beside `qctl` at
+runtime for varlock’s SEA sibling lookup — not PATH). Override guest/platform with
 `QCTL_GUEST_DIST`. First-boot secrets come from provision → Tier-0 pending.
-Install renames `qctl-guest` → `/usr/local/bin/qctl`. No separate `varlock` binary.
+Install renames `qctl-guest` → `/usr/local/bin/qctl`.
 
 ## Guest: Quadlet
 

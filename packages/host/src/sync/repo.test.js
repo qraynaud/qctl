@@ -74,10 +74,11 @@ describe('resolveGuestToolingForSync', () => {
     try {
       const t = await resolveGuestToolingForSync()
       expect(t.sourceLabel).toBe(dist)
-      expect(t.files.map((f) => f.installAs)).toEqual([
-        '/usr/local/bin/qctl',
-        '/usr/local/lib/qctl/qctl-platform-rocky.mjs',
-      ])
+      const installs = t.files.map((f) => f.installAs)
+      expect(installs).toContain('/usr/local/bin/qctl')
+      expect(installs).toContain('/usr/local/lib/qctl/qctl-platform-rocky.mjs')
+      // Host embed / npm helper materializes encrypt for SEA sibling on appliance.
+      expect(installs).toContain('/usr/local/bin/varlock-local-encrypt')
     } finally {
       if (prev === undefined) delete process.env.QCTL_GUEST_DIST
       else process.env.QCTL_GUEST_DIST = prev
