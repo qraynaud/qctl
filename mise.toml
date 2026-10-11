@@ -4,10 +4,14 @@ npm = "latest"
 
 # Host packages for `qctl vm seed` (ISO preferred; FAT needs mtools + dosfstools).
 # Apply with: mise bootstrap packages apply --yes
+# Unused managers are skipped (apt on Arch, pacman on Ubuntu, …).
 [bootstrap.packages]
 "apt:genisoimage" = "latest"
 "apt:mtools" = "latest"
 "apt:dosfstools" = "latest"
+"dnf:genisoimage" = "latest"
+"dnf:mtools" = "latest"
+"dnf:dosfstools" = "latest"
 "pacman:xorriso" = "latest"
 "pacman:mtools" = "latest"
 "pacman:dosfstools" = "latest"
