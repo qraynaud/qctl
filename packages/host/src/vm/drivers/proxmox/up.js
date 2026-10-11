@@ -175,7 +175,7 @@ export async function up(argv) {
     })
     const isoPath = seedResult.isoPath
     if (!fs.existsSync(isoPath)) {
-      die(`appliance ISO missing at ${isoPath} — install xorriso/genisoimage`)
+      die(`appliance ISO missing at ${isoPath} — run \`qctl vm seed\``)
     }
 
     if (vmid != null && wipeOs) {

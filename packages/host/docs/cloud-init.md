@@ -183,7 +183,10 @@ Resume after a failure with `qctl init --from <stage>`; preview with `qctl init 
 Tier-0 / provision secrets are declared in `provision/.env.schema` (scaffold via
 `qctl init`).
 
-Seed stages guest tooling into `qctl-guest/` on the ISO from, in order:
+`qctl vm seed` builds `nocloud.iso` (volume label `cidata`, Joliet) in-process via
+`@gcu/iso9660` — no `genisoimage` / `xorriso` / FAT fallback.
+
+Guest tooling is staged into `qctl-guest/` on that ISO from, in order:
 `QCTL_GUEST_DIST`, the local qctl checkout’s `dist/` (when the host is running from
 that repo), otherwise the GitHub release matching `qctl.platform` / the host version
 (`qctl-guest`, `qctl-platform-*.mjs`, `varlock-local-encrypt`).

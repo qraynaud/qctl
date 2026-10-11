@@ -1,15 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": [
-    "qemu-img",
-    "virsh",
-    "truncate",
-    "mkfs.vfat",
-    "mcopy",
-    "xorriso",
-    "genisoimage",
-    "mkisofs"
-  ],
+  "ignoreBinaries": ["qemu-img", "virsh"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {

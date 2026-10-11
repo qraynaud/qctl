@@ -16,24 +16,11 @@ node_modules/
 
 export const MISE_TOML = `# Host qctl on PATH via mise. No varlock CLI — the graph API is bundled into qctl-host.
 # Activate with \`mise install\` (or direnv / mise activate) in this repo.
-# Host packages for \`qctl vm seed\`: \`mise bootstrap packages apply --yes\`
+# \`qctl vm seed\` builds the NoCloud ISO in-process (bundled ISO writer).
 
 [tools]
 # GitHub release asset \`qctl-host\` → command \`qctl\` on PATH.
 "github:qraynaud/qctl" = { version = "latest", asset_pattern = "qctl-host", bin = "qctl" }
-
-# ISO preferred (genisoimage / xorriso); FAT fallback needs mtools + dosfstools.
-# Unused managers are skipped.
-[bootstrap.packages]
-"apt:genisoimage" = "latest"
-"apt:mtools" = "latest"
-"apt:dosfstools" = "latest"
-"dnf:genisoimage" = "latest"
-"dnf:mtools" = "latest"
-"dnf:dosfstools" = "latest"
-"pacman:xorriso" = "latest"
-"pacman:mtools" = "latest"
-"pacman:dosfstools" = "latest"
 `
 
 export const ROOT_ENV_SCHEMA = `# Instance root schema. \`loadEnvGraphForDir\` uses this directory as the graph entry;

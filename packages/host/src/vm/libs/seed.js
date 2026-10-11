@@ -1,12 +1,15 @@
 /**
- * NoCloud seed: stage cidata in tmp; keep ISO/FAT + instance-id under XDG cache.
+ * NoCloud seed: stage cidata in tmp; keep ISO + instance-id under XDG cache.
  */
 
 import { mkdtempSync } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { join as pathJoin } from 'node:path'
 
+import { ISOWriter } from '@gcu/iso9660'
 import YAML from 'yaml'
-import { $, chalk, fs, path } from 'zx'
+import { chalk, fs, path } from 'zx'
 
 import { gcQctlCache, touchPath } from './cache-gc.js'
 import { renderNetworkConfigV2 } from './guest-net.js'
@@ -24,7 +27,7 @@ import {
   injectProvisionFiles,
   renderTemplate,
 } from './seed-template.js'
-import { die, requireBins, which } from './util.js'
+import { die } from './util.js'
 
 /** @import { SeedProfile as VmSeedProfile, VmArgv } from '../types.js' */
 /** @import { GuestFile } from './secrets-schema/files.js' */
@@ -94,7 +97,7 @@ export function applySeedProfileDefaults(sec, profileName) {
 
 /**
  * Env-scoped seed artifact paths under `$XDG_CACHE_HOME/qctl/repos/<hash>/seed/<env>/`.
- * Durable outputs: nocloud.iso (preferred), cidata.img (fallback), instance-id.
+ * Durable outputs: nocloud.iso + instance-id (`cidata.img` is legacy read-only).
  * @param {SeedProfile | string} profileName
  * @param {string} env
  */
@@ -125,7 +128,7 @@ export function resolveSeedPaths(profileName, env = 'dev') {
 }
 
 /**
- * Prefer ISO; else FAT img. Does not fall back to another env's artifacts.
+ * Prefer ISO; legacy FAT img still accepted if present from older seeds.
  *
  * @param {{ isoPath?: string | null, imgPath?: string | null }} opts
  * @returns {Promise<{ path: string, format: 'raw', device: 'cdrom' | 'disk' }>}
@@ -136,78 +139,71 @@ export async function ensureSeed({ isoPath, imgPath }) {
     return { path: isoPath, format: 'raw', device: 'cdrom' }
   }
   if (imgPath && fs.existsSync(imgPath)) {
-    console.log(chalk.dim(`vm: seed FAT ${imgPath}`))
+    console.log(chalk.dim(`vm: seed FAT ${imgPath} (legacy)`))
     return { path: imgPath, format: 'raw', device: 'disk' }
   }
   die(
-    `no seed ISO/FAT at ${isoPath || '(no iso)'} / ${imgPath || '(no img)'}`
+    `no seed ISO at ${isoPath || '(no iso)'}`
       + `\n  Run: qctl vm seed --env <env>`
       + (isoPath && String(isoPath).includes('init-tank') ? ' --profile init-tank' : ''),
   )
 }
 
 /**
- * @param {string} stageDir
- * @param {string} imgPath
+ * Walk a stage directory into flat ISO paths (files only; skip empty).
+ * @param {string} dir
+ * @param {string} [prefix]
+ * @returns {Promise<{ path: string, data: Uint8Array }[]>}
  */
-async function buildFatImg(stageDir, imgPath) {
-  await requireBins(['mkfs.vfat', 'mcopy', 'truncate'])
-  console.log(chalk.cyan(`vm: building FAT seed ${imgPath} (label CIDATA)`))
-  await fs.remove(imgPath).catch(() => {})
-  await $`truncate -s 4M ${imgPath}`
-  const mk = await $`mkfs.vfat -n CIDATA ${imgPath}`.nothrow()
-  if (mk.exitCode !== 0) die(`mkfs.vfat failed for ${imgPath}`)
-
-  for (const name of ['user-data', 'meta-data', 'network-config']) {
-    const src = path.join(stageDir, name)
-    if (!fs.existsSync(src)) continue
-    const r = await $`mcopy -o -i ${imgPath} ${src} ::${name}`.nothrow()
-    if (r.exitCode !== 0) die(`mcopy ${name} into seed failed`)
+async function collectStageFiles(dir, prefix = '') {
+  /** @type {{ path: string, data: Uint8Array }[]} */
+  const out = []
+  const entries = await readdir(dir, { withFileTypes: true })
+  for (const ent of entries) {
+    const rel = prefix ? `${prefix}/${ent.name}` : ent.name
+    const abs = pathJoin(dir, ent.name)
+    if (ent.isDirectory()) {
+      out.push(...(await collectStageFiles(abs, rel)))
+      continue
+    }
+    if (!ent.isFile()) continue
+    const buf = await readFile(abs)
+    if (buf.byteLength === 0) {
+      console.log(chalk.dim(`  seed ISO: skip empty ${rel}`))
+      continue
+    }
+    out.push({ path: rel, data: new Uint8Array(buf) })
   }
-  // Guest tooling lives only on the ISO path today; FAT is a last-resort NoCloud disk.
-  console.log(chalk.green(`vm: seed disk ${imgPath}`))
+  return out
 }
 
 /**
+ * Build a NoCloud ISO (label `cidata`, Joliet) with pure JS — no host ISO tools.
  * @param {string} stageDir
  * @param {string} isoPath
- * @returns {Promise<boolean>}
  */
 async function buildIso(stageDir, isoPath) {
-  const tmpIso = `${isoPath}.tmp`
-  await fs.remove(tmpIso).catch(() => {})
-
-  const tryCmds = [
-    async () => {
-      if (!(await which('xorriso'))) return false
-      const r =
-        await $`xorriso -as mkisofs -output ${tmpIso} -volid cidata -joliet -rock ${stageDir}`.nothrow()
-      return r.exitCode === 0
-    },
-    async () => {
-      if (!(await which('genisoimage'))) return false
-      const r =
-        await $`genisoimage -output ${tmpIso} -volid cidata -joliet -rock ${stageDir}`.nothrow()
-      return r.exitCode === 0
-    },
-    async () => {
-      if (!(await which('mkisofs'))) return false
-      const r = await $`mkisofs -output ${tmpIso} -volid cidata -joliet -rock ${stageDir}`.nothrow()
-      return r.exitCode === 0
-    },
-  ]
-
-  for (const run of tryCmds) {
-    if (await run()) {
-      await fs.remove(isoPath).catch(() => {})
-      await fs.move(tmpIso, isoPath)
-      console.log(chalk.green(`vm seed: ISO -> ${isoPath}`))
-      return true
-    }
+  const files = await collectStageFiles(stageDir)
+  const names = new Set(files.map((f) => f.path))
+  if (!names.has('user-data') || !names.has('meta-data')) {
+    die('seed stage missing user-data or meta-data')
   }
 
+  const writer = new ISOWriter({
+    volumeId: 'cidata',
+    joliet: true,
+    greeting: false,
+    application: 'qctl',
+  })
+  for (const f of files) writer.add(f.path, f.data)
+
+  const iso = writer.toUint8Array()
+  const tmpIso = `${isoPath}.tmp`
   await fs.remove(tmpIso).catch(() => {})
-  return false
+  await fs.writeFile(tmpIso, iso)
+  await fs.remove(isoPath).catch(() => {})
+  await fs.move(tmpIso, isoPath)
+  console.log(chalk.green(`vm seed: ISO -> ${isoPath}`))
 }
 
 /**
@@ -361,19 +357,9 @@ export async function runSeed(argv) {
       target,
     })
 
-    const isoOk = await buildIso(stageDir, isoPath)
-    if (isoOk) {
-      await fs.remove(imgPath).catch(() => {})
-    } else {
-      console.warn(
-        chalk.yellow(
-          'vm seed: no xorriso/genisoimage/mkisofs — writing FAT cidata.img instead.\n'
-            + '  Install e.g. `sudo pacman -S cdrtools` or `xorriso` for ISO attach.',
-        ),
-      )
-      await buildFatImg(stageDir, imgPath)
-      await fs.remove(isoPath).catch(() => {})
-    }
+    await buildIso(stageDir, isoPath)
+    // Drop legacy FAT seed if present from older qctl versions.
+    await fs.remove(imgPath).catch(() => {})
 
     await fs.writeFile(paths.instanceIdPath, `${instanceId}\n`, 'utf8')
     // Drop any previous unpacked cidata tree under the seed cache root.
@@ -393,10 +379,8 @@ export async function runSeed(argv) {
   }
   gcQctlCache()
 
-  const kept = isoPath && fs.existsSync(isoPath) ? isoPath : imgPath
-  console.log(chalk.green(`vm seed: wrote ${kept}`))
+  console.log(chalk.green(`vm seed: wrote ${isoPath}`))
   console.log(chalk.dim(`  profile=${profileName} env=${env} instance-id=${instanceId}`))
-  console.log(chalk.dim(`  iso=${isoPath}`))
   return {
     isoPath,
     imgPath,

@@ -34,15 +34,7 @@ export async function check(argv) {
   for (const bin of ['virsh', 'virt-install', 'qemu-img']) {
     await checkBin(report, bin)
   }
-  for (const bin of ['xorriso', 'genisoimage', 'mkisofs']) {
-    if (await which(bin)) {
-      report.ok(`ISO tool ${bin} (seed)`)
-      break
-    }
-  }
-  if (!(await which('xorriso')) && !(await which('genisoimage')) && !(await which('mkisofs'))) {
-    report.warn('no xorriso/genisoimage/mkisofs — `vm seed` ISO step will fail')
-  }
+  report.ok('NoCloud ISO writer bundled (@gcu/iso9660)')
 
   report.section(`Libvirt (${connect})`)
   const ver = await virsh(connect, 'version').nothrow()
