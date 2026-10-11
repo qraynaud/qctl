@@ -5,7 +5,10 @@ export {
   applyVcsFileDefaults,
   normalizeFiles,
 } from './files.js'
-export { firstBootCredentialsFromProvision } from './first-boot.js'
+export {
+  appsIdentityFromProvision,
+  firstBootCredentialsFromProvision,
+} from './first-boot.js'
 export {
   HG_PIPX_DEFAULT,
   applyVcsPackageDefaults,

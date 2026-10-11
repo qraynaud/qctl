@@ -38,7 +38,16 @@ Matches prod appliance roles (lab uses tiny qcow2s; same counts and serials):
 | `!template "…"` | Inline **Nunjucks**. Context: `secrets.*` = secrets YAML; seed-only `env`, `instance_id`, `profile` / `is_init_tank`, `admin_ssh_authorized_keys`, …. Empty output drops that `write_files` entry. Filter: `named`. |
 | `!file path` | Embed seed-kit `<path>` (`lib/…`, `first-boot/…`). Nunjucks only if the file contains `{{` / `{%`; empty render drops the entry. |
 
-Bake `secrets/<env>.yaml` into seed as `secrets.*` (e.g. DNAT in `lib/dnat-apply.sh`, `caddy-publish.env`) — no YAML parsing on the guest.
+Bake `secrets/<env>.yaml` into seed as `secrets.*` (e.g. DNAT in `lib/dnat-apply.sh`,
+`vlan-parents.env`, `ROCKY_APPS_SUBID_*` / `ROCKY_APPS_SUBGID_*` for `/etc/subuid` +
+`/etc/subgid`) — no YAML parsing on the guest.
+Appliance users under `users` are optional. Defaults: `admin` (uid/gid 1000; password
+omitted → key-only sudo with seed SSH keys / host pubkey fallback) and `apps`
+(uid/gid 900; subuid/subgid `<id>×1000:32768`). `gid` defaults to `uid` when omitted.
+When `users.admin.password` is omitted the account has **no password** (not a random
+one): SSH works with the seeded key, but Cockpit login needs a password — SSH in and
+run `passwd` (or set `users.admin.password` in provision) before using Cockpit.
+Quadlet templates get apps ids from the instance env graph under whatever names the user defines.
 
 ```bash
 mise trust   # once, if prompted

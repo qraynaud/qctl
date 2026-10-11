@@ -54,6 +54,7 @@ export const PROVISION_ENV_SCHEMA = `# Host / provision secret graph (not import
 TANK_PASSPHRASE=
 # @optional
 SSH_HOST_KEYS=
+# Optional — wire via users.admin in provision/*.yaml when you want them
 # @optional
 ADMIN_USERNAME=
 # @optional
@@ -72,16 +73,16 @@ REPO_BRANCH=
 `
 
 export const PROVISION_ENV_DEV = `# Lab host bindings for provision !env (QCTL_ENV=dev).
+# users: omitted in provision/dev.yaml → admin/apps defaults (key-only admin; passwd for Cockpit).
+# Uncomment users.admin.password: !env ADMIN_PASSWORD in the YAML to use ADMIN_PASSWORD= below.
 # ---
 TANK_PASSPHRASE=lab-tank-passphrase
 SSH_HOST_KEYS=
-ADMIN_USERNAME=rocky
-ADMIN_PASSWORD=lab
-ADMIN_UID=1000
-ADMIN_GID=1000
+# ADMIN_PASSWORD=lab
 DEPLOY_KEY=lab-deploy-key-placeholder
 HEPTAPOD_REGISTRY=
-PROXMOX_API_TOKEN=
+# Required when using --target proxmox (provision/dev.proxmox.yaml):
+# PROXMOX_API_TOKEN=
 `
 
 export const PROVISION_ENV_PROD = `# Prod host bindings — use vw() + @plugin as needed.
@@ -90,11 +91,12 @@ export const PROVISION_ENV_PROD = `# Prod host bindings — use vw() + @plugin a
 # ---
 TANK_PASSPHRASE=vw("rocky", field="tank-passphrase")
 SSH_HOST_KEYS=
-ADMIN_USERNAME=vw("rocky", field="username")
-ADMIN_PASSWORD=vw("rocky", field="password")
+# Uncomment users.admin in provision YAML to wire these:
+# ADMIN_USERNAME=vw("rocky", field="username")
+# ADMIN_PASSWORD=vw("rocky", field="password")
 DEPLOY_KEY=vw("rocky", attachment="heptapod-deploy-key")
 HEPTAPOD_REGISTRY=
-PROXMOX_API_TOKEN=
+# PROXMOX_API_TOKEN=vw("proxmox", field="api-token")
 `
 
 /** Non-secret root values for QCTL_ENV=dev (literal values: varlock, not bash \`source\`). */
@@ -147,9 +149,16 @@ qctl:
 tank:
   passphrase: !env TANK_PASSPHRASE
 
-admin:
-  username: !env ADMIN_USERNAME
-  password: !env ADMIN_PASSWORD
+# users:  # optional — defaults: admin (uid 1000), apps (uid 900, subids <id>×1000:32768)
+#   admin:
+#     username: admin
+#     password: !env ADMIN_PASSWORD
+#   apps:
+#     username: apps
+#     # uid: 900
+#     # gid: 900   # defaults to uid when omitted
+#     # subuid: 900000:32768
+#     # subgid: 900000:32768
 
 # ssh:
 #   authorized_keys:
@@ -244,9 +253,10 @@ export const PROVISION_README = `# provision/
 Topology YAML (\`dev.yaml\`, overlays) plus the host env graph
 (\`.env.schema\` + \`.env.<env>\`, optional \`.env.local\`).
 
-First-boot secrets are declared in YAML (\`tank\`, \`admin\`, \`repo.deploy_key\`, …)
-with \`!env\` pointing at this graph. \`qctl vm seed\` resolves on the host and
-injects Tier-0 credentials into the guest (no guest-side bootstrap graph).
+First-boot secrets are declared in YAML (\`tank\`, \`users.admin\`, \`repo.deploy_key\`, …)
+with \`!env\` pointing at this graph. \`users\` is optional (defaults: admin/1000 key-only,
+apps/900 + subids). \`qctl vm seed\` resolves on the host and injects Tier-0 credentials
+into the guest (no guest-side bootstrap graph).
 
 Host caches are **not** here — they live under XDG:
 

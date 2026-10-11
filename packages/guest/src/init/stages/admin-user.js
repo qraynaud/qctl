@@ -1,5 +1,5 @@
 /**
- * Create sudo/SSH admin from seed Tier-0 ADMIN_* (or key-only default "rocky").
+ * Create sudo/SSH admin from seed Tier-0 ADMIN_* (or key-only default "admin").
  * SSH pubkeys from seed `/etc/rocky/admin_ssh_authorized_keys`.
  */
 import { chmod, writeFile } from 'node:fs/promises'
@@ -9,18 +9,25 @@ import { detectQctlEnv, envString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
 
-const DEFAULT_USER = 'rocky'
+const DEFAULT_USER = 'admin'
 const DEFAULT_UID = 1000
-const DEFAULT_GID = 1000
 const SUDOERS_DROPIN_DEFAULT = '/etc/sudoers.d/90-rocky-wheel'
 const ADMIN_KEYS_SRC_DEFAULT = '/etc/rocky/admin_ssh_authorized_keys'
 
 /**
  * @param {string} u
+ * @param {string} [appsUsername]
  */
-function validUsername(u) {
+function validUsername(u, appsUsername = 'apps') {
   if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(u)) return false
-  if (u === 'root' || u === 'apps' || u === 'nobody' || u === 'dbus' || u.startsWith('systemd-')) {
+  if (
+    u === 'root'
+    || u === 'nobody'
+    || u === 'dbus'
+    || u === appsUsername
+    || u === 'apps'
+    || u.startsWith('systemd-')
+  ) {
     return false
   }
   return true
@@ -158,7 +165,7 @@ export default {
   plan(ctx) {
     return [
       `Tier-0 ADMIN_* (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
-      'ADMIN_USERNAME+PASSWORD → password sudo; else key-only rocky + NOPASSWD',
+      'ADMIN_USERNAME+PASSWORD → password sudo; else key-only admin + NOPASSWD',
       'install seed admin_ssh_authorized_keys; write /etc/rocky/admin-user',
     ]
   },
@@ -171,39 +178,32 @@ export default {
     const username = envString(ctx.env, 'ADMIN_USERNAME')
     const password = envString(ctx.env, 'ADMIN_PASSWORD')
     const defaultUser = ctx.env.ROCKY_ADMIN_DEFAULT_USER?.trim() || DEFAULT_USER
+    const appsUsername = ctx.env.ROCKY_QUADLET_USER?.trim() || 'apps'
     const keysSrc = ctx.env.ROCKY_ADMIN_SSH_KEYS?.trim() || ADMIN_KEYS_SRC_DEFAULT
     const sudoers = ctx.env.ROCKY_SUDOERS_DROPIN?.trim() || SUDOERS_DROPIN_DEFAULT
 
     /** @type {{ mode: string, user: string, pass: string, uid: number, gid: number }} */
     let admin
     try {
-      if (!username || !password) {
-        ctx.log(
-          `rocky-admin-user: ADMIN_USERNAME/PASSWORD incomplete — default key-only '${defaultUser}'`,
-        )
-        admin = {
-          mode: 'keyonly',
-          user: defaultUser,
-          pass: '',
-          uid: DEFAULT_UID,
-          gid: DEFAULT_GID,
-        }
+      const uid = parseId(envString(ctx.env, 'ADMIN_UID'), 'UID', DEFAULT_UID)
+      const gid = parseId(envString(ctx.env, 'ADMIN_GID'), 'GID', uid)
+      if (!password) {
+        const user = username || defaultUser
+        ctx.log(`rocky-admin-user: no ADMIN_PASSWORD — key-only '${user}'`)
+        admin = { mode: 'keyonly', user, pass: '', uid, gid }
       } else {
-        if (!validUsername(username)) {
+        if (!username) {
+          throw new Error('ADMIN_PASSWORD set but ADMIN_USERNAME missing')
+        }
+        if (!validUsername(username, appsUsername)) {
           throw new Error(`refusing username ${JSON.stringify(username)}`)
         }
-        admin = {
-          mode: 'password',
-          user: username,
-          pass: password,
-          uid: parseId(envString(ctx.env, 'ADMIN_UID'), 'UID', DEFAULT_UID),
-          gid: parseId(envString(ctx.env, 'ADMIN_GID'), 'GID', DEFAULT_GID),
-        }
+        admin = { mode: 'password', user: username, pass: password, uid, gid }
         ctx.log(
           `rocky-admin-user: provision → user '${admin.user}' uid=${admin.uid} gid=${admin.gid} (password sudo)`,
         )
       }
-      if (!validUsername(admin.user)) {
+      if (!validUsername(admin.user, appsUsername)) {
         throw new Error(`invalid admin username ${JSON.stringify(admin.user)}`)
       }
       await ensureSudoers(ctx, admin.mode, admin.user, sudoers)

@@ -53,9 +53,12 @@ describe('loadEnvSecrets (provision adapter)', () => {
     expect(sec.provisionDir).toBe(join(root, 'provision'))
     expect(sec.guest).toMatchObject({
       TANK_PASSPHRASE: 'lab-tank-passphrase',
-      ADMIN_USERNAME: 'rocky',
+      ADMIN_USERNAME: 'admin',
+      ADMIN_UID: '1000',
+      ADMIN_GID: '1000',
       DEPLOY_KEY: 'lab-deploy-key-placeholder',
     })
+    expect(sec.guest.ADMIN_PASSWORD).toBeUndefined()
     expect(sec.ports.map((p) => p.name)).toEqual(['ssh', 'http', 'https'])
     expect(sec.ports[0]).toMatchObject({ name: 'ssh', port: 22, forward: 2222 })
     expect(sec.uplinks).toEqual([{ name: 'eth0', dhcp4: true }])

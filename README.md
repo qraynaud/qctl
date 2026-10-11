@@ -20,7 +20,7 @@ You need [mise](https://mise.jdx.dev/) and a published [qctl release](https://gi
 "github:qraynaud/qctl" = { version = "latest", asset_pattern = "qctl-host", bin = "qctl" }
 ```
 
-3. Install and activate (`qctl vm seed` builds the NoCloud ISO in-process — no genisoimage/xorriso):
+3. Install and activate:
 
 ```bash
 mise install
@@ -37,6 +37,10 @@ qctl init .
 That writes schemas, `provision/`, `applications/` / `networks/` stubs, and a matching
 `mise.toml` (existing `mise.toml` is left alone unless you pass `--force`).
 
+Edit `provision/<env>.yaml` (and optional `provision/<env>.local.yaml` /
+`provision/<env>.proxmox.yaml` overlays) for networking, users, tank, and hypervisor
+sizing — see [docs/provision.md](docs/provision.md) for every field and commented samples.
+
 ## CLI reference
 
 | Role | Binary | Docs |
@@ -51,6 +55,7 @@ That writes schemas, `provision/`, `applications/` / `networks/` stubs, and a ma
 | [packages/host/README.md](packages/host/README.md) | Host CLI reference |
 | [packages/guest/README.md](packages/guest/README.md) | Guest CLI reference |
 | [docs/instance.md](docs/instance.md) | Instance layout, schemas, provision, seed |
+| [docs/provision.md](docs/provision.md) | Provision YAML fields, overlays, commented samples |
 | [docs/secrets.md](docs/secrets.md) | `@sensitive` → Podman; `@tag(guest)` credentials |
 | [packages/vaultwarden-plugin/README.md](packages/vaultwarden-plugin/README.md) | `vw()` / `@initVw` varlock plugin |
 

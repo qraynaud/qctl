@@ -1,10 +1,11 @@
 import { z } from 'zod'
 
 import { filesSchema, normalizeFiles } from './files.js'
-import { adminSchema, registriesSchema, tankSchema } from './first-boot.js'
+import { registriesSchema, tankSchema } from './first-boot.js'
 import { alignProxmoxNets, networkingSchema, portsSchema } from './networking.js'
 import { normalizePackages, packagesSchema } from './packages.js'
 import { localSchema, proxmoxSchema } from './targets.js'
+import { usersSchema } from './users.js'
 import { formatSecretsError, parseSecretsSchema } from './zod-utils.js'
 
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
@@ -30,8 +31,8 @@ export const secretsFileSchema = z
       .optional(),
     /** ZFS tank key (host-resolved → Tier-0 TANK_PASSPHRASE). */
     tank: tankSchema,
-    /** Appliance admin user (host-resolved → Tier-0 ADMIN_*). */
-    admin: adminSchema,
+    /** Optional; defaults admin (1000) + apps (900 / subids). */
+    users: z.preprocess((v) => (v == null ? {} : v), usersSchema),
     /** podman login lines (host-resolved → Tier-0 ROCKY_REGISTRIES JSON). */
     registries: registriesSchema,
     repo: z
@@ -115,6 +116,7 @@ export const secretsFileSchema = z
 /**
  * @typedef {object} SecretsRootPreview
  * @property {YamlValue} [ports]
+ * @property {YamlValue} [admin]
  * @property {{ ports?: YamlValue }} [networking]
  * @property {YamlValue} [packages]
  */
@@ -138,6 +140,21 @@ export function parseSecretsFile(raw, source = 'secrets') {
             message:
               'move top-level ports: under networking: (see provision/dev.yaml from `qctl init`)',
             path: ['ports'],
+          },
+        ]),
+        source,
+      ),
+    )
+  }
+  if (root.admin != null) {
+    throw new Error(
+      formatSecretsError(
+        new z.ZodError([
+          {
+            code: 'custom',
+            message:
+              'move top-level admin: under users.admin (see provision/dev.yaml from `qctl init`)',
+            path: ['admin'],
           },
         ]),
         source,

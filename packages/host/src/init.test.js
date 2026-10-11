@@ -12,7 +12,14 @@ import {
 
 import { makeTempDir, removeTempDir } from '../../shared/src/test-helpers.js'
 import { initInstance } from './init.js'
+import {
+  appsIdentityFromProvision,
+  firstBootCredentialsFromProvision,
+  parseSecretsFile,
+} from './vm/libs/secrets-schema.js'
 import { afterEach, describe, expect, test } from 'bun:test'
+
+/** @import { YamlMapping } from '@qctl/shared' */
 
 /** @type {string[]} */
 const temps = []
@@ -61,6 +68,27 @@ describe('initInstance', () => {
     const prov = readFileSync(join(result.root, 'provision', 'dev.yaml'), 'utf8')
     expect(prov).toContain('tank:')
     expect(prov).toContain('!env TANK_PASSPHRASE')
+
+    // Resolved local provision must validate (users omitted → schema defaults).
+    const loaded = await loadProvision({
+      root: result.root,
+      env: 'dev',
+      target: 'local',
+      processEnv: { ...process.env, QCTL_ENV: 'dev' },
+    })
+    const raw = /** @type {YamlMapping} */ ({ ...loaded.data })
+    delete raw.qctl
+    const parsed = parseSecretsFile(raw, loaded.basePath)
+    expect(parsed.data.users.admin).toMatchObject({ username: 'admin', uid: 1000, gid: 1000 })
+    expect(appsIdentityFromProvision(/** @type {YamlMapping} */ (parsed.data))).toMatchObject({
+      username: 'apps',
+      uid: 900,
+      subuidSpec: '900000:32768',
+    })
+    const tier0 = firstBootCredentialsFromProvision(/** @type {YamlMapping} */ (parsed.data))
+    expect(tier0.TANK_PASSPHRASE).toBeTruthy()
+    expect(tier0.ADMIN_USERNAME).toBe('admin')
+    expect(tier0.ADMIN_PASSWORD).toBeUndefined()
   })
 
   test('scaffolded schema + .env.dev/.env.prod load through the varlock graph (no .env.<env> auto-load)', async () => {

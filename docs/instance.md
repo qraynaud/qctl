@@ -4,7 +4,8 @@ How an **instance** repo is laid out for qctl (what `qctl init` / `qctl new` sca
 and what host/guest CLIs expect).
 
 For command flags see [packages/host/README.md](../packages/host/README.md) and
-[packages/guest/README.md](../packages/guest/README.md). Secrets → [secrets.md](./secrets.md).
+[packages/guest/README.md](../packages/guest/README.md). Provision YAML →
+[provision.md](./provision.md). Secrets → [secrets.md](./secrets.md).
 
 ## Roles
 
