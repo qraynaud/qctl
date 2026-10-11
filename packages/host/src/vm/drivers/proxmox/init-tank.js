@@ -152,7 +152,7 @@ export async function initTank(argv) {
   })
   const isoPath = seedResult.isoPath
   if (!fs.existsSync(isoPath)) {
-    die(`init-tank ISO missing at ${isoPath} — install xorriso/genisoimage and re-run seed`)
+    die(`init-tank ISO missing at ${isoPath} — run \`qctl vm seed --profile init-tank\``)
   }
 
   const importVolid = await ensureCloudImageImport(client, {

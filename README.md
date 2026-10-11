@@ -13,31 +13,17 @@ You need [mise](https://mise.jdx.dev/) and a published [qctl release](https://gi
 
 1. Create an empty repository and `cd` into it.
 
-2. Add this `mise.toml` (tool pin + host packages for `qctl vm seed`):
+2. Add this `mise.toml`:
 
 ```toml
 [tools]
 "github:qraynaud/qctl" = { version = "latest", asset_pattern = "qctl-host", bin = "qctl" }
-
-# ISO preferred (genisoimage / xorriso); FAT fallback needs mtools + dosfstools.
-# Unused managers are skipped — keep the block for the distros you care about.
-[bootstrap.packages]
-"apt:genisoimage" = "latest"
-"apt:mtools" = "latest"
-"apt:dosfstools" = "latest"
-"dnf:genisoimage" = "latest"
-"dnf:mtools" = "latest"
-"dnf:dosfstools" = "latest"
-"pacman:xorriso" = "latest"
-"pacman:mtools" = "latest"
-"pacman:dosfstools" = "latest"
 ```
 
-3. Install tools and host packages, then activate:
+3. Install and activate (`qctl vm seed` builds the NoCloud ISO in-process — no genisoimage/xorriso):
 
 ```bash
 mise install
-mise bootstrap packages apply --yes
 # ensure `qctl` is on PATH (mise activate, direnv, or `mise exec -- …`)
 qctl --help
 ```
@@ -86,7 +72,6 @@ Requires [mise](https://mise.jdx.dev/) (installs Bun):
 git clone https://github.com/qraynaud/qctl.git
 cd qctl
 mise install
-mise bootstrap packages apply --yes   # genisoimage/xorriso + mtools (vm seed)
 bun install
 bun run test:lint
 bun run typecheck

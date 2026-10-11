@@ -6,7 +6,7 @@ import { runSeed } from '../libs/seed.js'
 
 export const command = 'seed'
 export const describe =
-  'Build NoCloud seed ISO (or FAT img) for --env / --target (provision/<env>.yaml + optional overlay)'
+  'Build NoCloud seed ISO for --env / --target (provision/<env>.yaml + optional overlay)'
 
 /**
  * @param {Argv} yargs

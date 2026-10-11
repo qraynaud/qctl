@@ -95,7 +95,7 @@ networking; `init-tank` does not (no guest SSH/cockpit).
 
 | Subcommand | Description |
 |------------|-------------|
-| `qctl vm seed` | Build NoCloud cidata + ISO (embeds guest binaries) |
+| `qctl vm seed` | Build NoCloud ISO in-process (embeds guest binaries; no host ISO tools) |
 | `qctl vm download` | Download/cache the pinned Rocky 9 cloud image |
 | `qctl vm up` | Start existing VM, or create if missing; stream console until ready |
 | `qctl vm down` | ACPI shutdown; wait until shut off (VM stays defined) |

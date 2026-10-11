@@ -17,9 +17,6 @@ jobs:
 
       - uses: jdx/mise-action@v5
 
-      - name: Host seed tools
-        run: mise bootstrap packages apply --yes
-
       - name: Install
         run: bun install --frozen-lockfile
 

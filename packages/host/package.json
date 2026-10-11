@@ -10,6 +10,7 @@
     "start": "bun run src/cli.js"
   },
   "dependencies": {
+    "@gcu/iso9660": "0.1.0",
     "@qctl/shared": "workspace:*",
     "nunjucks": "^3.2.4",
     "ssh2": "^1.17.0",

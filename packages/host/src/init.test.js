@@ -48,10 +48,8 @@ describe('initInstance', () => {
     expect(mise).not.toContain('github:dmno-dev/varlock')
     expect(mise).toContain('github:qraynaud/qctl')
     expect(mise).toContain('bin = "qctl"')
-    expect(mise).toContain('[bootstrap.packages]')
-    expect(mise).toContain('apt:genisoimage')
-    expect(mise).toContain('dnf:genisoimage')
-    expect(mise).toContain('pacman:xorriso')
+    expect(mise).not.toContain('[bootstrap.packages]')
+    expect(mise).toContain('bundled ISO writer')
 
     const { envRefs } = await loadProvision({
       root: result.root,

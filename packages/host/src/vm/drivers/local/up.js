@@ -253,7 +253,7 @@ export async function up(argv) {
   /** @type {Awaited<ReturnType<typeof ensureSeed>>} */
   let seed
   if (dryRun) {
-    seed = { path: 'seed/<env>/cidata.img', format: 'raw', device: 'disk' }
+    seed = { path: 'seed/<env>/nocloud.iso', format: 'raw', device: 'cdrom' }
   } else {
     console.log(chalk.cyan('vm: building appliance seed…'))
     const seedResult = await runSeed({

@@ -216,9 +216,8 @@ describe('host CLI', () => {
     expect(existsSync(join(seedEnv, 'cidata'))).toBe(false)
     expect(existsSync(join(seedEnv, 'instance-id'))).toBe(true)
     expect(readFileSync(join(seedEnv, 'instance-id'), 'utf8')).toContain('rocky-dev')
-    expect(
-      existsSync(join(seedEnv, 'nocloud.iso')) || existsSync(join(seedEnv, 'cidata.img')),
-    ).toBe(true)
+    expect(existsSync(join(seedEnv, 'nocloud.iso'))).toBe(true)
+    expect(existsSync(join(seedEnv, 'cidata.img'))).toBe(false)
 
     const userData = readFileSync(join(keep, 'user-data'), 'utf8')
     expect(userData.startsWith('#cloud-config')).toBe(true)

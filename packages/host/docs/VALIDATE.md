@@ -33,7 +33,7 @@ On-box VW **container** data belongs on `/tank`.
 
 ## Gate 0 — Seed builds
 
-- [ ] `qctl vm seed` writes `~/.cache/qctl/repos/<hash>/seed/<env>/nocloud.iso` (or `cidata.img`) + `instance-id`
+- [ ] `qctl vm seed` writes `~/.cache/qctl/repos/<hash>/seed/<env>/nocloud.iso` + `instance-id`
 - [ ] Seed embeds guest `qctl-guest` + `qctl-platform-rocky.mjs` (`qctl-guest/` on the ISO); Tier-0 pending paths present when provision guest tags exist (or intentionally omitted with `--allow-missing-tier0` for dry docs only)
 - [ ] `user-data` is valid YAML after tag resolution (use `qctl vm seed --out /tmp/cidata` to inspect; no leftover `!template` / `!file`)
 

@@ -6,7 +6,7 @@
  * Workstation artifacts (not in the repo):
  *   $XDG_CACHE_HOME/qctl/images/              shared cloud base images
  *   $XDG_CACHE_HOME/qctl/tooling/             materialized seed-kit (compiled host)
- *   $XDG_CACHE_HOME/qctl/repos/<hash>/seed/   NoCloud ISO / FAT + instance-id
+ *   $XDG_CACHE_HOME/qctl/repos/<hash>/seed/   NoCloud ISO + instance-id
  *   $XDG_DATA_HOME/qctl/repos/<hash>/vms/     libvirt disk images (kept; not GC'd)
  *
  * `<hash>` = first 16 hex chars of sha256(realpath(instance root)).
