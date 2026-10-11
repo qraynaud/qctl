@@ -1,5 +1,33 @@
-/** @import { SessionCache, VwClient } from './vw/client.js' */
-/** @import { InitVwArgs, VwAccountId, VwCall } from './vw/parse.js' */
+/** @import { Resolver } from 'varlock/plugin-lib' */
+/** @import { SessionCache } from './vw/client.js' */
+/** @import { InitVwArgs, InitVwRawBag, VwAccountId, VwCall } from './vw/parse.js' */
+
+/**
+ * `@initVw` process → execute payload (resolvers still unresolved until execute).
+ * @typedef {object} InitVwProcessed
+ * @property {string} [id]
+ * @property {VwAccountId} accountId
+ * @property {Resolver} [appDataDir]
+ * @property {Resolver} [sessionToken]
+ * @property {Resolver} [masterPassword]
+ * @property {Resolver} [serverUrl]
+ * @property {Resolver} [clientId]
+ * @property {Resolver} [clientSecret]
+ * @property {Resolver} [sessionTtl]
+ * @property {Resolver} [cacheTtl]
+ * @property {Resolver} [syncTtl]
+ * @property {Resolver} [bin]
+ */
+
+/**
+ * `vw()` process → resolve payload (child resolvers before string await).
+ * @typedef {object} VwResolveRaw
+ * @property {Resolver} [accountId]
+ * @property {Resolver} [item]
+ * @property {Resolver} [field]
+ * @property {Resolver} [attachment]
+ * @property {Resolver} [encoding]
+ */
 
 /*
  * Varlock plugin entry (loaded by varlock via @plugin(<path>)).
@@ -33,12 +61,10 @@ const {
   valueCacheKey,
 } = require('./vw.js')
 
-/** @type {any} */
-const p = plugin
-const { SchemaError, ResolutionError } = p.ERRORS
+const { SchemaError, ResolutionError } = plugin.ERRORS
 
-p.name = 'qctl-vaultwarden'
-p.icon = 'mdi:shield-key'
+plugin.name = 'qctl-vaultwarden'
+plugin.icon = 'mdi:shield-key'
 
 /**
  * Capture during module load while the plugin context is active.
@@ -49,7 +75,7 @@ p.icon = 'mdi:shield-key'
  */
 let pluginCache
 try {
-  pluginCache = p.cache
+  pluginCache = plugin.cache
 } catch {
   // loaded outside an active plugin context
 }
@@ -59,7 +85,7 @@ const clients = new Map()
 
 /**
  * Resolve a varlock arg to a string, preserving empty strings for Zod preprocess.
- * @param {any} resolver
+ * @param {Resolver | null | undefined} resolver
  * @returns {Promise<string | undefined>}
  */
 async function resolveOptionalString(resolver) {
@@ -73,7 +99,7 @@ async function resolveOptionalString(resolver) {
 }
 
 /**
- * @param {any} resolver
+ * @param {Resolver | null | undefined} resolver
  * @returns {Promise<string | undefined>}
  */
 async function resolveString(resolver) {
@@ -100,13 +126,17 @@ function requireClient(accountId) {
   return client
 }
 
-p.registerRootDecorator({
+plugin.registerRootDecorator({
   name: 'initVw',
   description:
     'Initialize Vaultwarden (bw CLI): id, appDataDir, sessionToken, masterPassword, serverUrl, '
     + 'clientId, clientSecret, sessionTtl, cacheTtl, syncTtl (repeatable with distinct id=)',
   isFunction: true,
-  async process(/** @type {any} */ argsVal) {
+  /**
+   * @param {Resolver} argsVal
+   * @returns {Promise<InitVwProcessed>}
+   */
+  async process(argsVal) {
     const arr = argsVal.arrArgs ?? []
     if (arr.length > 0) {
       throw new SchemaError(
@@ -118,7 +148,7 @@ p.registerRootDecorator({
     /** @type {{ id?: string }} */
     let keys
     try {
-      keys = parseInitVwArgKeys(o)
+      keys = parseInitVwArgKeys(/** @type {InitVwRawBag} */ (o))
     } catch (e) {
       throw new SchemaError(e instanceof Error ? e.message : String(e))
     }
@@ -147,7 +177,11 @@ p.registerRootDecorator({
       bin: o.bin,
     }
   },
-  async execute(/** @type {any} */ r) {
+  /**
+   * @param {InitVwProcessed} r
+   * @returns {Promise<void>}
+   */
+  async execute(r) {
     /** @type {VwAccountId} */
     const accountId = r.accountId ?? DEFAULT_VW_ACCOUNT
     /** @type {string | number} */
@@ -195,15 +229,19 @@ p.registerRootDecorator({
   },
 })
 
-p.registerDataType({
+plugin.registerDataType({
   name: 'vwSession',
   sensitive: true,
   internal: true,
   typeDescription: 'Bitwarden/Vaultwarden CLI session token (output of `bw unlock --raw`)',
-  async validate(/** @type {unknown} */ val) {
+  /**
+   * @param {string | null | undefined} val
+   * @returns {Promise<void>}
+   */
+  async validate(val) {
     if (val == null || val === '') return
     if (typeof val !== 'string') {
-      throw new p.ERRORS.ValidationError('session token must be a string')
+      throw new plugin.ERRORS.ValidationError('session token must be a string')
     }
   },
 })
@@ -220,11 +258,14 @@ async function fetchVw(call) {
   return await client.getField(call.item, call.field)
 }
 
-p.registerResolverFunction({
+plugin.registerResolverFunction({
   name: 'vw',
   label:
     'Vaultwarden item: vw("item") | vw("accountId", "item"); field=/attachment=/encoding= named',
   argsSchema: { type: 'mixed', arrayMinLength: 1, arrayMaxLength: 2 },
+  /**
+   * @returns {VwResolveRaw}
+   */
   process() {
     if (clients.size === 0) {
       throw new SchemaError('Vaultwarden plugin not initialized', {
@@ -257,14 +298,20 @@ p.registerResolverFunction({
       encoding: obj.encoding,
     }
   },
-  async resolve(/** @type {any} */ raw) {
-    /** @type {{
+  /**
+   * @param {VwResolveRaw} raw
+   * @returns {Promise<string>}
+   */
+  async resolve(raw) {
+    /**
+     * @type {{
      *   accountId?: string,
      *   item?: string,
      *   field?: string,
      *   attachment?: string,
      *   encoding?: string,
-     * }} */
+     * }}
+     */
     const resolved = {
       accountId: raw.accountId !== undefined ? await resolveString(raw.accountId) : undefined,
       item: await resolveString(raw.item),

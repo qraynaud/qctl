@@ -21,6 +21,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
  * @property {string} sha256
  */
 
+/**
+ * Pre-validation pin shape (JSON / plugin export before normalize).
+ * @typedef {object} CloudImagePinCandidate
+ * @property {string} [file]
+ * @property {string} [url]
+ * @property {string} [sha256]
+ */
+
 /** @type {RockyCloudImage | null} */
 let cached = null
 
@@ -70,23 +78,24 @@ export function pluginCloudImageCandidates() {
   }
   // Workspace / sibling compile output.
   // packages/host/src → repo root dist/
-  out.push(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist', 'cloud-image.json'))
+  out.push(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist', 'cloud-image.json'),
+  )
   return out
 }
 
 /**
- * @param {unknown} raw
+ * @param {CloudImagePinCandidate | RockyCloudImage | string | number | boolean | null | undefined} raw
  * @param {string} label
  * @returns {RockyCloudImage}
  */
 export function normalizeCloudImage(raw, label = 'cloud image pin') {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!raw || typeof raw !== 'object') {
     throw new Error(`invalid ${label}`)
   }
-  const o = /** @type {Record<string, unknown>} */ (raw)
-  const file = typeof o.file === 'string' ? o.file.trim() : ''
-  const url = typeof o.url === 'string' ? o.url.trim() : ''
-  const sha256 = typeof o.sha256 === 'string' ? o.sha256.trim().toLowerCase() : ''
+  const file = typeof raw.file === 'string' ? raw.file.trim() : ''
+  const url = typeof raw.url === 'string' ? raw.url.trim() : ''
+  const sha256 = typeof raw.sha256 === 'string' ? raw.sha256.trim().toLowerCase() : ''
   if (!file || !url || !/^[a-f0-9]{64}$/.test(sha256)) {
     throw new Error(`invalid ${label} (need file, url, sha256 hex)`)
   }
@@ -98,7 +107,9 @@ export function normalizeCloudImage(raw, label = 'cloud image pin') {
  * @returns {RockyCloudImage}
  */
 function readPin(filePath) {
-  return normalizeCloudImage(JSON.parse(readFileSync(filePath, 'utf8')), filePath)
+  /** @type {CloudImagePinCandidate} */
+  const parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+  return normalizeCloudImage(parsed, filePath)
 }
 
 /**
@@ -159,9 +170,9 @@ export function writeCloudImagePin(dir, pin) {
  * @returns {Promise<RockyCloudImage>}
  */
 export async function loadCloudImageFromPlugin(modulePath) {
+  /** @type {{ CLOUD_IMAGE?: CloudImagePinCandidate | RockyCloudImage }} */
   const mod = await import(pathToFileURL(modulePath).href)
-  const pin = /** @type {{ CLOUD_IMAGE?: unknown }} */ (mod).CLOUD_IMAGE
-  return setCloudImageCache(normalizeCloudImage(pin, modulePath))
+  return setCloudImageCache(normalizeCloudImage(mod.CLOUD_IMAGE, modulePath))
 }
 
 /**

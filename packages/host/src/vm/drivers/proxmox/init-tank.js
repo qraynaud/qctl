@@ -1,8 +1,8 @@
 import { chalk, fs } from 'zx'
 
-import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import { matchInitTankFatal } from '../../libs/console.js'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
+import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import { applyNetsToForm } from '../../libs/proxmox/config.js'
 import {
   assertNameFreeForCreate,
@@ -34,8 +34,8 @@ import { ping } from './shared.js'
 /** @typedef {{ ok: boolean, aborted?: boolean, line?: string }} WaitOutcome */
 
 /**
- * @param {unknown} err
- * @returns {boolean}
+ * @param {Error | { name?: string } | string | number | boolean | null | undefined} err
+ * @returns {err is Error}
  */
 function isGuestFatalError(err) {
   return err instanceof Error && err.name === 'GuestFatalError'
@@ -288,7 +288,7 @@ export async function initTank(argv) {
     console.log(chalk.dim('  next: qctl vm up --target proxmox'))
     console.log(chalk.dim('  (appliance first-boot 30 will import tank)'))
   } catch (err) {
-    if (isGuestFatalError(err)) {
+    if (err instanceof Error && isGuestFatalError(err)) {
       if (consoleFollow) {
         await consoleFollow.stop()
         consoleFollow = null

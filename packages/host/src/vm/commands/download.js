@@ -10,8 +10,8 @@ import { ensureCloudImage } from '../libs/platform-tooling.js'
 import { die, requireBins } from '../libs/util.js'
 
 /** @import { Argv } from 'yargs' */
-/** @import { VmArgv } from '../types.js' */
 /** @import { RockyCloudImage } from '../../cloud-image.js' */
+/** @import { VmArgv } from '../types.js' */
 
 export { IMAGE }
 

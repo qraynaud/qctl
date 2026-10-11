@@ -5,7 +5,7 @@
  */
 import { existsSync } from 'node:fs'
 
-import { chalk, fs, path, $ } from 'zx'
+import { $, chalk, fs, path } from 'zx'
 
 import {
   loadCloudImage,
@@ -133,8 +133,7 @@ export async function ensurePlatformModule(opts = {}) {
   }
 
   await fs.mkdirp(destDir)
-  const url =
-    `https://github.com/${ref.githubRepo}/releases/download/v${version}/${ref.moduleFile}`
+  const url = `https://github.com/${ref.githubRepo}/releases/download/v${version}/${ref.moduleFile}`
   console.log(chalk.cyan(`vm: downloading ${ref.moduleFile} v${version} ← ${ref.githubRepo}`))
   const r = await $`curl -fsSL -o ${dest} ${url}`.nothrow()
   if (r.exitCode !== 0 || !existsSync(dest)) {

@@ -1,10 +1,11 @@
+import { join } from 'node:path'
+
 import {
   IMAGE,
   loadCloudImageFromPlugin,
   resolveCloudImagePinPath,
   workspaceCloudImagePath,
 } from './cloud-image.js'
-import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')

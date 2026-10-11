@@ -35,8 +35,18 @@ const DEFAULT_VW_ACCOUNT = Symbol('vw.default')
 
 /**
  * Resolved `vw()` call shape after string resolution.
- * @typedef {{ kind: 'field', item: string, field: string, accountId: VwAccountId }
- *   | { kind: 'attachment', item: string, file: string, encoding: 'utf8' | 'base64', accountId: VwAccountId }} VwCall
+ * @typedef {{
+ *   kind: 'field',
+ *   item: string,
+ *   field: string,
+ *   accountId: VwAccountId,
+ * } | {
+ *   kind: 'attachment',
+ *   item: string,
+ *   file: string,
+ *   encoding: 'utf8' | 'base64',
+ *   accountId: VwAccountId,
+ * }} VwCall
  */
 
 const vwArgsSchema = z
@@ -138,6 +148,22 @@ const INIT_VW_KEYS = /** @type {const} */ ([
  * }} InitVwArgs
  */
 
+/**
+ * Opaque `@initVw` / varlock arg value before Zod validation.
+ * @typedef {object} InitVwArgValue
+ * @property {() => Promise<string | number | boolean | undefined>} [resolve]
+ * @property {boolean} [isStatic]
+ * @property {string | number | boolean | null} [staticValue]
+ */
+
+/**
+ * Loose `@initVw` bag before Zod (unknown keys rejected).
+ * @typedef {Record<
+ *   string,
+ *   string | number | boolean | null | undefined | InitVwArgValue
+ * >} InitVwRawBag
+ */
+
 /** Empty string → undefined so `$BW_SESSION` can be unset in the graph. */
 const initVwOptString = (/** @type {string} */ name) =>
   z.preprocess(
@@ -158,7 +184,7 @@ const unresolvedStringArg = (name) =>
           (v) =>
             typeof v === 'object'
             && v !== null
-            && typeof (/** @type {{ resolve?: unknown }} */ (v).resolve) === 'function',
+            && typeof (/** @type {InitVwArgValue} */ (v).resolve) === 'function',
           { error: `@initVw: ${name} must be a string or varlock resolver` },
         ),
       ],
@@ -180,7 +206,7 @@ const unresolvedTtlArg = (name) =>
           (v) =>
             typeof v === 'object'
             && v !== null
-            && typeof (/** @type {{ resolve?: unknown }} */ (v).resolve) === 'function',
+            && typeof (/** @type {InitVwArgValue} */ (v).resolve) === 'function',
           { error: `@initVw: ${name} must be a TTL string/number or varlock resolver` },
         ),
       ],
@@ -216,18 +242,14 @@ const resolvedCacheTtl = z
 /**
  * Unwrap varlock process-time args: bare literals arrive as StaticValueResolver
  * (`{ isStatic: true, staticValue }`), not plain strings.
- * @param {unknown} v
- * @returns {unknown}
+ * @param {string | InitVwArgValue | null | undefined} v
+ * @returns {string | InitVwArgValue | undefined}
  */
 function unwrapStaticArg(v) {
   if (v == null || v === '') return undefined
   if (typeof v === 'string') return v
-  if (
-    typeof v === 'object'
-    && /** @type {{ isStatic?: boolean }} */ (v).isStatic === true
-    && typeof (/** @type {{ staticValue?: unknown }} */ (v).staticValue) === 'string'
-  ) {
-    return /** @type {{ staticValue: string }} */ (v).staticValue
+  if (typeof v === 'object' && v.isStatic === true && typeof v.staticValue === 'string') {
+    return v.staticValue
   }
   return v
 }
@@ -237,18 +259,15 @@ function unwrapStaticArg(v) {
  * Varlock wraps `id=perso` / `id="perso"` as StaticValueResolver — both OK.
  * Dynamic resolvers (`$FOO`, function calls) are rejected.
  */
-const initVwIdLiteral = z.preprocess(
-  (v) => {
-    const unwrapped = unwrapStaticArg(v)
-    if (unwrapped == null || unwrapped === '') return undefined
-    return unwrapped
-  },
-  z
-    .string({ error: '@initVw: id= must be a non-empty string literal' })
-    .trim()
-    .min(1, '@initVw: id= must be a non-empty string literal')
-    .optional(),
-)
+const initVwIdLiteral = z.preprocess((v) => {
+  const unwrapped = unwrapStaticArg(/** @type {string | InitVwArgValue | null | undefined} */ (v))
+  if (unwrapped == null || unwrapped === '') return undefined
+  return unwrapped
+}, z
+  .string({ error: '@initVw: id= must be a non-empty string literal' })
+  .trim()
+  .min(1, '@initVw: id= must be a non-empty string literal')
+  .optional())
 
 /** Process-time `@initVw` args: known keys only; values still unresolved. */
 const initVwKeysSchema = z
@@ -347,7 +366,7 @@ function formatInitVwZodError(err) {
 
 /**
  * Reject unknown `@initVw` keys (call from plugin `process` before values resolve).
- * @param {Record<string, unknown>} raw
+ * @param {InitVwRawBag | null | undefined} raw
  */
 function parseInitVwArgKeys(raw) {
   const r = initVwKeysSchema.safeParse(raw ?? {})
@@ -359,7 +378,7 @@ function parseInitVwArgKeys(raw) {
  * Validate resolved `@initVw` options (after varlock resolver strings are awaited).
  * All keys optional; present values must be non-empty strings. Unknown keys rejected.
  * Expands a leading `~` on `appDataDir`.
- * @param {InitVwArgs} raw
+ * @param {InitVwArgs | InitVwRawBag | null | undefined} raw
  * @returns {InitVwArgs}
  */
 function parseInitVwArgs(raw) {

@@ -176,7 +176,9 @@ async function bundlePlatformModule() {
   const pinSrc = join(ROOT, 'packages/platform-rocky/cloud-image.json')
   if (existsSync(pinSrc)) {
     await cp(pinSrc, join(OUT, 'cloud-image.json'))
-    console.log(`staged ${join(OUT, 'cloud-image.json')} ← packages/platform-rocky/cloud-image.json`)
+    console.log(
+      `staged ${join(OUT, 'cloud-image.json')} ← packages/platform-rocky/cloud-image.json`,
+    )
   }
 }
 

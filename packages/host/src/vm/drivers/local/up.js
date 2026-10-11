@@ -7,7 +7,6 @@ import {
   startSerialTcpFollow,
 } from '../../libs/console.js'
 import { ensureDisks } from '../../libs/disks.js'
-import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import {
   domainExists,
   domainState,
@@ -22,6 +21,7 @@ import {
 } from '../../libs/libvirt.js'
 import { portsFromArgv } from '../../libs/options.js'
 import { getImages } from '../../libs/paths.js'
+import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import { portByName, resolvePorts } from '../../libs/ports.js'
 import { ensureSeed, runSeed } from '../../libs/seed.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'

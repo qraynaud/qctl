@@ -29,12 +29,7 @@ describe('profiles', () => {
   })
 
   test('init-tank stage order', () => {
-    expect([...INIT_TANK_STAGES]).toEqual([
-      'tier0-seal',
-      'vw-mount',
-      'tank-create',
-      'poweroff',
-    ])
+    expect([...INIT_TANK_STAGES]).toEqual(['tier0-seal', 'vw-mount', 'tank-create', 'poweroff'])
   })
 
   test('stagesForProfile', () => {

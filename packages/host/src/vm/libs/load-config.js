@@ -138,7 +138,7 @@ export async function loadEnvSecretsOrThrow({ env = 'dev', target = 'local' } = 
       q.tooling
       && typeof q.tooling === 'object'
       && !Array.isArray(q.tooling)
-      && typeof /** @type {YamlMapping} */ (q.tooling).platform === 'string'
+      && typeof (/** @type {YamlMapping} */ (q.tooling).platform) === 'string'
     ) {
       // Legacy `qctl.tooling.platform: rocky@x.y.z` — prefer new `qctl.platform`.
       platform = String(/** @type {YamlMapping} */ (q.tooling).platform).trim()

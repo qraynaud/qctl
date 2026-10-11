@@ -1,5 +1,3 @@
-import { describe, expect, test } from 'bun:test'
-
 import { QCTL_VERSION } from '@qctl/shared'
 
 import {
@@ -7,6 +5,7 @@ import {
   platformIdFromGithubRepo,
   resolvePlatformVersion,
 } from './platform-ref.js'
+import { describe, expect, test } from 'bun:test'
 
 describe('platform-ref', () => {
   test('short name rocky defaults to host version', () => {

@@ -89,7 +89,10 @@ export function resolvePlatformModule(opts = {}) {
     )
   }
 
-  for (const cand of [defaultPlatformModulePath(env), join(dirname(execPath), PLATFORM_MODULE_NAME)]) {
+  for (const cand of [
+    defaultPlatformModulePath(env),
+    join(dirname(execPath), PLATFORM_MODULE_NAME),
+  ]) {
     if (exists(cand)) return cand
   }
 

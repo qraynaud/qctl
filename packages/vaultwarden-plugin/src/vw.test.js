@@ -1,5 +1,7 @@
+/** @import { StdioOptions } from 'node:child_process' */
 /** @import { SessionCache } from './vw/client.js' */
 /** @import { BwItem } from './vw/items.js' */
+/** @import { InitVwArgValue, InitVwRawBag } from './vw/parse.js' */
 /** @import { Runner } from './vw/runner.js' */
 
 const { describe, expect, test } = require('bun:test')
@@ -34,7 +36,7 @@ const ITEM = {
  *   cmd: string,
  *   args: string[],
  *   env: Record<string, string | undefined>,
- *   stdio?: unknown,
+ *   stdio?: StdioOptions,
  *   teeStderr?: boolean,
  * }} MockCall
  */
@@ -50,7 +52,7 @@ function mockRunner(outputs, calls) {
    * @param {string[]} args
    * @param {{
    *   env: Record<string, string | undefined>,
-   *   stdio?: unknown,
+   *   stdio?: StdioOptions,
    *   teeStderr?: boolean,
    * }} opts
    */
@@ -163,7 +165,7 @@ describe('VwClient', () => {
   })
 
   test('sessionToken; BW_SESSION env; master password unlock', async () => {
-    /** @type {{ cmd: string, args: string[], env: Record<string, string | undefined>, stdio?: unknown }[]} */
+    /** @type {MockCall[]} */
     const calls = []
     const c1 = new VwClient({ sessionToken: 'TOK', env: {}, runner: mockRunner({}, calls) })
     expect(await c1.session()).toBe('TOK')
@@ -182,7 +184,7 @@ describe('VwClient', () => {
   })
 
   test('interactive unlock on TTY; errors without TTY', async () => {
-    /** @type {{ cmd: string, args: string[], env: Record<string, string | undefined>, stdio?: unknown }[]} */
+    /** @type {MockCall[]} */
     const calls = []
     const c = new VwClient({
       env: {},
@@ -231,7 +233,7 @@ describe('VwClient', () => {
   })
 
   test('unauthenticated: interactive login --raw skips unlock; apikey + serverUrl', async () => {
-    /** @type {{ cmd: string, args: string[], env: Record<string, string | undefined>, stdio?: unknown, teeStderr?: boolean }[]} */
+    /** @type {MockCall[]} */
     const calls = []
     let loggedIn = false
     const interactive = new VwClient({
@@ -267,7 +269,7 @@ describe('VwClient', () => {
     expect(calls.find((x) => x.args[0] === 'login')?.teeStderr).toBe(true)
     expect(calls.filter((x) => x.args[0] === 'unlock').length).toBe(0)
 
-    /** @type {{ cmd: string, args: string[], env: Record<string, string | undefined>, stdio?: unknown }[]} */
+    /** @type {MockCall[]} */
     const apiCalls = []
     let apiLogged = false
     const api = new VwClient({
@@ -730,7 +732,9 @@ describe('parseInitVwArgs', () => {
   test('id= requires appDataDir=', () => {
     expect(() => parseInitVwArgKeys({ id: 'work' })).toThrow(/id= requires appDataDir/)
     expect(() => parseInitVwArgs({ id: 'work' })).toThrow(/id= requires appDataDir/)
-    expect(parseInitVwArgKeys({ id: 'work', appDataDir: { resolve: async () => '/vw' } })).toMatchObject({
+    expect(
+      parseInitVwArgKeys({ id: 'work', appDataDir: { resolve: async () => '/vw' } }),
+    ).toMatchObject({
       id: 'work',
     })
   })
@@ -750,13 +754,15 @@ describe('parseInitVwArgs', () => {
   })
 
   test('rejects unknown keys (including removed sessionFile)', () => {
-    expect(() => parseInitVwArgs(/** @type {any} */ ({ appDataDir: '/vw', fake: 'x' }))).toThrow(
+    expect(() =>
+      parseInitVwArgs(/** @type {InitVwRawBag} */ ({ appDataDir: '/vw', fake: 'x' })),
+    ).toThrow(/unknown argument/)
+    expect(() =>
+      parseInitVwArgs(/** @type {InitVwRawBag} */ ({ sessionFile: '/run/vw.session' })),
+    ).toThrow(/unknown argument/)
+    expect(() => parseInitVwArgKeys(/** @type {InitVwRawBag} */ ({ typo: 1 }))).toThrow(
       /unknown argument/,
     )
-    expect(() => parseInitVwArgs(/** @type {any} */ ({ sessionFile: '/run/vw.session' }))).toThrow(
-      /unknown argument/,
-    )
-    expect(() => parseInitVwArgKeys(/** @type {any} */ ({ typo: 1 }))).toThrow(/unknown argument/)
   })
 
   test('parseInitVwArgKeys allows resolvers and rejects junk types', () => {
@@ -767,9 +773,9 @@ describe('parseInitVwArgs', () => {
       cacheTtl: '5m',
       sessionTtl: 60_000,
     })
-    expect(() => parseInitVwArgKeys({ appDataDir: { nope: true } })).toThrow(
-      /string or varlock resolver/,
-    )
+    expect(() =>
+      parseInitVwArgKeys({ appDataDir: /** @type {InitVwArgValue} */ ({ nope: true }) }),
+    ).toThrow(/string or varlock resolver/)
     expect(() => parseInitVwArgKeys({ appDataDir: 1 })).toThrow(/string or varlock resolver/)
     expect(() => parseInitVwArgKeys({ cacheTtl: true })).toThrow(
       /TTL string\/number or varlock resolver/,
