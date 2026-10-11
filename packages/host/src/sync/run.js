@@ -54,8 +54,12 @@ export async function runSync(argv) {
           } catch {
             // default rocky
           }
-          const t = resolveGuestToolingForSync({ platformModule })
-          console.log(chalk.dim(`  [dry-run] tooling ← ${t.distDir}`))
+          const t = await resolveGuestToolingForSync({
+            platformModule,
+            env: argv.env,
+            target: argv.target,
+          })
+          console.log(chalk.dim(`  [dry-run] tooling ← ${t.sourceLabel}`))
           for (const f of t.files) {
             console.log(chalk.dim(`  [dry-run] ${f.local} → ${f.installAs}`))
           }

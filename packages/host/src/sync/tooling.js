@@ -1,5 +1,5 @@
 /**
- * Push compiled guest/platform binaries (and optional bootstrap) onto the appliance.
+ * Push guest/platform release binaries (and optional bootstrap) onto the appliance.
  */
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -8,49 +8,38 @@ import { join } from 'node:path'
 
 import { $, chalk, path } from 'zx'
 
-import { loadEnvSecretsOrThrow } from '../vm/libs/load-config.js'
+import { ensureGuestTooling } from '../vm/libs/guest-tooling.js'
 import { tryGetRepoRoot } from '../vm/libs/paths.js'
-import { parsePlatformRef } from '../vm/libs/platform-ref.js'
 import { sftpPut, sshExecOk } from './ssh.js'
 
 /** @import { Client } from 'ssh2' */
-
-/**
- * @returns {string[]}
- */
-function guestToolingDistDirs() {
-  /** @type {string[]} */
-  const dirs = []
-  if (process.env.QCTL_GUEST_DIST) dirs.push(path.resolve(process.env.QCTL_GUEST_DIST))
-  const root = tryGetRepoRoot()
-  if (root) dirs.push(path.resolve(root, '..', 'qctl', 'dist'))
-  return dirs
-}
 
 /**
  * @typedef {{ local: string, remoteTmp: string, installAs: string, mode: string }} ToolingFile
  */
 
 /**
- * Resolve qctl-guest → /usr/local/bin/qctl and selected platform module from dist / env.
- * @param {{ platformModule?: string }} [opts]
- * @returns {{ files: ToolingFile[], bootstrapDir: string | null, distDir: string }}
+ * Resolve qctl-guest → /usr/local/bin/qctl and selected platform module (GitHub or env).
+ * @param {{
+ *   platformModule?: string,
+ *   env?: string,
+ *   target?: string,
+ *   platform?: string,
+ * }} [opts]
+ * @returns {Promise<{ files: ToolingFile[], bootstrapDir: string | null, sourceLabel: string }>}
  */
-export function resolveGuestToolingForSync(opts = {}) {
-  const platformModule = opts.platformModule || parsePlatformRef('rocky').moduleFile
-  const names = ['qctl-guest', platformModule]
-  /** @type {string | null} */
-  let distDir = null
-  for (const dir of guestToolingDistDirs()) {
-    if (names.every((n) => existsSync(path.join(dir, n)))) {
-      distDir = dir
-      break
-    }
-  }
-  if (!distDir) {
+export async function resolveGuestToolingForSync(opts = {}) {
+  const resolved = await ensureGuestTooling({
+    env: opts.env,
+    target: opts.target,
+    platform: opts.platform,
+    platformModule: opts.platformModule,
+    required: true,
+  })
+  if (!resolved) {
     throw new Error(
-      'sync --include-tooling: no compiled guest binaries.\n'
-        + '  Run `bun run compile` in the qctl checkout, or set QCTL_GUEST_DIST.',
+      'sync --include-tooling: no guest binaries.\n'
+        + '  Need a GitHub release (or set QCTL_GUEST_DIST / QCTL_PLATFORM_MODULE).',
     )
   }
 
@@ -58,22 +47,21 @@ export function resolveGuestToolingForSync(opts = {}) {
   /** @type {ToolingFile[]} */
   const files = [
     {
-      local: path.join(distDir, 'qctl-guest'),
+      local: resolved.guestPath,
       remoteTmp: `/tmp/${stamp}-qctl-guest`,
       installAs: '/usr/local/bin/qctl',
       mode: '0755',
     },
     {
-      local: path.join(distDir, platformModule),
-      remoteTmp: `/tmp/${stamp}-${platformModule}`,
-      installAs: `/usr/local/lib/qctl/${platformModule}`,
+      local: resolved.platformModulePath,
+      remoteTmp: `/tmp/${stamp}-${resolved.platformModule}`,
+      installAs: `/usr/local/lib/qctl/${resolved.platformModule}`,
       mode: '0644',
     },
   ]
-  const encrypt = path.join(distDir, 'varlock-local-encrypt')
-  if (existsSync(encrypt)) {
+  if (resolved.encryptPath) {
     files.push({
-      local: encrypt,
+      local: resolved.encryptPath,
       remoteTmp: `/tmp/${stamp}-varlock-local-encrypt`,
       installAs: '/usr/local/bin/varlock-local-encrypt',
       mode: '0755',
@@ -88,7 +76,7 @@ export function resolveGuestToolingForSync(opts = {}) {
     if (existsSync(path.join(boot, '.env.schema'))) bootstrapDir = boot
   }
 
-  return { files, bootstrapDir, distDir }
+  return { files, bootstrapDir, sourceLabel: resolved.sourceLabel }
 }
 
 /**
@@ -103,18 +91,11 @@ function shellQuote(s) {
  * @param {{ dryRun?: boolean, env?: string, target?: string }} [opts]
  */
 export async function syncTooling(conn, opts = {}) {
-  let platformModule = parsePlatformRef('rocky').moduleFile
-  try {
-    const sec = await loadEnvSecretsOrThrow({
-      env: opts.env || 'dev',
-      target: opts.target || 'local',
-    })
-    platformModule = parsePlatformRef(sec.platform).moduleFile
-  } catch {
-    // default rocky
-  }
-  const { files, bootstrapDir, distDir } = resolveGuestToolingForSync({ platformModule })
-  console.log(chalk.dim(`  tooling ← ${distDir}`))
+  const { files, bootstrapDir, sourceLabel } = await resolveGuestToolingForSync({
+    env: opts.env,
+    target: opts.target,
+  })
+  console.log(chalk.dim(`  tooling ← ${sourceLabel}`))
 
   if (opts.dryRun) {
     for (const f of files) {

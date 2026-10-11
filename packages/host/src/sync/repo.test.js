@@ -64,7 +64,7 @@ describe('sync repo archive', () => {
 })
 
 describe('resolveGuestToolingForSync', () => {
-  test('finds binaries under QCTL_GUEST_DIST', () => {
+  test('finds binaries under QCTL_GUEST_DIST', async () => {
     const dist = mkdtempSync(join(tmpdir(), 'qctl-dist-'))
     temps.push(dist)
     writeFileSync(join(dist, 'qctl-guest'), '#!/bin/sh\n')
@@ -72,8 +72,8 @@ describe('resolveGuestToolingForSync', () => {
     const prev = process.env.QCTL_GUEST_DIST
     process.env.QCTL_GUEST_DIST = dist
     try {
-      const t = resolveGuestToolingForSync()
-      expect(t.distDir).toBe(dist)
+      const t = await resolveGuestToolingForSync()
+      expect(t.sourceLabel).toBe(dist)
       expect(t.files.map((f) => f.installAs)).toEqual([
         '/usr/local/bin/qctl',
         '/usr/local/lib/qctl/qctl-platform-rocky.mjs',

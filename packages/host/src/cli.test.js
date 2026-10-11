@@ -183,10 +183,16 @@ describe('host CLI', () => {
 
     const xdgCache = join(base, 'xdg-cache')
     const xdgData = join(base, 'xdg-data')
+    const guestDist = join(base, 'guest-dist')
+    mkdirSync(guestDist, { recursive: true })
+    writeFileSync(join(guestDist, 'qctl-guest'), '#!/bin/sh\n')
+    writeFileSync(join(guestDist, 'qctl-platform-rocky.mjs'), 'export default {}\n')
+    writeFileSync(join(guestDist, 'varlock-local-encrypt'), '#!/bin/sh\n')
     const { stdout, stderr, code } = await runHost(['vm', 'seed', '--out', keep], {
       cwd: root,
       env: {
         QCTL_ROCKY_SEED: seedKit,
+        QCTL_GUEST_DIST: guestDist,
         QCTL_CACHE_HOME: xdgCache,
         QCTL_DATA_HOME: xdgData,
         TANK_PASSPHRASE: 'lab-tank-passphrase',
@@ -219,6 +225,8 @@ describe('host CLI', () => {
     expect(userData).toContain('lab-tank-passphrase')
     expect(userData).toContain('AAAATEST')
     expect(existsSync(join(keep, 'qctl-guest', 'bootstrap'))).toBe(false)
+    expect(existsSync(join(keep, 'qctl-guest', 'qctl-guest'))).toBe(true)
+    expect(existsSync(join(keep, 'qctl-guest', 'qctl-platform-rocky.mjs'))).toBe(true)
     expect(readFileSync(join(keep, 'meta-data'), 'utf8')).toContain('rocky-dev')
     expect(existsSync(join(keep, 'network-config'))).toBe(true)
   })

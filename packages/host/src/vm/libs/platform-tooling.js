@@ -5,7 +5,7 @@
  */
 import { existsSync } from 'node:fs'
 
-import { $, chalk, fs, path } from 'zx'
+import { chalk, fs, path } from 'zx'
 
 import {
   loadCloudImage,
@@ -13,11 +13,13 @@ import {
   setCloudImageCache,
   writeCloudImagePin,
 } from '../../cloud-image.js'
+import { tryGetLocalGuestDist } from '../../qctl-source.js'
 import { copySeedKit } from '../../seed-fs.js'
 import { getRockySeedRoot, isEmbeddedSeedRoot } from '../../seed-root.js'
 import { touchPath } from './cache-gc.js'
+import { downloadGithubReleaseAsset } from './github-release.js'
 import { loadEnvSecretsOrThrow } from './load-config.js'
-import { getTooling, isSeedKitRoot, setSeedKitRoot, tryGetRepoRoot } from './paths.js'
+import { getTooling, isSeedKitRoot, setSeedKitRoot } from './paths.js'
 import { parsePlatformRef, resolvePlatformVersion } from './platform-ref.js'
 import { die } from './util.js'
 
@@ -91,7 +93,8 @@ export async function resolvePlatformRef(opts = {}) {
 }
 
 /**
- * Candidate paths for an already-present platform module.
+ * Local overrides + checkout `dist/` (never a random sibling tree).
+ * Installed hosts fall through to the tooling cache / GitHub download.
  * @param {string} moduleFile
  * @returns {string[]}
  */
@@ -100,18 +103,16 @@ function platformModuleCandidates(moduleFile) {
   const out = []
   const fromEnv = process.env.QCTL_PLATFORM_MODULE?.trim()
   if (fromEnv) out.push(path.resolve(fromEnv))
-  if (process.env.QCTL_GUEST_DIST) {
+  if (process.env.QCTL_GUEST_DIST?.trim()) {
     out.push(path.join(path.resolve(process.env.QCTL_GUEST_DIST), moduleFile))
   }
-  const root = tryGetRepoRoot()
-  if (root) out.push(path.join(root, '..', 'qctl', 'dist', moduleFile))
-  // packages/host/src/vm/libs → repo root dist/
-  out.push(path.join(import.meta.dir, '..', '..', '..', '..', '..', 'dist', moduleFile))
+  const checkoutDist = tryGetLocalGuestDist()
+  if (checkoutDist) out.push(path.join(checkoutDist, moduleFile))
   return out
 }
 
 /**
- * Ensure the selected platform ESM module is on disk (workspace dist or GitHub download).
+ * Ensure the selected platform ESM module is on disk (env override or GitHub download).
  * @param {{ env?: string, target?: string, version?: string, platform?: string }} [opts]
  * @returns {Promise<string>} absolute path to the module
  */
@@ -128,23 +129,18 @@ export async function ensurePlatformModule(opts = {}) {
   const destDir = path.join(getTooling(), `platform-${ref.id}`, version)
   const dest = path.join(destDir, ref.moduleFile)
   if (existsSync(dest)) {
+    touchPath(dest)
     console.log(chalk.dim(`  platform plugin: ${dest}`))
     return dest
   }
 
-  await fs.mkdirp(destDir)
-  const url = `https://github.com/${ref.githubRepo}/releases/download/v${version}/${ref.moduleFile}`
-  console.log(chalk.cyan(`vm: downloading ${ref.moduleFile} v${version} ← ${ref.githubRepo}`))
-  const r = await $`curl -fsSL -o ${dest} ${url}`.nothrow()
-  if (r.exitCode !== 0 || !existsSync(dest)) {
-    await fs.remove(dest).catch(() => {})
-    die(
-      `failed to download ${url}\n`
-        + `  Set QCTL_PLATFORM_MODULE to a local ${ref.moduleFile},`
-        + ` or run \`bun run compile\` in a qctl checkout.`,
-    )
-  }
-  console.log(chalk.dim(`  platform plugin: ${dest} ← ${url}`))
+  await downloadGithubReleaseAsset({
+    githubRepo: ref.githubRepo,
+    version,
+    name: ref.moduleFile,
+    dest,
+  })
+  touchPath(dest)
   return dest
 }
 

@@ -55,8 +55,9 @@ Pushes the working tree and, by default, deletes guest files missing locally
 (rsync `--delete` semantics). Never uploads/deletes under `.hg`, `.git`,
 `node_modules`, `.env.host`, editor dirs, `volumes/`, `restic-repo/`. A stray
 repo-root `.env` on the guest is removed (use `.env.dev` / `.env.prod` only).
-Needs compiled guest binaries for `--include-tooling` (`bun run compile` or
-`QCTL_GUEST_DIST`). Replaces the old instance `scripts/sync-to-local.sh`.
+`--include-tooling` uses checkout `dist/` when the host runs from a qctl repo,
+otherwise the GitHub release (`QCTL_GUEST_DIST` / `QCTL_PLATFORM_MODULE` override).
+Replaces the old instance `scripts/sync-to-local.sh`.
 
 ```bash
 qctl sync

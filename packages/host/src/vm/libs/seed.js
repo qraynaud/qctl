@@ -10,8 +10,9 @@ import { $, chalk, fs, path } from 'zx'
 
 import { gcQctlCache, touchPath } from './cache-gc.js'
 import { renderNetworkConfigV2 } from './guest-net.js'
+import { ensureGuestTooling } from './guest-tooling.js'
 import { loadEnvSecrets } from './load-config.js'
-import { getCloud, getRepoRoot, getSeed } from './paths.js'
+import { getCloud, getSeed } from './paths.js'
 import { parsePlatformRef } from './platform-ref.js'
 import { ensurePlatformSeedKit } from './platform-tooling.js'
 import { applyVcsFileDefaults } from './secrets-schema/files.js'
@@ -224,92 +225,51 @@ function readExistingInstanceId(instanceIdPath) {
 }
 
 /**
- * Candidate dirs for compiled guest artifacts (`bun run compile` → dist/).
- * @returns {string[]}
- */
-function guestToolingDistDirs() {
-  /** @type {string[]} */
-  const dirs = []
-  if (process.env.QCTL_GUEST_DIST) dirs.push(path.resolve(process.env.QCTL_GUEST_DIST))
-  // Sibling qctl checkout (matches rocky's mise `_.path = ../qctl/bin`).
-  dirs.push(path.resolve(getRepoRoot(), '..', 'qctl', 'dist'))
-  return dirs
-}
-
-/**
- * Optional guest artifacts staged beside the binaries (name → candidate sources,
- * relative to the dist dir; first existing wins).
- * @type {Record<string, string[]>}
- */
-/**
- * Copy compiled guest tooling into the staging cidata dir under `qctl-guest/`.
- * First-boot secrets come from provision YAML → Tier-0 pending (not a guest bootstrap graph).
+ * Stage guest tooling into the cidata dir under `qctl-guest/`.
+ * Prefer `QCTL_GUEST_DIST`, else checkout `dist/` when running from a qctl repo,
+ * else GitHub release assets (`qctl.platform` / host version).
+ * First-boot secrets come from provision YAML → Tier-0 pending.
  *
  * @param {string} stageDir temporary cidata directory
- * @param {{ platformModule?: string }} [opts] `qctl-platform-<id>.mjs` from `qctl.platform`
- * @returns {Promise<string[]>} basenames of the binaries copied
+ * @param {{
+ *   platformModule?: string,
+ *   env?: string,
+ *   target?: string,
+ *   platform?: string,
+ * }} [opts]
+ * @returns {Promise<string[]>} basenames of the primary binaries copied (`qctl-guest` when present)
  */
 export async function embedGuestTooling(stageDir, opts = {}) {
   const dest = path.join(stageDir, 'qctl-guest')
   await fs.mkdirp(dest)
 
-  const platformModule = opts.platformModule || parsePlatformRef('rocky').moduleFile
-  const names = ['qctl-guest']
+  const resolved = await ensureGuestTooling({
+    env: opts.env,
+    target: opts.target,
+    platform: opts.platform,
+    platformModule: opts.platformModule,
+    // Soft-fail only when an explicit local dist override is incomplete (tests / dry paths).
+    required: !process.env.QCTL_GUEST_DIST?.trim(),
+  })
+  if (!resolved) return []
+
+  await fs.copyFile(resolved.guestPath, path.join(dest, 'qctl-guest'))
+  await fs.chmod(path.join(dest, 'qctl-guest'), 0o755)
+
+  await fs.copyFile(resolved.platformModulePath, path.join(dest, resolved.platformModule))
+  await fs.chmod(path.join(dest, resolved.platformModule), 0o644)
+
   /** @type {string[]} */
-  let found = []
-  /** @type {string | null} */
-  let distDir = null
-  for (const dir of guestToolingDistDirs()) {
-    const hit = names.filter((n) => fs.existsSync(path.join(dir, n)))
-    if (hit.length === 0) continue
-    found = hit
-    distDir = dir
-    break
+  const extras = [resolved.platformModule]
+  if (resolved.encryptPath) {
+    await fs.copyFile(resolved.encryptPath, path.join(dest, 'varlock-local-encrypt'))
+    await fs.chmod(path.join(dest, 'varlock-local-encrypt'), 0o755)
+    extras.push('varlock-local-encrypt')
   }
 
-  if (distDir) {
-    for (const n of found) {
-      await fs.copyFile(path.join(distDir, n), path.join(dest, n))
-      await fs.chmod(path.join(dest, n), 0o755)
-    }
-    console.log(chalk.dim(`  guest tooling: ${found.join(', ')} ← ${distDir}`))
-
-    /** @type {string[]} */
-    const extras = []
-    const platformSrc = path.join(distDir, platformModule)
-    if (fs.existsSync(platformSrc)) {
-      await fs.copyFile(platformSrc, path.join(dest, platformModule))
-      await fs.chmod(path.join(dest, platformModule), 0o644)
-      extras.push(platformModule)
-    } else {
-      console.log(
-        chalk.yellow(
-          `  guest extras: missing ${platformModule} in ${distDir}`
-            + ` (run \`bun run compile\` / set QCTL_GUEST_DIST)`,
-        ),
-      )
-    }
-    const encrypt = path.join(distDir, 'varlock-local-encrypt')
-    if (fs.existsSync(encrypt)) {
-      await fs.copyFile(encrypt, path.join(dest, 'varlock-local-encrypt'))
-      await fs.chmod(path.join(dest, 'varlock-local-encrypt'), 0o755)
-      extras.push('varlock-local-encrypt')
-    } else {
-      console.log(
-        chalk.dim(
-          '  note: varlock-local-encrypt not in dist — run `bun run compile` (stages the helper)',
-        ),
-      )
-    }
-    if (extras.length) console.log(chalk.dim(`  guest extras: ${extras.join(', ')}`))
-  } else {
-    console.log(
-      chalk.dim(
-        '  guest tooling: none found (run `bun run compile` in qctl or set QCTL_GUEST_DIST)',
-      ),
-    )
-  }
-  return found
+  console.log(chalk.dim(`  guest tooling: qctl-guest ← ${resolved.sourceLabel}`))
+  console.log(chalk.dim(`  guest extras: ${extras.join(', ')}`))
+  return ['qctl-guest']
 }
 
 /**
@@ -388,13 +348,18 @@ export async function runSeed(argv) {
     await fs.writeFile(path.join(stageDir, 'user-data'), userDataOut)
     await fs.writeFile(path.join(stageDir, 'meta-data'), metaOut)
     await fs.writeFile(path.join(stageDir, 'network-config'), network)
-    let platformModule = parsePlatformRef('rocky').moduleFile
+    let platformModule
     try {
       platformModule = parsePlatformRef(sec.platform).moduleFile
     } catch (err) {
       die(err instanceof Error ? err.message : String(err))
     }
-    await embedGuestTooling(stageDir, { platformModule })
+    await embedGuestTooling(stageDir, {
+      platform: sec.platform || undefined,
+      platformModule,
+      env,
+      target,
+    })
 
     const isoOk = await buildIso(stageDir, isoPath)
     if (isoOk) {

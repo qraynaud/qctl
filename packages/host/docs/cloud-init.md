@@ -56,7 +56,8 @@ Use **GenericCloud Base** x86_64 (not EC2-specific). Root filesystem is **XFS**.
 The pin lives in `@qctl/platform-rocky` as [`cloud-image.json`](../../platform-rocky/cloud-image.json)
 (`file` / `url` / `sha256`) and is exported as `CLOUD_IMAGE` from
 `qctl-platform-rocky.mjs`. Host does **not** embed it — after downloading the
-platform plugin (workspace `dist/` or GitHub release via `qctl.platform`),
+platform plugin (GitHub release via `qctl.platform`, or `QCTL_PLATFORM_MODULE` /
+`QCTL_GUEST_DIST`),
 it reads the pin from that module. Override with `QCTL_ROCKY_CLOUD_IMAGE`
 pointing at a JSON file of the same shape.
 
@@ -182,5 +183,7 @@ Resume after a failure with `qctl init --from <stage>`; preview with `qctl init 
 Tier-0 / provision secrets are declared in `provision/.env.schema` (scaffold via
 `qctl init`).
 
-Seed requires compiled guest tooling: `bun run compile` in the sibling `../qctl` checkout
-(or `QCTL_GUEST_DIST=…`) — `qctl vm seed` copies it to `qctl-guest/` on the ISO.
+Seed stages guest tooling into `qctl-guest/` on the ISO from, in order:
+`QCTL_GUEST_DIST`, the local qctl checkout’s `dist/` (when the host is running from
+that repo), otherwise the GitHub release matching `qctl.platform` / the host version
+(`qctl-guest`, `qctl-platform-*.mjs`, `varlock-local-encrypt`).

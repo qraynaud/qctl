@@ -83,13 +83,13 @@ jobs:
           - \`varlock-local-encrypt\` — native helper staged next to binaries
           - \`SHA256SUMS\`
 
-          Pin in \`provision/<env>.yaml\`:
+          Host downloads \`qctl-guest\`, \`qctl-platform-rocky.mjs\`, and \`varlock-local-encrypt\`
+          from this release when seeding / \`sync --include-tooling\` (override with \`QCTL_GUEST_DIST\`).
+
+          Pin platform in \`provision/<env>.yaml\` (version defaults to the running host):
           \`\`\`yaml
           qctl:
-            tooling:
-              host: \"${VERSION}\"
-              guest: \"${VERSION}\"
-              platform: \"rocky@${VERSION}\"
+            platform: rocky@${VERSION}
           \`\`\`
 
           Vaultwarden plugin is staged separately on npm (\`release-plugin\` workflow → \`npm stage approve\`).
