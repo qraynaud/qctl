@@ -2,13 +2,13 @@
  * Resolve guest + platform release assets.
  *
  * Order: `QCTL_GUEST_DIST` → local checkout `dist/` → GitHub release.
- * Release asset names (see `.github/workflows/release.yml`):
- *   qctl-guest, qctl-platform-<id>.mjs, varlock-local-encrypt
+ * `varlock-local-encrypt` comes from the host embed / cache (not a release asset).
  */
 import { existsSync } from 'node:fs'
 
 import { chalk, fs, path } from 'zx'
 
+import { ensureHostNativeHelper } from '../../native-helper.js'
 import { tryGetLocalGuestDist } from '../../qctl-source.js'
 import { touchPath } from './cache-gc.js'
 import { downloadGithubReleaseAsset } from './github-release.js'
@@ -98,8 +98,6 @@ export async function ensureGuestTooling(opts = {}) {
     if (existsSync(localGuest)) {
       guestPath = localGuest
       sourceLabel = distKind === 'local checkout' ? `${distDir} (${distKind})` : distDir
-      const localEncrypt = path.join(distDir, 'varlock-local-encrypt')
-      if (existsSync(localEncrypt)) encryptPath = localEncrypt
     } else if (opts.required === false) {
       console.log(chalk.dim(`  guest tooling: none found under ${distKind}=${distDir}`))
       return null
@@ -121,18 +119,11 @@ export async function ensureGuestTooling(opts = {}) {
     if (!guestPath) {
       die(`failed to resolve qctl-guest for github:${ref.githubRepo}@v${version}`)
     }
-    encryptPath = await ensureReleaseBinary({
-      githubRepo: ref.githubRepo,
-      version,
-      name: 'varlock-local-encrypt',
-      mode: 0o755,
-      required: false,
-    })
-    if (!encryptPath) {
-      console.log(
-        chalk.dim('  note: varlock-local-encrypt not on release — seed continues without it'),
-      )
-    }
+  }
+
+  encryptPath = await ensureHostNativeHelper()
+  if (!encryptPath) {
+    console.log(chalk.dim('  note: varlock-local-encrypt unavailable — seed continues without it'))
   }
 
   const platformModulePath = await ensurePlatformModule({

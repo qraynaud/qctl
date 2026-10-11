@@ -61,6 +61,8 @@ export async function registerVarlockBuiltins(graph) {
  * @returns {Promise<EnvGraph>}
  */
 export async function loadEnvGraph(opts = {}) {
+  const { ensureVarlockLocalEncrypt } = await import('./native-helper.js')
+  await ensureVarlockLocalEncrypt({ quiet: true })
   const userAfterInit = opts.afterInit
   return await internal.loadEnvGraph({
     ...opts,

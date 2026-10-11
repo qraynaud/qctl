@@ -2,6 +2,13 @@ export { loadEnvGraph, registerVarlockBuiltins } from './builtins.js'
 export { hydrateSystemdCredentials } from './hydrate.js'
 export { loadEnvGraphForDir } from './load.js'
 export {
+  configureNativeHelperEmbed,
+  ensureVarlockLocalEncrypt,
+  isCompiledQctlBinary,
+  resolveNativeHelperFromNpm,
+  varlockLocalEncryptName,
+} from './native-helper.js'
+export {
   collectNpmPluginPins,
   collectNpmPluginPinsFromDir,
   ensureNpmPluginsFromDir,

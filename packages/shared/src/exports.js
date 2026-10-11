@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.1.0'
+export const QCTL_VERSION = '0.2.0'
 
 /**
  * @param {never} value
@@ -67,18 +67,23 @@ export {
   GUEST_TAG,
   collectNpmPluginPins,
   collectNpmPluginPinsFromDir,
+  configureNativeHelperEmbed,
   declaresSensitive,
   ensureNpmPluginsFromDir,
+  ensureVarlockLocalEncrypt,
   hydrateSystemdCredentials,
+  isCompiledQctlBinary,
   isSensitiveItem,
   keysWithTag,
   loadEnvGraph,
   loadEnvGraphForDir,
   prefetchNpmPlugins,
   registerVarlockBuiltins,
+  resolveNativeHelperFromNpm,
   resolvedNonSensitive,
   resolvedSensitive,
   sensitiveKeys,
+  varlockLocalEncryptName,
 } from './varlock-graph.js'
 export {
   exitZeroOnMissingCommand,

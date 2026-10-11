@@ -54,5 +54,8 @@ jobs:
           rm -rf /tmp/qctl-seed-export-smoke
           ./dist/qctl-host seed-kit export /tmp/qctl-seed-export-smoke
           test -f /tmp/qctl-seed-export-smoke/cloud-init/user-data.yaml
+          # Helper is embedded in host/guest; compile also stages dist/ for checkout runs.
           test -x ./dist/varlock-local-encrypt
+          test -x ./packages/host/varlock-local-encrypt
+          test -x ./packages/guest/varlock-local-encrypt
           test -f ./packages/vaultwarden-plugin/dist/vaultwarden.cjs
