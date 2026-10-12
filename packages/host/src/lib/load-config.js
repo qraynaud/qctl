@@ -13,7 +13,10 @@ import { chalk, path } from 'zx'
 
 import { loadHostGuestCredentials, loadProvision } from '@qctl/shared'
 
-import { firstBootCredentialsFromProvision, parseSecretsFile } from '../provision/secrets-schema.js'
+import {
+  firstBootCredentialsFromProvision,
+  parseSecretsFile,
+} from '../provision/secrets-schema/index.js'
 import { getProvision, tryGetRepoRoot } from './paths.js'
 import { TARGETS } from './target.js'
 import { die } from './util.js'

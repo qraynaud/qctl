@@ -1,7 +1,7 @@
 import { chalk } from 'zx'
 
 import { shellQuote } from '../lib/shell-quote.js'
-import { applianceExists, applianceRunning } from './appliance.js'
+import { applianceExists, applianceRunning } from './appliance-lifecycle.js'
 import { createLocalContext } from './context.js'
 import { execInAppliance } from './exec-in.js'
 import { sharedLocalEnv } from './options.js'

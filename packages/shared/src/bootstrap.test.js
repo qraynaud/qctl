@@ -9,7 +9,7 @@ import {
   resolveBootstrapDir,
 } from './bootstrap.js'
 import { makeTempDir, removeTempDir } from './test-helpers.js'
-import { resolvedSensitive } from './varlock-graph.js'
+import { resolvedSensitive } from './varlock/index.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 /** @type {string[]} */

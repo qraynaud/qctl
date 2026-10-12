@@ -1,6 +1,6 @@
 import { loadProvisionDocument } from '@qctl/shared'
 
-import { parsePorts } from '../provision/secrets-schema.js'
+import { parsePorts } from '../provision/secrets-schema/index.js'
 import { DATA_COUNT, SPECIAL_COUNT, tryGetRepoRoot } from './paths.js'
 import { addPasstPortOptions } from './ports.js'
 import { ENVS, TARGETS } from './target.js'

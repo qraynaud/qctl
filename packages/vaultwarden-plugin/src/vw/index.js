@@ -1,3 +1,7 @@
+/**
+ * Pure Vaultwarden helpers (no varlock import) — unit-testable without `bw`.
+ * The varlock wiring lives in `plugin.js`.
+ */
 const parse = require('./parse.js')
 const items = require('./items.js')
 const runner = require('./runner.js')

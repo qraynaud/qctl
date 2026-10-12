@@ -8,7 +8,7 @@ export type {
   PlatformNetworkCtx,
   PlatformNetworking,
   PlatformPackagesMap,
-} from './platform/module.js'
+} from './platform/index.js'
 export type {
   InitProfile,
   PlatformStage,

@@ -1,4 +1,4 @@
-import { applianceRunning, ensureAppliance } from './appliance.js'
+import { applianceRunning, ensureAppliance } from './appliance-lifecycle.js'
 import { createLocalContext } from './context.js'
 import { shellInAppliance } from './exec-in.js'
 import { sharedLocalEnv } from './options.js'

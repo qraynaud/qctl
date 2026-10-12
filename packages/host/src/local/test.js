@@ -1,11 +1,5 @@
-import {
-  dumpFailureLogs,
-  ensureAppliance,
-  quadletDown,
-  quadletUp,
-  removeAppliance,
-  waitQuadletHealthy,
-} from './appliance.js'
+import { ensureAppliance, removeAppliance } from './appliance-lifecycle.js'
+import { dumpFailureLogs, quadletDown, quadletUp, waitQuadletHealthy } from './appliance-quadlet.js'
 import { createLocalContext } from './context.js'
 import { sharedLocalEnv } from './options.js'
 import { LocalExit, argvApps, log, logDim } from './util.js'

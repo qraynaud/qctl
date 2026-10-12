@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.3.0-pre'
+export const QCTL_VERSION = '0.3.0'
 
 /**
  * @param {never} value
@@ -78,7 +78,7 @@ export {
   resolvedSensitive,
   sensitiveKeys,
   varlockLocalEncryptName,
-} from './varlock-graph.js'
+} from './varlock/index.js'
 export {
   exitZeroOnMissingCommand,
   isMissingCommandMessage,

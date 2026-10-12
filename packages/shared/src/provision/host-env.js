@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { GUEST_TAG, keysWithTag, loadEnvGraph } from '../varlock-graph.js'
+import { GUEST_TAG, keysWithTag, loadEnvGraph } from '../varlock/index.js'
 
 /** Directory under the instance root for host/provision env + YAML. */
 export const PROVISION_DIR = 'provision'

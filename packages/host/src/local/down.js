@@ -1,10 +1,5 @@
-import {
-  anyQuadletUp,
-  applianceExists,
-  applianceRunning,
-  quadletDown,
-  removeAppliance,
-} from './appliance.js'
+import { applianceExists, applianceRunning, removeAppliance } from './appliance-lifecycle.js'
+import { anyQuadletUp, quadletDown } from './appliance-quadlet.js'
 import { listInstanceApps } from './apps.js'
 import { createLocalContext } from './context.js'
 import { sharedLocalEnv } from './options.js'

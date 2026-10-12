@@ -7,7 +7,7 @@ import {
   normalizeFiles,
   normalizePackages,
   parseSecretsFile,
-} from './secrets-schema.js'
+} from './secrets-schema/index.js'
 import { describe, expect, test } from 'bun:test'
 
 const baseNet = {

@@ -1,4 +1,5 @@
-import { applianceRunning, dumpFailureLogs } from './appliance.js'
+import { applianceRunning } from './appliance-lifecycle.js'
+import { dumpFailureLogs } from './appliance-quadlet.js'
 import { createLocalContext } from './context.js'
 import { execInAppliance } from './exec-in.js'
 import { sharedLocalEnv } from './options.js'

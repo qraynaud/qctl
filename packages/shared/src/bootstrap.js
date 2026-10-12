@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { loadEnvGraphForDir } from './varlock-graph.js'
+import { loadEnvGraphForDir } from './varlock/index.js'
 /** @import { LoadGraphOptions } from './varlock/load.js' */
 
 /** Guest install path for the bootstrap schema + env files. */
