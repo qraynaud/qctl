@@ -1,15 +1,19 @@
-import { runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
+import { argvApps, runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
 import { runUp } from '../../quadlet/up.js'
 /** @import { Argv } from 'yargs' */
 /** @import { QuadletArgv } from '../../quadlet/cli.js' */
 
-export const command = 'up [app]'
+export const command = 'up [apps..]'
 export const describe = 'Reconcile apps with the repo (compose up–ish)'
 
 /** @param {Argv} yargs */
 export function builder(yargs) {
   return withRootOption(yargs)
-    .positional('app', { type: 'string', describe: 'Only this app (plus companions)' })
+    .positional('apps', {
+      type: 'string',
+      array: true,
+      describe: 'Only these apps (plus companions); omit = all',
+    })
     .option('dry-run', {
       alias: 'n',
       type: 'boolean',
@@ -20,10 +24,11 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
+  const apps = argvApps(argv)
   await runQuadletCommand(argv, (ctx) =>
     runUp(ctx, {
       dryRun: Boolean(argv.dryRun),
-      app: typeof argv.app === 'string' ? argv.app : undefined,
+      apps: apps.length ? apps : undefined,
     }),
   )
 }

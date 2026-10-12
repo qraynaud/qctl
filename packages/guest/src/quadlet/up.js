@@ -63,12 +63,18 @@ import {
 
 /**
  * @param {QuadletContext} ctx
- * @param {{ dryRun?: boolean, app?: string }} [opts]
+ * @param {{ dryRun?: boolean, app?: string, apps?: string[] }} [opts]
  * @returns {Promise<void>}
  */
 export async function runUp(ctx, opts = {}) {
   const dry = Boolean(opts.dryRun)
-  const appFilter = opts.app ? resolveAppName(opts.app) : ''
+  /** @type {Set<string>} */
+  const appFilters = new Set()
+  const rawApps = opts.apps?.length ? opts.apps : opts.app ? [opts.app] : []
+  for (const a of rawApps) appFilters.add(resolveAppName(a))
+  const filtered = appFilters.size > 0
+  /** @type {string[]} */
+  const filterList = [...appFilters].sort()
 
   /** @type {Entry[]} */
   const markers = []
@@ -130,7 +136,7 @@ export async function runUp(ctx, opts = {}) {
       mkdirSync(d, { recursive: true })
       ctx.sys.chown(paths.engine, d)
     }
-    if (!dry && !appFilter && listMarkers().length === 0) {
+    if (!dry && !filtered && listMarkers().length === 0) {
       /** @type {string[]} */
       const containers = [...globExts(paths.dest, ['container'])]
       try {
@@ -158,7 +164,7 @@ export async function runUp(ctx, opts = {}) {
       }
     }
     for (const app of listMarkers()) {
-      if (appFilter && app !== appFilter) continue
+      if (filtered && !appFilters.has(app)) continue
       const marker = join(d, app)
       const e = markerEngine(marker)
       markers.push({
@@ -170,29 +176,31 @@ export async function runUp(ctx, opts = {}) {
   }
 
   function registerRepoApps() {
-    if (appFilter) {
-      const dir = appDir(ctx, appFilter)
-      if (!dir) {
-        if (markerAlready(appFilter)) return
-        die(`unknown app '${appFilter}' (no applications/${appFilter}/app.yaml)`)
-      }
-      // Companions from unit After=/Wants=/… first, then the target app.
-      for (const name of expandUnitDepApps(ctx, appFilter)) {
-        if (markerAlready(name)) continue
-        const ddir = appDir(ctx, name)
-        if (!ddir) die(`unit dep: unknown app '${name}' (from ${appFilter})`)
-        if (!appHasUnits(ddir)) {
-          if (!dry) ctx.log(`skip ${name} (no units)`)
+    if (filtered) {
+      for (const appFilter of filterList) {
+        const dir = appDir(ctx, appFilter)
+        if (!dir) {
+          if (markerAlready(appFilter)) continue
+          die(`unknown app '${appFilter}' (no applications/${appFilter}/app.yaml)`)
+        }
+        // Companions from unit After=/Wants=/… first, then the target app.
+        for (const name of expandUnitDepApps(ctx, appFilter)) {
+          if (markerAlready(name)) continue
+          const ddir = appDir(ctx, name)
+          if (!ddir) die(`unit dep: unknown app '${name}' (from ${appFilter})`)
+          if (!appHasUnits(ddir)) {
+            if (!dry) ctx.log(`skip ${name} (no units)`)
+            continue
+          }
+          markers.push({ marker: '', app: name, engine: readEngine(ddir) })
+        }
+        if (markerAlready(appFilter)) continue
+        if (!appHasUnits(dir)) {
+          if (!dry) ctx.log(`skip ${appFilter} (no units)`)
           continue
         }
-        markers.push({ marker: '', app: name, engine: readEngine(ddir) })
+        markers.push({ marker: '', app: appFilter, engine: readEngine(dir) })
       }
-      if (markerAlready(appFilter)) return
-      if (!appHasUnits(dir)) {
-        if (!dry) ctx.log(`skip ${appFilter} (no units)`)
-        return
-      }
-      markers.push({ marker: '', app: appFilter, engine: readEngine(dir) })
       return
     }
     for (const name of listRepoApps(ctx)) {
@@ -245,18 +253,23 @@ export async function runUp(ctx, opts = {}) {
   }
 
   function pruneOrphansForFilter() {
-    if (!appFilter) {
+    if (!filtered) {
       pruneOrphanNetworks('rootless')
       pruneOrphanNetworks('rootful')
       return
     }
-    const dir = appDir(ctx, appFilter)
-    if (dir) {
-      pruneOrphanNetworks(readEngine(dir))
-    } else {
+    /** @type {Set<Engine>} */
+    const engines = new Set()
+    for (const name of filterList) {
+      const dir = appDir(ctx, name)
+      if (dir) engines.add(readEngine(dir))
+    }
+    if (engines.size === 0) {
       pruneOrphanNetworks('rootless')
       pruneOrphanNetworks('rootful')
+      return
     }
+    for (const eng of engines) pruneOrphanNetworks(eng)
   }
 
   // --- shared networks/<name>/ (rootless bridges + rootful macvlan/ipvlan) ---
@@ -267,7 +280,7 @@ export async function runUp(ctx, opts = {}) {
     /** @type {Set<string>} */
     const wantRootful = new Set()
 
-    if (!appFilter) {
+    if (!filtered) {
       for (const f of listSharedNetworkFiles(ctx)) {
         ;(networkSharedEngine(f) === 'rootful' ? wantRootful : wantRootless).add(basename(f))
       }
@@ -565,21 +578,24 @@ export async function runUp(ctx, opts = {}) {
   }
 
   if (restartApps.length === 0) {
-    const dir = appFilter ? appDir(ctx, appFilter) : null
-    if (appFilter && dir) {
-      // Filtered up with nothing dirty: still ensure target is started.
-      const engine = readEngine(dir)
-      if (engine === 'rootless') ctx.sys.ensureRootlessBus()
-      for (const svc of appServiceNames(dir)) {
-        if (
-          ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
-        )
-          continue
-        ctx.log(`start ${svc} (${engine})`)
-        const r = ctx.sys.systemctl(engine, ['start', svc])
-        if (r.status !== 0) die(`systemctl start ${svc} failed (exit ${r.status})`)
+    if (filtered) {
+      // Filtered up with nothing dirty: still ensure targets are started.
+      for (const name of filterList) {
+        const dir = appDir(ctx, name)
+        if (!dir) continue
+        const engine = readEngine(dir)
+        if (engine === 'rootless') ctx.sys.ensureRootlessBus()
+        for (const svc of appServiceNames(dir)) {
+          if (
+            ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
+          )
+            continue
+          ctx.log(`start ${svc} (${engine})`)
+          const r = ctx.sys.systemctl(engine, ['start', svc])
+          if (r.status !== 0) die(`systemctl start ${svc} failed (exit ${r.status})`)
+        }
       }
-      ctx.log(`done (started ${appFilter} if needed)`)
+      ctx.log(`done (started ${filterList.join(' ')} if needed)`)
     } else {
       ctx.log('done (no restarts)')
     }

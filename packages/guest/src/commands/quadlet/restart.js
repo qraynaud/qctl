@@ -1,17 +1,25 @@
-import { runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
+import { argvApps, runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
 import { runRestart } from '../../quadlet/lifecycle.js'
 /** @import { Argv } from 'yargs' */
 /** @import { QuadletArgv } from '../../quadlet/cli.js' */
 
-export const command = 'restart <app>'
-export const describe = "Restart one app's units (blocks on Notify=healthy)"
+export const command = 'restart <apps..>'
+export const describe = "Restart apps' units (blocks on Notify=healthy)"
 
 /** @param {Argv} yargs */
 export function builder(yargs) {
-  return withRootOption(yargs).positional('app', { type: 'string', demandOption: true })
+  return withRootOption(yargs).positional('apps', {
+    type: 'string',
+    array: true,
+    demandOption: true,
+    describe: 'Apps to restart',
+  })
 }
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  await runQuadletCommand(argv, (ctx) => runRestart(ctx, String(argv.app)))
+  const apps = argvApps(argv)
+  await runQuadletCommand(argv, (ctx) => {
+    for (const app of apps) runRestart(ctx, app)
+  })
 }

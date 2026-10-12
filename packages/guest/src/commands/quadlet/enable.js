@@ -1,15 +1,20 @@
-import { runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
+import { argvApps, runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
 import { runEnable } from '../../quadlet/enable.js'
 /** @import { Argv } from 'yargs' */
 /** @import { QuadletArgv } from '../../quadlet/cli.js' */
 
-export const command = 'enable <app>'
-export const describe = "Render/install one app's units"
+export const command = 'enable <apps..>'
+export const describe = "Render/install apps' units"
 
 /** @param {Argv} yargs */
 export function builder(yargs) {
   return withRootOption(yargs)
-    .positional('app', { type: 'string', demandOption: true })
+    .positional('apps', {
+      type: 'string',
+      array: true,
+      demandOption: true,
+      describe: 'Apps to enable',
+    })
     .option('install', {
       type: 'boolean',
       default: true,
@@ -19,7 +24,10 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  await runQuadletCommand(argv, (ctx) =>
-    runEnable(ctx, { app: String(argv.app), install: argv.install !== false }),
-  )
+  const apps = argvApps(argv)
+  await runQuadletCommand(argv, async (ctx) => {
+    for (const app of apps) {
+      await runEnable(ctx, { app, install: argv.install !== false })
+    }
+  })
 }

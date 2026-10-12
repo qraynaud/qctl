@@ -248,6 +248,19 @@ describe('quadlet up', () => {
     }
   })
 
+  test('filtered up: multiple apps in one pass', async () => {
+    const fx = makeQuadletInstance()
+    try {
+      const { ctx, sys } = makeContext(fx)
+      await runUp(ctx, { apps: ['proxy', 'dbroot'] })
+      expect(existsSync(join(sys.paths('rootless').dest, 'proxy/proxy.container'))).toBe(true)
+      expect(existsSync(join(sys.paths('rootful').dest, 'dbroot/dbroot.container'))).toBe(true)
+      expect(existsSync(join(sys.paths('rootless').dest, 'web/web.container'))).toBe(false)
+    } finally {
+      cleanup(fx)
+    }
+  })
+
   test('seeds markers from installed containers when none exist', async () => {
     const fx = makeQuadletInstance()
     try {

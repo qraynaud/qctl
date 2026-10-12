@@ -1,5 +1,5 @@
 /**
- * `quadlet enable <app>`: render one app's units into containers/systemd.
+ * `quadlet enable <apps…>`: render apps' units into containers/systemd.
  */
 import { existsSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'

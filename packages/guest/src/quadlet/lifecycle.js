@@ -203,37 +203,52 @@ export function formatTable(rows) {
 }
 
 /**
+ * Rows for one app's package containers (installed or not-installed placeholders).
  * @param {QuadletContext} ctx
- * @param {string} [appArg]
+ * @param {string} appArg
+ * @param {string[][]} rows
+ */
+function appendAppPsRows(ctx, appArg, rows) {
+  const app = resolveAppName(appArg)
+  const paths = resolveAppEngine(ctx, app)
+  const dir = appDir(ctx, app)
+  if (!dir) die(`unknown app '${app}' (no applications/${app}/app.yaml)`)
+  if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
+  for (const f of packageUnitFiles(dir, ['container'])) {
+    const udir = listUnitDirs(dir).find((d) => f.startsWith(`${d}/`))
+    const installed = udir
+      ? join(paths.dest, unitInstallName(udir), basename(f))
+      : join(paths.dest, basename(f))
+    if (existsSync(installed)) {
+      rows.push(psUnitRow(ctx, paths.engine, installed))
+    } else {
+      // Not installed yet — still show expected name from template.
+      rows.push([paths.engine, containerName(f), 'not-installed', unitValue(f, 'Image') || '-'])
+    }
+  }
+}
+
+/**
+ * @param {QuadletContext} ctx
+ * @param {string | string[]} [appArg] one app, several, or omit for all installed
  */
 export function runPs(ctx, appArg) {
   /** @type {string[][]} */
   const rows = [['ENGINE', 'NAMES', 'STATUS', 'IMAGE']]
+  const apps = Array.isArray(appArg)
+    ? appArg.map(String).filter(Boolean)
+    : typeof appArg === 'string' && appArg
+      ? [appArg]
+      : []
 
-  if (!appArg) {
+  if (apps.length === 0) {
     for (const eng of /** @type {const} */ (['rootless', 'rootful'])) {
       const paths = ctx.sys.paths(eng)
       if (eng === 'rootless') ctx.sys.ensureRootlessBus()
       for (const f of installedContainers(paths.dest)) rows.push(psUnitRow(ctx, eng, f))
     }
   } else {
-    const app = resolveAppName(appArg)
-    const paths = resolveAppEngine(ctx, app)
-    const dir = appDir(ctx, app)
-    if (!dir) die(`unknown app '${app}' (no applications/${app}/app.yaml)`)
-    if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
-    for (const f of packageUnitFiles(dir, ['container'])) {
-      const udir = listUnitDirs(dir).find((d) => f.startsWith(`${d}/`))
-      const installed = udir
-        ? join(paths.dest, unitInstallName(udir), basename(f))
-        : join(paths.dest, basename(f))
-      if (existsSync(installed)) {
-        rows.push(psUnitRow(ctx, paths.engine, installed))
-      } else {
-        // Not installed yet — still show expected name from template.
-        rows.push([paths.engine, containerName(f), 'not-installed', unitValue(f, 'Image') || '-'])
-      }
-    }
+    for (const app of apps) appendAppPsRows(ctx, app, rows)
   }
   for (const line of formatTable(rows)) ctx.print(line)
 }
