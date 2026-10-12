@@ -150,9 +150,9 @@ bun run build    # → dist/vaultwarden.cjs
 bun test
 ```
 
-Release: after merge to `main`, workflow `release-plugin.yml` re-runs checks; approve the
+Release: after merge to `main`, workflow `release.yml` re-runs checks; approve the
 **release-plugin** environment when that version is not yet on npm, then it runs
-`npm stage publish` (OIDC trusted publisher = **`release-plugin.yml`**). Then approve with 2FA:
+`npm stage publish` (OIDC trusted publisher = **`release.yml`**). Then approve with 2FA:
 
 ```bash
 npm stage approve @qctl/vaultwarden-plugin@$(node -p "require('./package.json').version")
