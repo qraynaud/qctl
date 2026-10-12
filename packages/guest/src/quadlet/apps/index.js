@@ -1,10 +1,9 @@
 export { MARKER_DIR, QUADLET_EXTS, SYSTEMD_EXTS } from './constants.js'
-export { depApps, expandUnitDepApps, topoSortApps, unitDepApps } from './deps.js'
+export { expandUnitDepApps, topoSortApps } from './deps.js'
 export {
   appDir,
   appHasUnits,
   appServiceNames,
-  companionApps,
   containerName,
   globExts,
   listRepoApps,

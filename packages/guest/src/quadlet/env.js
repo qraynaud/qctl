@@ -12,11 +12,11 @@ import { dirname, join, resolve } from 'node:path'
 
 import { loadEnvGraphForDir, resolvedNonSensitive, sensitiveKeys } from '@qctl/shared'
 
-import { listUnitDirs } from './apps.js'
+import { listUnitDirs } from './apps/index.js'
+import { evalEnvText, listAssignedKeys } from './env/shellenv.js'
 import { die } from './errors.js'
-import { evalEnvText, listAssignedKeys } from './shellenv.js'
 
-/** @import { Scope } from './shellenv.js' */
+/** @import { Scope } from './env/shellenv.js' */
 
 /**
  * @typedef {object} RenderEnv

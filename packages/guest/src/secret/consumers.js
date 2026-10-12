@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { globExts, listUnitDirs } from '../quadlet/apps.js'
+import { globExts, listUnitDirs } from '../quadlet/apps/index.js'
 
 /**
  * @param {string} file .container path

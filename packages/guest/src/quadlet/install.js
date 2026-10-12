@@ -13,7 +13,7 @@ import {
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
-import { rmdirQuiet, unitInstallName } from './apps.js'
+import { rmdirQuiet, unitInstallName } from './apps/index.js'
 import { renderFile, renderUnitEnvFile } from './env.js'
 import { die } from './errors.js'
 

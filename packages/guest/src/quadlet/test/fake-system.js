@@ -4,7 +4,7 @@
  */
 import { join } from 'node:path'
 
-/** @import { ExecResult, System } from './system.js' */
+/** @import { ExecResult, System } from '../system.js' */
 
 /**
  * @typedef {object} FakeCall

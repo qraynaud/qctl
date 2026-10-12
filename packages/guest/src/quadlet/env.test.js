@@ -12,7 +12,7 @@ import {
   runtimeUnitDirs,
   substitute,
 } from './env.js'
-import { makeQuadletInstance, packageSchema, unitSchema } from './test-fixture.js'
+import { makeQuadletInstance, packageSchema, unitSchema } from './test/fixture.js'
 import { describe, expect, test } from 'bun:test'
 
 /** @param {string} root @param {string} seedDir */
