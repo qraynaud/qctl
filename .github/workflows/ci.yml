@@ -4,10 +4,15 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Keep workflow_call (from release) out of the branch cancel group.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'workflow_call' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -59,3 +64,47 @@ jobs:
           test -x ./packages/host/varlock-local-encrypt
           test -x ./packages/guest/varlock-local-encrypt
           test -f ./packages/vaultwarden-plugin/dist/vaultwarden.cjs
+
+  # Propose a release only when package.json version is not yet a GitHub release.
+  release-status:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Release readiness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(bun ci/check-version.js)"
+          TAG="v${VERSION}"
+          {
+            echo "### Release status"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            {
+              echo "\`${TAG}\` is **already published** — do not run the release workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "already published: ${TAG}"
+          else
+            {
+              echo "\`${TAG}\` is **not published** yet."
+              echo ""
+              echo "Changelog preview (commit subjects since previous \`v*\` tag):"
+              echo ""
+              bun ci/release-changelog.js
+              echo ""
+              echo "To publish: **Actions → release** → check both confirmation boxes → Run workflow on \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready to release: ${TAG}"
+          fi

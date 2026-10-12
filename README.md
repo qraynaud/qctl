@@ -100,8 +100,8 @@ in that repo’s `mise.toml`.
 
 ### CI / release
 
-- **PRs / `main`:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — version check, typecheck, tests, compile, smoke `--help`.
-- **Binaries:** [`.github/workflows/release.yml`](.github/workflows/release.yml) — GitHub release `v$version` (`qctl-host`, `qctl-guest`, `qctl-platform-rocky.mjs`, `SHA256SUMS`). `varlock-local-encrypt` is embedded in the host/guest binaries.
+- **PRs / `main`:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — version check, typecheck, tests, compile, smoke `--help`. On `main`, the job summary says whether `v$version` is ready to publish (skips proposing when that release already exists).
+- **Binaries:** [`.github/workflows/release.yml`](.github/workflows/release.yml) — manual workflow with confirmation checkboxes; refuses if `v$version` already exists; re-runs CI on the commit; publishes GitHub release notes with a commit-subject changelog plus assets (`qctl-host`, `qctl-guest`, `qctl-platform-rocky.mjs`, `SHA256SUMS`). `varlock-local-encrypt` is embedded in the host/guest binaries.
 - **Plugin:** [`.github/workflows/release-plugin.yml`](.github/workflows/release-plugin.yml) — `npm stage publish` `@qctl/vaultwarden-plugin` (own version; OIDC trusted publishing). Maintainer approves with 2FA (`npm stage approve` or npmjs.com → Staged Packages).
 
 Binary version SoT: root `package.json` ↔ `QCTL_VERSION` in `@qctl/shared`.  
