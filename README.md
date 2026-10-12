@@ -100,14 +100,15 @@ in that repo’s `mise.toml`.
 
 ### CI / release
 
-- **PRs / `main`:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — version check, typecheck, tests, compile, smoke `--help`. On `main`, the job summary says whether `v$version` is ready to publish (skips proposing when that release already exists).
-- **Binaries:** [`.github/workflows/release.yml`](.github/workflows/release.yml) — manual workflow with confirmation checkboxes; refuses if `v$version` already exists; re-runs CI on the commit; publishes GitHub release notes with a commit-subject changelog plus assets (`qctl-host`, `qctl-guest`, `qctl-platform-rocky.mjs`, `SHA256SUMS`). `varlock-local-encrypt` is embedded in the host/guest binaries.
-- **Plugin:** [`.github/workflows/release-plugin.yml`](.github/workflows/release-plugin.yml) — `npm stage publish` `@qctl/vaultwarden-plugin` (own version; OIDC trusted publishing). Maintainer approves with 2FA (`npm stage approve` or npmjs.com → Staged Packages).
+- **PRs:** [`.github/workflows/pr.yml`](.github/workflows/pr.yml) → shared [`pr-check.yml`](.github/workflows/pr-check.yml) (version check, typecheck, tests, compile, smoke). No release jobs.
+- **After merge to `main`:** each release workflow re-runs `pr-check`, then asks for **Review deployments** only when that version is unpublished:
+  - [`release.yml`](.github/workflows/release.yml) — environment `release-qctl` → GitHub release `v$version` (changelog + `qctl-host` / `qctl-guest` / `qctl-platform-rocky.mjs`). `varlock-local-encrypt` is embedded in the binaries.
+  - [`release-plugin.yml`](.github/workflows/release-plugin.yml) — environment `release-plugin` → `npm stage publish` (OIDC); then 2FA via `npm stage approve` or npmjs.com → Staged Packages.
+- **Environments:** `release-qctl` and `release-plugin` (required reviewers). Adjust under **Settings → Environments**.
 
 Binary version SoT: root `package.json` ↔ `QCTL_VERSION` in `@qctl/shared`.  
 Plugin version SoT: `packages/vaultwarden-plugin/package.json` only.
 
 npm trusted publisher (one-time) for `@qctl/vaultwarden-plugin`: GitHub Actions → repo
-`qraynaud/qctl` → workflow **`release-plugin.yml`** → prefer **stage-only** (so CI cannot
-`npm publish` directly). After the workflow stages a version, approve locally:
+`qraynaud/qctl` → workflow **`release-plugin.yml`** → prefer **stage-only**. After the workflow stages a version, approve locally:
 `npm stage approve @qctl/vaultwarden-plugin@<version>`.

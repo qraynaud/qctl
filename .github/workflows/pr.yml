@@ -1,0 +1,16 @@
+name: pr
+
+# Pull requests: tests only (no release environments / skipped release jobs).
+on:
+  pull_request:
+
+concurrency:
+  group: pr-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/pr-check.yml

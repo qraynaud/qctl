@@ -1,19 +1,76 @@
 name: release-plugin
 
-# Manual staged npm publish of @qctl/vaultwarden-plugin (own version; independent of
-# qctl binaries). CI runs `npm stage publish` (OIDC, no 2FA); a maintainer then
-# approves with 2FA via `npm stage approve` or npmjs.com → Staged Packages.
-# Skips when that exact version is already published or already staged.
-# Tooling comes from mise.toml (`npm = "latest"` — needs npm ≥11.15 for `npm stage`).
+# After merge to main: re-run checks, then optionally stage the plugin on npm
+# (Review deployments on environment `release-plugin` only when the version is new).
+# This file is the npm trusted-publisher workflow filename (OIDC).
+# Tooling from mise.toml (`npm = "latest"` — needs npm ≥11.15 for `npm stage`).
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-plugin-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   id-token: write # npm trusted publishing (OIDC) — no NPM_TOKEN
 
 jobs:
+  check:
+    uses: ./.github/workflows/pr-check.yml
+
+  plan:
+    needs: check
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.plan.outputs.needed }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Plan plugin stage
+        id: plan
+        working-directory: packages/vaultwarden-plugin
+        run: |
+          set -euo pipefail
+          VERSION="$(bun -e 'console.log(require("./package.json").version)')"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "invalid plugin version: ${VERSION}" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          PKG="@qctl/vaultwarden-plugin@${VERSION}"
+          {
+            echo "### plugin release"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          if npm view "$PKG" version >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "\`${PKG}\` already on npm — no approval." >> "$GITHUB_STEP_SUMMARY"
+          elif npm stage view "$PKG" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "\`${PKG}\` already staged — \`npm stage approve ${PKG}\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "\`${PKG}\` not on npm — waiting for **release-plugin** approval." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  approve:
+    needs: plan
+    if: needs.plan.outputs.needed == 'true'
+    runs-on: ubuntu-latest
+    environment: release-plugin
+    steps:
+      - run: echo "Approved plugin @${{ needs.plan.outputs.version }}"
+
   publish:
+    needs: [approve, plan]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,40 +86,31 @@ jobs:
           npm --version
           npm stage --help >/dev/null
 
-      - name: Resolve plugin version
-        id: ver
+      - name: Refuse if already published or staged
         working-directory: packages/vaultwarden-plugin
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="$(bun -e 'console.log(require("./package.json").version)')"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "invalid plugin version: ${VERSION}" >&2
-            exit 1
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           PKG="@qctl/vaultwarden-plugin@${VERSION}"
           if npm view "$PKG" version >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "${PKG} already published on npm — skipping."
-          elif npm stage view "$PKG" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "${PKG} already staged — approve with: npm stage approve ${PKG}"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Will stage ${PKG}"
+            echo "::error::${PKG} already published on npm."
+            exit 1
+          fi
+          if npm stage view "$PKG" >/dev/null 2>&1; then
+            echo "::error::${PKG} already staged — approve with: npm stage approve ${PKG}"
+            exit 1
           fi
 
       - name: Stage @qctl/vaultwarden-plugin on npm
-        if: steps.ver.outputs.exists != 'true'
         working-directory: packages/vaultwarden-plugin
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          # Auth via GitHub OIDC trusted publisher (configured on npmjs.com).
-          # Prefer stage-only permissions on the trusted publisher so direct
-          # `npm publish` from CI is rejected. Provenance is automatic.
-          # Workflow filename must remain release-plugin.yml.
-          # prepublishOnly → bun run build needs workspace deps (zod) from Install.
+          # Auth via GitHub OIDC trusted publisher (workflow filename: release-plugin.yml).
+          # Prefer stage-only permissions so direct `npm publish` from CI is rejected.
           npm stage publish --access public
-          echo "Staged @qctl/vaultwarden-plugin@${{ steps.ver.outputs.version }}"
-          echo "Approve (2FA): npm stage approve @qctl/vaultwarden-plugin@${{ steps.ver.outputs.version }}"
+          echo "Staged @qctl/vaultwarden-plugin@${VERSION}"
+          echo "Approve (2FA): npm stage approve @qctl/vaultwarden-plugin@${VERSION}"
           echo "Or: https://www.npmjs.com → Staged Packages"
