@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
-import { writeFile } from '../../../../shared/src/test-helpers.js'
+import { writeFile } from '@qctl/shared/test-helpers'
+
 import { QuadletError } from '../errors.js'
 import { cleanupQuadletFixture, makeQuadletInstance } from '../test/fixture.js'
 import {

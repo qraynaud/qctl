@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { CACHE_MAX_AGE_MS, gcQctlCache, touchPath } from './cache-gc.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 

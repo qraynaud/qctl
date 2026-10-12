@@ -2,8 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { loadEnvGraphForDir, resolvedNonSensitive } from '@qctl/shared'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { makeTempDir, removeTempDir } from '../../shared/src/test-helpers.js'
 import { initInstance } from './init.js'
 import { newPackage } from './new.js'
 import { afterEach, describe, expect, test } from 'bun:test'

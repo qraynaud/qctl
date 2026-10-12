@@ -1,4 +1,5 @@
-import { removeTempDir } from '../../../shared/src/test-helpers.js'
+import { removeTempDir } from '@qctl/shared/test-helpers'
+
 import { runSecretCheck } from './check.js'
 import { makeSecretInstance } from './fixture.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'

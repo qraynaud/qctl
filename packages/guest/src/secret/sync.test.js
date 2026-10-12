@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir, writeFile } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir, writeFile } from '@qctl/shared/test-helpers'
+
 import { discoverSecretConsumers, secretNamesInContainer } from './consumers.js'
 import { makeSecretInstance, makeShims } from './fixture.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'

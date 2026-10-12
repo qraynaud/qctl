@@ -6,7 +6,7 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, writeFile, writeMinimalInstance } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, writeFile, writeMinimalInstance } from '@qctl/shared/test-helpers'
 
 /**
  * caddy: CADDY_DNS (rootless).

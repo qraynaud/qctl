@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
-import { writeFile } from '../../../../shared/src/test-helpers.js'
+import { writeFile } from '@qctl/shared/test-helpers'
+
 import { cleanupQuadletFixture, makeQuadletInstance } from '../test/fixture.js'
 import { depApps, expandUnitDepApps, topoSortApps, unitDepApps } from './deps.js'
 import { companionApps } from './discovery.js'

@@ -11,7 +11,6 @@ export type {
 } from './platform/module.js'
 export type {
   InitProfile,
-  PlatformAdapter,
   PlatformStage,
   PlatformStageContext,
   QctlRole,
