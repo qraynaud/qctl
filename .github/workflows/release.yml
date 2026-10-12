@@ -55,7 +55,10 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if gh release view "$QCTL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [[ "$QCTL_VERSION" == *-pre* ]]; then
+            echo "qctl_needed=false" >> "$GITHUB_OUTPUT"
+            echo "- **qctl** \`${QCTL_TAG}\`: prerelease (\`-pre\`) — no approval" >> "$GITHUB_STEP_SUMMARY"
+          elif gh release view "$QCTL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "qctl_needed=false" >> "$GITHUB_OUTPUT"
             echo "- **qctl** \`${QCTL_TAG}\`: already published (no approval)" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -74,7 +77,10 @@ jobs:
           PLUGIN_VERSION="$(bun -e 'console.log(require("./packages/vaultwarden-plugin/package.json").version)')"
           echo "plugin_version=${PLUGIN_VERSION}" >> "$GITHUB_OUTPUT"
           PKG="@qctl/vaultwarden-plugin@${PLUGIN_VERSION}"
-          if npm view "$PKG" version >/dev/null 2>&1; then
+          if [[ "$PLUGIN_VERSION" == *-pre* ]]; then
+            echo "plugin_needed=false" >> "$GITHUB_OUTPUT"
+            echo "- **plugin** \`${PKG}\`: prerelease (\`-pre\`) — no approval" >> "$GITHUB_STEP_SUMMARY"
+          elif npm view "$PKG" version >/dev/null 2>&1; then
             echo "plugin_needed=false" >> "$GITHUB_OUTPUT"
             echo "- **plugin** \`${PKG}\`: already on npm (no approval)" >> "$GITHUB_STEP_SUMMARY"
           elif npm stage view "$PKG" >/dev/null 2>&1; then
@@ -90,11 +96,13 @@ jobs:
     if: needs.plan.outputs.qctl_needed == 'true'
     runs-on: ubuntu-latest
     environment: release-qctl
+    outputs:
+      tag: ${{ needs.plan.outputs.qctl_tag }}
     steps:
       - run: echo "Approved qctl ${{ needs.plan.outputs.qctl_tag }}"
 
   publish-qctl:
-    needs: [approve-qctl, plan]
+    needs: approve-qctl
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -109,7 +117,7 @@ jobs:
       - name: Refuse if already released
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.qctl_tag }}
+          TAG: ${{ needs.approve-qctl.outputs.tag }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -134,7 +142,7 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.qctl_tag }}
+          TAG: ${{ needs.approve-qctl.outputs.tag }}
         run: |
           set -euo pipefail
           NOTES_FILE="$(mktemp)"
@@ -153,11 +161,13 @@ jobs:
     if: needs.plan.outputs.plugin_needed == 'true'
     runs-on: ubuntu-latest
     environment: release-plugin
+    outputs:
+      version: ${{ needs.plan.outputs.plugin_version }}
     steps:
       - run: echo "Approved plugin @${{ needs.plan.outputs.plugin_version }}"
 
   publish-plugin:
-    needs: [approve-plugin, plan]
+    needs: approve-plugin
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -176,7 +186,7 @@ jobs:
       - name: Refuse if already published or staged
         working-directory: packages/vaultwarden-plugin
         env:
-          VERSION: ${{ needs.plan.outputs.plugin_version }}
+          VERSION: ${{ needs.approve-plugin.outputs.version }}
         run: |
           set -euo pipefail
           PKG="@qctl/vaultwarden-plugin@${VERSION}"
@@ -192,7 +202,7 @@ jobs:
       - name: Stage @qctl/vaultwarden-plugin on npm
         working-directory: packages/vaultwarden-plugin
         env:
-          VERSION: ${{ needs.plan.outputs.plugin_version }}
+          VERSION: ${{ needs.approve-plugin.outputs.version }}
         run: |
           set -euo pipefail
           # OIDC trusted publisher workflow filename: release.yml
