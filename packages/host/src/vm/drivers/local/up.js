@@ -23,7 +23,7 @@ import {
   setDomainSerialNull,
   setDomainSerialTcp,
   virsh,
-} from '../../libs/libvirt.js'
+} from '../../libs/libvirt/index.js'
 import { ensureSeed, runSeed } from '../../libs/seed.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
 import { runVmUp } from '../../libs/up-pipeline.js'

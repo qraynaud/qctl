@@ -3,7 +3,7 @@ import { chalk, fs } from 'zx'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { requireBins } from '../../../lib/util.js'
 import { persistentDisks, vmPaths } from '../../libs/disks.js'
-import { domainExists, removeDomain } from '../../libs/libvirt.js'
+import { domainExists, removeDomain } from '../../libs/libvirt/index.js'
 
 /** @import { VmArgv } from '../../types.js' */
 

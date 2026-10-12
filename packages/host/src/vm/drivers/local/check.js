@@ -5,7 +5,7 @@ import { loadEnvSecrets } from '../../../lib/load-config.js'
 import { getCacheHome, getDataHome, getImages, getSeed, getVms } from '../../../lib/paths.js'
 import { HOST_DEPS, which } from '../../../lib/util.js'
 import { createCheckReport } from '../../libs/check-report.js'
-import { virsh } from '../../libs/libvirt.js'
+import { virsh } from '../../libs/libvirt/index.js'
 
 /** @import { CheckReport } from '../../libs/check-report.js' */
 /** @import { VmArgv } from '../../types.js' */

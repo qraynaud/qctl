@@ -4,7 +4,7 @@ import { portsFromArgv } from '../../../lib/options.js'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { requireBins } from '../../../lib/util.js'
 import { vmPaths } from '../../libs/disks.js'
-import { virsh } from '../../libs/libvirt.js'
+import { virsh } from '../../libs/libvirt/index.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
 
 /** @import { VmArgv } from '../../types.js' */

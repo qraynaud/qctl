@@ -11,7 +11,12 @@ import {
   reportGuestFatalLeaveRunning,
   waitForSuccessOrGuestFatal,
 } from '../../libs/guest-fatal.js'
-import { domainExists, ensureDefaultNetwork, removeDomain, virsh } from '../../libs/libvirt.js'
+import {
+  domainExists,
+  ensureDefaultNetwork,
+  removeDomain,
+  virsh,
+} from '../../libs/libvirt/index.js'
 import { ensureSeed, runSeed } from '../../libs/seed.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep } from '../../libs/wait.js'

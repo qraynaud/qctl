@@ -6,7 +6,7 @@ import { chalk } from 'zx'
 import { portsFromArgv } from '../lib/options.js'
 import { portByName, resolvePorts } from '../lib/ports.js'
 import { resolveVmName } from '../lib/target.js'
-import { virsh } from '../vm/libs/libvirt.js'
+import { virsh } from '../vm/libs/libvirt/index.js'
 
 /** @import { VmArgv } from '../vm/types.js' */
 
