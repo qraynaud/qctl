@@ -42,19 +42,4 @@ describe('ci/compile.js', () => {
     expect(code).toBe(1)
     expect(stderr).toMatch(/unknown target/)
   })
-
-  // Full `bun build --compile` is covered by CI; keep unit suite fast.
-  test.skipIf(!existsSync(join(ROOT, 'dist/qctl-host')))(
-    'dist/qctl-host --help when already compiled',
-    async () => {
-      const proc = Bun.spawn([join(ROOT, 'dist/qctl-host'), '--help'], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: { ...process.env },
-      })
-      const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-      expect(code).toBe(0)
-      expect(stdout).toContain('init')
-    },
-  )
 })

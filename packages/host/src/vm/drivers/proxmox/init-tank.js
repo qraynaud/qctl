@@ -1,6 +1,11 @@
 import { chalk, fs } from 'zx'
 
 import { matchInitTankFatal } from '../../libs/console.js'
+import {
+  isGuestFatalError,
+  reportGuestFatalLeaveRunning,
+  waitForSuccessOrGuestFatal,
+} from '../../libs/guest-fatal.js'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
 import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import { applyNetsToForm } from '../../libs/proxmox/config.js'
@@ -27,78 +32,8 @@ import { isAbortError } from '../../libs/wait.js'
 import { ping } from './shared.js'
 
 /** @import { SerialFollow } from '../../libs/console.js' */
-/** @import { ProxmoxClient } from '../../libs/proxmox/client.js' */
 /** @import { QemuConfig } from '../../libs/proxmox/types.js' */
 /** @import { VmArgv } from '../../types.js' */
-
-/** @typedef {{ ok: boolean, aborted?: boolean, line?: string }} WaitOutcome */
-
-/**
- * @param {Error | { name?: string } | string | number | boolean | null | undefined} err
- * @returns {err is Error}
- */
-function isGuestFatalError(err) {
-  return err instanceof Error && err.name === 'GuestFatalError'
-}
-
-/**
- * Race poweroff wait against serial fatal patterns (cloud-init / prep failure).
- * On fatal: abort the wait; leave the VM running for diagnosis.
- * @param {ProxmoxClient} client
- * @param {number} vmid
- * @param {string} name
- * @param {number} timeoutSec
- * @param {AbortSignal} signal
- * @param {SerialFollow | null} consoleFollow
- * @returns {Promise<void>}
- */
-async function waitForSuccessOrGuestFatal(client, vmid, name, timeoutSec, signal, consoleFollow) {
-  if (!consoleFollow?.result) {
-    await waitUntilVmStopped(client, vmid, { timeoutSec, name })
-    return
-  }
-
-  const waitAc = new AbortController()
-  const onParentAbort = () => waitAc.abort()
-  signal?.addEventListener('abort', onParentAbort, { once: true })
-
-  /** @type {Promise<WaitOutcome>} */
-  const shutOff = waitUntilVmStopped(client, vmid, {
-    timeoutSec,
-    name,
-    signal: waitAc.signal,
-  }).then(
-    () => ({ ok: true }),
-    (err) => {
-      if (isAbortError(err) && !signal?.aborted) {
-        return { ok: false, aborted: true }
-      }
-      throw err
-    },
-  )
-
-  /** @type {Promise<WaitOutcome>} */
-  const fatal = consoleFollow.result.then((hit) => ({
-    ok: false,
-    line: hit.line,
-  }))
-
-  try {
-    const result = await Promise.race([shutOff, fatal])
-    if (result.ok) return
-
-    waitAc.abort()
-    await shutOff.catch(() => {})
-
-    if (result.line) {
-      const err = new Error(result.line)
-      err.name = 'GuestFatalError'
-      throw err
-    }
-  } finally {
-    signal?.removeEventListener('abort', onParentAbort)
-  }
-}
 
 /**
  * @param {VmArgv} argv
@@ -269,7 +204,11 @@ export async function initTank(argv) {
       })
     }
 
-    await waitForSuccessOrGuestFatal(client, vmid, name, timeoutSec, ac.signal, consoleFollow)
+    await waitForSuccessOrGuestFatal({
+      waitUntilStopped: (signal) => waitUntilVmStopped(client, vmid, { timeoutSec, name, signal }),
+      signal: ac.signal,
+      consoleFollow,
+    })
 
     if (consoleFollow) {
       await consoleFollow.stop()
@@ -289,19 +228,11 @@ export async function initTank(argv) {
     console.log(chalk.dim('  (appliance first-boot 30 will import tank)'))
   } catch (err) {
     if (err instanceof Error && isGuestFatalError(err)) {
-      if (consoleFollow) {
-        await consoleFollow.stop()
-        consoleFollow = null
-      }
-      console.error(chalk.red(`vm: guest failure detected on serial — stopping wait`))
-      console.error(chalk.red(`  ${errMessage(err)}`))
-      console.error(
-        chalk.yellow(
-          `vm: VM ${name} (vmid=${vmid}) left as-is for diagnosis (PVE console); destroy when done`,
-        ),
-      )
-      console.error(chalk.dim(`  qctl vm destroy --target proxmox --env ${env}`))
-      process.exitCode = 1
+      await reportGuestFatalLeaveRunning(consoleFollow, err, {
+        leaveHint: `vm: VM ${name} (vmid=${vmid}) left as-is for diagnosis (PVE console); destroy when done`,
+        destroyHint: `  qctl vm destroy --target proxmox --env ${env}`,
+      })
+      consoleFollow = null
       return
     }
     if (isAbortError(err) || ac.signal.aborted) {

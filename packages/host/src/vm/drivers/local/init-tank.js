@@ -3,6 +3,11 @@ import { $, chalk } from 'zx'
 import { downloadImage } from '../../commands/download.js'
 import { matchInitTankFatal, startSerialTcpFollow } from '../../libs/console.js'
 import { ensureDisks } from '../../libs/disks.js'
+import {
+  isGuestFatalError,
+  reportGuestFatalLeaveRunning,
+  waitForSuccessOrGuestFatal,
+} from '../../libs/guest-fatal.js'
 import { domainExists, ensureDefaultNetwork, removeDomain, virsh } from '../../libs/libvirt.js'
 import { portsFromArgv } from '../../libs/options.js'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
@@ -12,11 +17,9 @@ import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep } from '../../libs/wait.js'
 import { destroyVm } from './destroy.js'
 
-/** @import { SerialFollow } from '../../libs/console.js' */
 /** @import { VmArgv } from '../../types.js' */
 
 /** @typedef {Awaited<ReturnType<typeof startSerialTcpFollow>>} TcpFollow */
-/** @typedef {{ ok: boolean, aborted?: boolean, line?: string }} WaitOutcome */
 
 /**
  * Wait until domain is shut off (guest poweroff after tank-create) or gone.
@@ -54,70 +57,6 @@ async function waitForDomainShutOff(connect, name, timeoutSec, signal) {
   die(
     `domain ${name} still running after ${timeoutSec}s — init-tank prep likely failed; check serial console`,
   )
-}
-
-/**
- * @param {unknown} err
- * @returns {boolean}
- */
-function isGuestFatalError(err) {
-  return err instanceof Error && err.name === 'GuestFatalError'
-}
-
-/**
- * Race poweroff wait against serial fatal patterns (cloud-init / prep failure).
- * On fatal: abort the wait; leave the VM running for diagnosis.
- * @param {string} connect
- * @param {string} name
- * @param {number} timeoutSec
- * @param {AbortSignal} signal
- * @param {SerialFollow | null} consoleFollow
- * @returns {Promise<void>}
- */
-async function waitForSuccessOrGuestFatal(connect, name, timeoutSec, signal, consoleFollow) {
-  if (!consoleFollow?.result) {
-    await waitForDomainShutOff(connect, name, timeoutSec, signal)
-    return
-  }
-
-  const waitAc = new AbortController()
-  const onParentAbort = () => waitAc.abort()
-  signal?.addEventListener('abort', onParentAbort, { once: true })
-
-  /** @type {Promise<WaitOutcome>} */
-  const shutOff = waitForDomainShutOff(connect, name, timeoutSec, waitAc.signal).then(
-    () => ({ ok: true }),
-    (err) => {
-      if (isAbortError(err) && !signal?.aborted) {
-        // Local abort from fatal match — swallow; fatal branch wins.
-        return { ok: false, aborted: true }
-      }
-      throw err
-    },
-  )
-
-  /** @type {Promise<WaitOutcome>} */
-  const fatal = consoleFollow.result.then((hit) => ({
-    ok: false,
-    line: hit.line,
-  }))
-
-  try {
-    const result = await Promise.race([shutOff, fatal])
-    if (result.ok) return
-
-    waitAc.abort()
-    // Let shutOff settle so we don't leave an unhandled rejection.
-    await shutOff.catch(() => {})
-
-    if (result.line) {
-      const err = new Error(result.line)
-      err.name = 'GuestFatalError'
-      throw err
-    }
-  } finally {
-    signal?.removeEventListener('abort', onParentAbort)
-  }
 }
 
 /**
@@ -267,7 +206,11 @@ export async function initTank(argv) {
     }
     domainStarted = true
 
-    await waitForSuccessOrGuestFatal(connect, name, timeoutSec, ac.signal, consoleFollow)
+    await waitForSuccessOrGuestFatal({
+      waitUntilStopped: (signal) => waitForDomainShutOff(connect, name, timeoutSec, signal),
+      signal: ac.signal,
+      consoleFollow,
+    })
 
     if (consoleFollow) {
       await consoleFollow.stop()
@@ -281,20 +224,12 @@ export async function initTank(argv) {
     console.log(chalk.dim('  next: qctl vm up --wipe-os'))
     console.log(chalk.dim('  (appliance first-boot 30 will import tank)'))
   } catch (err) {
-    if (isGuestFatalError(err)) {
-      if (consoleFollow) {
-        await consoleFollow.stop()
-        consoleFollow = null
-      }
-      console.error(chalk.red(`vm: guest failure detected on serial — stopping wait`))
-      console.error(chalk.red(`  ${errMessage(err)}`))
-      console.error(
-        chalk.yellow(
-          `vm: domain ${name} left running for diagnosis (serial/journal); destroy when done:`,
-        ),
-      )
-      console.error(chalk.dim(`  qctl vm destroy`))
-      process.exitCode = 1
+    if (err instanceof Error && isGuestFatalError(err)) {
+      await reportGuestFatalLeaveRunning(consoleFollow, err, {
+        leaveHint: `vm: domain ${name} left running for diagnosis (serial/journal); destroy when done:`,
+        destroyHint: '  qctl vm destroy',
+      })
+      consoleFollow = null
       return
     }
     if (isAbortError(err) || ac.signal.aborted) {
