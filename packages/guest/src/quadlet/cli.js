@@ -27,10 +27,23 @@ export function withRootOption(yargs) {
 /**
  * @typedef {object} QuadletArgv
  * @property {string} [root]
- * @property {string} [app]
+ * @property {string | string[]} [app]
+ * @property {string | string[]} [apps]
  * @property {boolean} [dryRun]
  * @property {boolean} [install]
  */
+
+/**
+ * Normalize yargs `apps` / legacy `app` into a string list.
+ * @param {QuadletArgv} argv
+ * @returns {string[]}
+ */
+export function argvApps(argv) {
+  const raw = argv.apps ?? argv.app
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean)
+  if (typeof raw === 'string' && raw) return [raw]
+  return []
+}
 
 /**
  * Escalate to root, resolve the instance, run `fn`, map errors to exit codes.
