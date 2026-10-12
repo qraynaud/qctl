@@ -1,0 +1,59 @@
+name: pr-check
+
+# Shared test/compile gate. Called from pr.yml and from release workflows on main.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Versions aligned
+        run: bun ci/check-version.js
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run test:lint
+
+      - name: Knip
+        run: bun run test:knip
+
+      - name: Test
+        run: bun test
+
+      - name: Build vaultwarden plugin
+        run: bun run --filter @qctl/vaultwarden-plugin build
+
+      - name: Compile linux-x64 binaries
+        run: bun run compile
+
+      - name: Smoke --help
+        run: |
+          ./dist/qctl-host --help
+          ./dist/qctl-guest --help
+          ./dist/qctl-guest list
+          # Seed kit is embedded in qctl-host — path/export must work without dist/rocky-seed/
+          test ! -d ./dist/rocky-seed
+          test -f ./dist/qctl-platform-rocky.mjs
+          kit=$(./dist/qctl-host seed-kit path)
+          test -f "$kit/cloud-init/user-data.yaml"
+          rm -rf /tmp/qctl-seed-export-smoke
+          ./dist/qctl-host seed-kit export /tmp/qctl-seed-export-smoke
+          test -f /tmp/qctl-seed-export-smoke/cloud-init/user-data.yaml
+          # Helper is embedded in host/guest; compile also stages dist/ for checkout runs.
+          test -x ./dist/varlock-local-encrypt
+          test -x ./packages/host/varlock-local-encrypt
+          test -x ./packages/guest/varlock-local-encrypt
+          test -f ./packages/vaultwarden-plugin/dist/vaultwarden.cjs
