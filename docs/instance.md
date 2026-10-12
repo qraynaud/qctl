@@ -25,7 +25,6 @@ For command flags see [packages/host/README.md](../packages/host/README.md) and
 ```text
 .env.schema                          # root graph (imports .env.dev / .env.prod by QCTL_ENV)
 .env.dev / .env.prod                 # non-secret root values (# @internal in schema)
-.env.host [/ .env.host.local]        # host provision secrets for !env (not scaffolded)
 applications/                          # package schemas @import repo root
   <app>/.env.schema                  # package / Quadlet ${VAR} template scope
   <app>/.env.app                     # optional package values
@@ -35,6 +34,8 @@ applications/                          # package schemas @import repo root
 common/<lib>/.env.schema             # shared libs (secret sync discovers these too)
 networks/
   <net>/.env.schema + <net>.network
+provision/.env.schema                # host provision graph (!env / @tag(guest))
+provision/.env.<env>                 # host provision values (+ optional .env.local)
 provision/<env>.yaml                 # topology + qctl.platform + !env
 provision/<env>.<target>.yaml        # optional overlay (local / proxmox)
 mise.toml                            # host: pin qctl-host (or _.path to sibling bin)
@@ -65,8 +66,8 @@ adds a package `.env.schema` + README.
 | File | Role |
 |------|------|
 | `.env.dev` / `.env.prod` (repo root) | Shared non-secrets (optional prod `@plugin` / `@initVw`); `# @internal` in root schema |
-| `.env.host` | Host-only provision secrets (`!env`); optional `vw()` |
-| `.env.host.local` | Machine-local overlay of `.env.host` (gitignored) |
+| `provision/.env.schema` + `.env.<env>` | Host provision secrets for `!env` / `@tag(guest)`; optional `vw()` |
+| `provision/.env.local` | Machine-local overlay of provision env (gitignored) |
 | `applications/<app>/.env.schema` | Template scope (`# @import(../../)`) |
 | `applications/<app>/<unit>/.env.schema` | Unit → installed `EnvironmentFile=.env` + secrets (`# @import(../../../)`) |
 
@@ -84,8 +85,8 @@ host version. Varlock plugins are **not** provision pins — declare them in
 schemas with `# @plugin(@pkg@version)`.
 
 - Committable: `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlays).
-- Host resolves `!env` via `loadHostEnv` (bundled graph API over `.env.host`, then
-  optional `.env.host.local`) — no `varlock` CLI.
+- Host resolves `!env` via `loadHostEnv` (bundled graph API over
+  `provision/.env.schema` + `.env.<env>`, optional `.env.local`) — no `varlock` CLI.
 - VM/seed/image caches: XDG (`~/.cache/qctl`, `~/.local/share/qctl`), not in-repo.
 
 ## mise (host only)

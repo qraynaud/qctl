@@ -33,7 +33,7 @@ export const SYNC_TAR_EXCLUDE_DIRS = [
  * Note: repo-root `.env` is intentionally absent — not listed here so `--delete`
  * removes a stale guest `.env` left over from older layouts.
  */
-export const SYNC_TAR_EXCLUDE_FILES = ['.env.host', '.env.host.local', 'build.env', '.DS_Store']
+export const SYNC_TAR_EXCLUDE_FILES = ['build.env', '.DS_Store']
 
 /** Extra tar --exclude only (not delete-protected): never upload a host `.env`. */
 const SYNC_TAR_EXCLUDE_UPLOAD_ONLY = ['.env']

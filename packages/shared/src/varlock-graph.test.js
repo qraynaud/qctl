@@ -171,7 +171,7 @@ describe('loadEnvGraphForDir', () => {
     }
   })
 
-  test('extraEntryPaths: .env.host for host provision', async () => {
+  test('extraEntryPaths: additional absolute entry file', async () => {
     const root = makeTempDir()
     try {
       writeFile(
@@ -180,12 +180,12 @@ describe('loadEnvGraphForDir', () => {
         '# ---\n# @type=enum(dev, prod)\n# @public\nQCTL_ENV=dev\n# @public @optional\nENV=\n',
       )
       writeFile(root, '.env.dev', 'ENV=dev\n')
-      writeFile(root, '.env.host', 'VW_CLIENT_ID=cid\nVW_CLIENT_SECRET=csec\n')
+      writeFile(root, '.env.extra', 'VW_CLIENT_ID=cid\nVW_CLIENT_SECRET=csec\n')
       const g = await loadEnvGraphForDir(root, {
         env: NO_ENV,
         qctlEnv: 'dev',
         skipCache: true,
-        extraEntryPaths: [`${root}/.env.host`],
+        extraEntryPaths: [`${root}/.env.extra`],
       })
       expect(resolvedSensitive(g)).toEqual([
         { key: 'VW_CLIENT_ID', value: 'cid' },

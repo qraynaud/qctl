@@ -27,7 +27,8 @@ describe('sync repo archive', () => {
     const root = mkdtempSync(join(tmpdir(), 'qctl-sync-src-'))
     temps.push(root)
     writeFileSync(join(root, 'README.md'), 'hi\n')
-    writeFileSync(join(root, '.env.host'), 'SECRET=1\n')
+    writeFileSync(join(root, 'build.env'), 'SECRET=1\n')
+    writeFileSync(join(root, '.env'), 'STALE=1\n')
     mkdirSync(join(root, '.hg'))
     writeFileSync(join(root, '.hg', 'requires'), 'x\n')
     mkdirSync(join(root, 'node_modules'))
@@ -42,22 +43,23 @@ describe('sync repo archive', () => {
     mkdirSync(extract)
     await $`tar -C ${extract} -xzf ${archive}`
     expect(readFileSync(join(extract, 'README.md'), 'utf8')).toBe('hi\n')
-    expect(() => readFileSync(join(extract, '.env.host'))).toThrow()
+    expect(() => readFileSync(join(extract, 'build.env'))).toThrow()
+    expect(() => readFileSync(join(extract, '.env'))).toThrow()
     expect(() => readFileSync(join(extract, '.hg', 'requires'))).toThrow()
     expect(() => readFileSync(join(extract, 'node_modules', 'x'))).toThrow()
-    expect(SYNC_TAR_EXCLUDES).toContain('.env.host')
+    expect(SYNC_TAR_EXCLUDES).toContain('build.env')
     expect(SYNC_TAR_EXCLUDES).toContain('.env') // upload-only; deleted on guest if present
 
     const paths = await listArchivePaths(archive)
     expect(paths).toContain('./README.md')
-    expect(paths.some((p) => p.includes('.env.host'))).toBe(false)
+    expect(paths.some((p) => p.includes('build.env'))).toBe(false)
   })
 
   test('remoteDeleteScript prunes dirs and protects host-only file basenames', () => {
     const script = remoteDeleteScript()
     expect(script).toContain("-name '.hg'")
     expect(script).toContain("-name 'node_modules'")
-    expect(script).toContain("! -name '.env.host'")
+    expect(script).toContain("! -name 'build.env'")
     expect(script).not.toContain("! -name '.env'")
     expect(script).toContain('grep -Fxq')
   })

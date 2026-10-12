@@ -1,0 +1,149 @@
+import { makeTempDir, removeTempDir, writeFile, writeMinimalInstance } from '../test-helpers.js'
+import { loadProvision, loadProvisionDocument, provisionNeedsEnv } from './load.js'
+import { isEnvRef } from './yaml.js'
+import { afterEach, describe, expect, test } from 'bun:test'
+
+/** @import { ProvisionValue } from './yaml.js' */
+
+/** @type {string[]} */
+const temps = []
+
+afterEach(() => {
+  while (temps.length) {
+    const dir = temps.pop()
+    if (dir) removeTempDir(dir)
+  }
+})
+
+/**
+ * @param {string} root
+ * @param {string} [devBody]
+ */
+function writeProvisionEnv(root, devBody = 'VW_CLIENT_ID=user.from-env\n') {
+  writeFile(
+    root,
+    'provision/.env.schema',
+    [
+      '# ---',
+      '# @sensitive',
+      '# @optional',
+      'VW_CLIENT_ID=',
+      '# @sensitive',
+      '# @optional',
+      'VW_CLIENT_SECRET=',
+      '# @sensitive',
+      '# @optional',
+      'PROVISION_SSH_AUTHORIZED_KEYS=',
+      '# @sensitive',
+      '# @optional',
+      'PROXMOX_API_TOKEN=',
+      '',
+    ].join('\n'),
+  )
+  writeFile(root, 'provision/.env.dev', devBody)
+}
+
+describe('loadProvisionDocument', () => {
+  test('loads base + local overlay and strips proxmox', () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.basePath).toContain('dev.yaml')
+    expect(doc.overlayPath).toContain('dev.local.yaml')
+    expect(doc.envRefs).toContain('VW_CLIENT_ID')
+    expect(doc.data.local).toEqual({ cpu: 2 })
+    expect(doc.data.proxmox).toBeUndefined()
+  })
+
+  test('throws when base yaml is missing', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    expect(() => loadProvisionDocument({ root, env: 'dev' })).toThrow(/not found/)
+  })
+
+  test('throws when base yaml is not a mapping', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(root, 'provision/dev.yaml', '- just a list\n')
+    expect(() => loadProvisionDocument({ root, env: 'dev' })).toThrow(/mapping/)
+  })
+})
+
+describe('loadProvision', () => {
+  test('loads base + overlay, resolves !env from process env', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+
+    const { data, overlayPath, envRefs } = await loadProvision({
+      root,
+      env: 'dev',
+      target: 'local',
+      processEnv: { VW_CLIENT_ID: 'user.1' },
+    })
+
+    expect(overlayPath).toContain('dev.local.yaml')
+    expect(envRefs).toContain('VW_CLIENT_ID')
+    expect(data.vaultwarden).toEqual({ client_id: 'user.1' })
+    expect(data.local).toEqual({ cpu: 2 })
+    expect(data.proxmox).toBeUndefined()
+  })
+
+  test('resolve:false keeps EnvRefs', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    const { data, envRefs } = await loadProvision({
+      root,
+      env: 'dev',
+      target: 'proxmox',
+      resolve: false,
+    })
+    expect(envRefs).toEqual(expect.arrayContaining(['VW_CLIENT_ID', 'PROXMOX_API_TOKEN']))
+    const proxmox = /** @type {{ api_token: ProvisionValue }} */ (data.proxmox)
+    expect(isEnvRef(proxmox.api_token)).toBe(true)
+  })
+
+  test('resolves !env from provision/.env.dev when process env is empty', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    writeProvisionEnv(
+      root,
+      [
+        'VW_CLIENT_ID=user.from-env',
+        'PROVISION_SSH_AUTHORIZED_KEYS="ssh-ed25519 AAAA comment"',
+        'VW_CLIENT_SECRET=',
+        '',
+      ].join('\n'),
+    )
+    const { data } = await loadProvision({
+      root,
+      env: 'dev',
+      target: 'local',
+      processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
+    })
+    expect(data.vaultwarden).toEqual({ client_id: 'user.from-env' })
+  })
+
+  test('provision/.env.local overlays .env.dev for !env resolution', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    writeProvisionEnv(root, ['VW_CLIENT_ID=from-dev', 'VW_CLIENT_SECRET=sec-dev', ''].join('\n'))
+    writeFile(root, 'provision/.env.local', ['VW_CLIENT_ID=from-local', ''].join('\n'))
+    const { data } = await loadProvision({
+      root,
+      env: 'dev',
+      target: 'local',
+      processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
+    })
+    expect(data.vaultwarden).toEqual({ client_id: 'from-local' })
+  })
+})
+
+describe('provisionNeedsEnv', () => {
+  test('detects !env usage', () => {
+    const withRefs = writeMinimalInstance(makeTempDir(), { withEnvRefs: true })
+    const plain = writeMinimalInstance(makeTempDir(), { withEnvRefs: false, withOverlay: false })
+    temps.push(withRefs, plain)
+    expect(provisionNeedsEnv(withRefs, 'dev', 'local')).toBe(true)
+    expect(provisionNeedsEnv(plain, 'dev', 'local')).toBe(false)
+  })
+})

@@ -41,13 +41,10 @@ export {
   platformPackagesMapSchema,
 } from './platform/index.js'
 export {
-  ENV_HOST_FILE,
-  ENV_HOST_LOCAL_FILE,
   ENV_REF,
   PROVISION_DIR,
   collectEnvRefs,
   envRef,
-  hostEnvFilePaths,
   isEnvRef,
   loadHostEnv,
   loadHostEnvDetailed,
@@ -55,13 +52,11 @@ export {
   loadProvision,
   loadProvisionDocument,
   parseProvisionYaml,
-  processEnvWithHostFile,
   provisionEnvDir,
   provisionNeedsEnv,
-  readEnvHostFile,
   resolveEnvRefs,
   stripOppositeTarget,
-} from './provision.js'
+} from './provision/index.js'
 export {
   CONTAINER_REGISTRY_TAG,
   GUEST_TAG,

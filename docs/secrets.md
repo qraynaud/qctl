@@ -28,8 +28,6 @@ Plugin: [packages/vaultwarden-plugin/README.md](../packages/vaultwarden-plugin/R
 Offline reinstall: seed while Vaultwarden is reachable, then `vm up --wipe-os`
 (seed runs **before** demoting the old VM).
 
-Legacy root `.env.host` is still loaded if `provision/.env.schema` is absent.
-
 ## Day-2 Podman secrets
 
 Unchanged: unit `@sensitive` → `qctl secret sync` → Podman secrets.

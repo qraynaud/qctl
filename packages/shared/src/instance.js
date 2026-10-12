@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
-import { parseProvisionYaml } from './provision.js'
+import { parseProvisionYaml } from './provision/index.js'
 
 /** @import { YamlMapping } from './yaml.js' */
 
