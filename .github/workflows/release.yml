@@ -1,28 +1,52 @@
 name: release
 
 # Manual publish of GitHub release (linux-x64 binaries + checksums).
-# Skips entirely when tag v$version already exists.
-# Quality gates live in ci.yml — this workflow only packages what CI already validated on main.
-# Plugin npm stage publish is a separate workflow: release-plugin.yml
+# Requires both confirmation checkboxes. Refuses if tag v$version already exists
+# (CI on main only proposes a release when the version is still free).
+# Runs the full CI suite on this commit before packaging.
+# Plugin npm stage publish is separate: release-plugin.yml
 # `varlock-local-encrypt` is embedded in qctl-host/qctl-guest (not a separate asset).
 on:
   workflow_dispatch:
+    inputs:
+      confirm_new_version:
+        description: 'Confirm package.json / QCTL_VERSION is the version I want to publish'
+        type: boolean
+        required: true
+        default: false
+      confirm_publish:
+        description: 'Confirm create GitHub release + upload linux-x64 assets for that version'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
-  release:
+  gate:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
+      - name: Require confirmation checkboxes
+        if: ${{ !(inputs.confirm_new_version && inputs.confirm_publish) }}
+        run: |
+          echo "::error::Check both confirmation boxes to publish a release."
+          exit 1
+
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: jdx/mise-action@v5
 
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Resolve version
+      - name: Resolve version (refuse if already released)
         id: ver
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,19 +57,39 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release ${TAG} already exists — skipping."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Will publish ${TAG}"
+            echo "::error::${TAG} already exists — nothing to release. Bump package.json / QCTL_VERSION first."
+            exit 1
           fi
+          echo "Will publish ${TAG}"
+          {
+            echo "### Planned release \`${TAG}\`"
+            echo ""
+            echo "Changelog (commit subjects):"
+            echo ""
+            bun ci/release-changelog.js
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: gate
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: [gate, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install
+        run: bun install --frozen-lockfile
 
       - name: Compile linux-x64 binaries
-        if: steps.ver.outputs.exists != 'true'
         run: bun run compile
 
       - name: Package release assets
-        if: steps.ver.outputs.exists != 'true'
         run: |
           set -euo pipefail
           mkdir -p release
@@ -57,36 +101,17 @@ jobs:
           )
 
       - name: Create GitHub release
-        if: steps.ver.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.gate.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.ver.outputs.tag }}"
-          VERSION="${{ steps.ver.outputs.version }}"
+          NOTES_FILE="$(mktemp)"
+          bun ci/release-notes.js > "$NOTES_FILE"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$TAG" \
-            --notes "qctl ${VERSION}
-
-          ## Assets
-          - \`qctl-host\` — workstation CLI (seed kit + embedded \`varlock-local-encrypt\`; install/rename to \`qctl\` on PATH)
-          - \`qctl-guest\` — appliance CLI (stages / quadlet / secret; seed installs as \`/usr/local/bin/qctl\`; embeds \`varlock-local-encrypt\`)
-          - \`qctl-platform-rocky.mjs\` — thin Rocky platform module (guest \`import()\`; exports \`CLOUD_IMAGE\` pin for host \`vm download\`)
-          - \`SHA256SUMS\`
-
-          Host downloads \`qctl-guest\` and \`qctl-platform-rocky.mjs\` from this release when seeding /
-          \`sync --include-tooling\` (override with \`QCTL_GUEST_DIST\`). The encrypt helper is
-          embedded in the host binary (materialized beside it at runtime).
-
-          Pin platform in \`provision/<env>.yaml\` (version defaults to the running host):
-          \`\`\`yaml
-          qctl:
-            platform: rocky@${VERSION}
-          \`\`\`
-
-          Vaultwarden plugin is staged separately on npm (\`release-plugin\` workflow → \`npm stage approve\`).
-          " \
+            --notes-file "$NOTES_FILE" \
             release/qctl-host \
             release/qctl-guest \
             release/qctl-platform-rocky.mjs \
