@@ -8,7 +8,8 @@ import {
   removeTempDir,
   writeFile,
   writeMinimalInstance,
-} from '../../../../shared/src/test-helpers.js'
+} from '@qctl/shared/test-helpers'
+
 import { createContext } from '../context.js'
 import { createFakeSystem } from './fake-system.js'
 

@@ -9,8 +9,8 @@ import {
   resolvedNonSensitive,
   sensitiveKeys,
 } from '@qctl/shared'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { makeTempDir, removeTempDir } from '../../shared/src/test-helpers.js'
 import { initInstance } from './init.js'
 import {
   appsIdentityFromProvision,

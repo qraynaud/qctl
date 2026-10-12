@@ -3,7 +3,8 @@ import { join } from 'node:path'
 
 import { ISOReader } from '@gcu/iso9660'
 
-import { makeTempDir, removeTempDir } from '../../../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { initInstance } from '../../../init.js'
 import { getSeed, resetRepoRootCache } from '../../../lib/paths.js'
 import { resolveSeedPaths } from './iso.js'

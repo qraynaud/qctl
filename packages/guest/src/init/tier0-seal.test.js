@@ -1,7 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { createContext } from './context.js'
 import { runStage } from './run-stage.js'
 import { describe, expect, test } from 'bun:test'

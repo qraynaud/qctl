@@ -24,9 +24,3 @@ export type PlatformStageContext = {
   profile: InitProfile
   dryRun?: boolean
 }
-
-/** Contract between guest `qctl init` and a platform stage runner (legacy CLI shape). */
-export type PlatformAdapter = {
-  name: string
-  runStage: (stage: PlatformStage, ctx: PlatformStageContext) => Promise<void>
-}

@@ -1,7 +1,8 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { capabilitiesForProfile } from './capabilities.js'
 import { PLATFORM_MODULE_NAME } from './platform.js'
 import { runInit } from './run.js'

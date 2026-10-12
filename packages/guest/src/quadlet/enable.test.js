@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { writeFile } from '../../../shared/src/test-helpers.js'
+import { writeFile } from '@qctl/shared/test-helpers'
+
 import { MARKER_DIR } from './apps/index.js'
 import { runEnable } from './enable.js'
 import { cleanupQuadletFixture, makeContext, makeQuadletInstance } from './test/fixture.js'

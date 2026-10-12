@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { initInstance } from '../../../init.js'
 import { resetRepoRootCache } from '../../../lib/paths.js'
 import { embedGuestTooling } from './tooling.js'

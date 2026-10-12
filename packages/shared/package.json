@@ -8,6 +8,9 @@
       "types": "./src/index.ts",
       "default": "./src/index.js"
     },
+    "./test-helpers": {
+      "default": "./src/test-helpers.js"
+    },
     "./packages/mercurial": {
       "types": "./src/packages/mercurial.js",
       "default": "./src/packages/mercurial.js"

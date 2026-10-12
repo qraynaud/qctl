@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+
 import { initInstance } from '../init.js'
 import { loadEnvSecrets, loadEnvSecretsOrThrow } from './load-config.js'
 import { resetRepoRootCache } from './paths.js'

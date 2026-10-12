@@ -139,9 +139,10 @@ Init-tank does not auto-add mercurial.
 
 ### `bw` unlock paths (before `tank`)
 
-First-boot secrets come from the seeded bootstrap graph (`loadBootstrapGraph` in
-platform stages): `TANK_PASSPHRASE`, `SSH_HOST_KEYS`, `ADMIN_*`, `DEPLOY_KEY`,
-`@tag(container-registry)`. Prod bindings use `@initVw` + `vw()`; lab uses literals.
+First-boot secrets come from the seeded bootstrap graph (instance `bootstrap/` →
+guest `/usr/local/lib/qctl/bootstrap/`): `TANK_PASSPHRASE`, `SSH_HOST_KEYS`,
+`ADMIN_*`, `DEPLOY_KEY`, `@tag(container-registry)`. Prod bindings use `@initVw` +
+`vw()`; lab uses literals.
 `bw` (if used) comes from provision `packages.http` / `packages.distro`. Extra installs:
 `packages.{distro,pipx,http}` in `provision/<env>.yaml` → cloud-init `install-packages.sh`
 (appliance + init-tank). `pipx` is installed on the guest only when `packages.pipx` is

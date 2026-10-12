@@ -1,4 +1,5 @@
-import { writeFile } from '../../../../shared/src/test-helpers.js'
+import { writeFile } from '@qctl/shared/test-helpers'
+
 import { cleanupQuadletFixture, makeContext, makeQuadletInstance } from '../test/fixture.js'
 import { runUp } from './index.js'
 import { describe, expect, test } from 'bun:test'

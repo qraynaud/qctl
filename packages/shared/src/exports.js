@@ -15,7 +15,6 @@ export {
   BOOTSTRAP_DIR_DEFAULT,
   BOOTSTRAP_INSTANCE_DIR,
   instanceBootstrapDir,
-  loadBootstrapGraph,
   resolveBootstrapDir,
 } from './bootstrap.js'
 export { findInstanceRoot, hasQctlProvision, isInstanceRoot } from './instance.js'

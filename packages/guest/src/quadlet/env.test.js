@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
-import { removeTempDir, writeFile } from '../../../shared/src/test-helpers.js'
+import { removeTempDir, writeFile } from '@qctl/shared/test-helpers'
+
 import {
   detectQctlEnvFor,
   envFileValue,
