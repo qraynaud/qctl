@@ -4,7 +4,7 @@
  */
 import { chalk } from 'zx'
 
-import { errMessage } from './util.js'
+import { errMessage } from '../../lib/util.js'
 import { isAbortError } from './wait.js'
 /** @import { SerialFollow } from './console.js' */
 
