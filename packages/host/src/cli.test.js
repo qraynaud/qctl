@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '../../shared/src/test-helpers.js'
 import { initInstance } from './init.js'
-import { getSeed, repoHash, resetRepoRootCache } from './vm/libs/paths.js'
+import { getSeed, repoHash, resetRepoRootCache } from './lib/paths.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 const ROOT = join(import.meta.dir, '../../..')

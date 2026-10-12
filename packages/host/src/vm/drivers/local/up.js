@@ -1,5 +1,10 @@
 import { $, chalk, path } from 'zx'
 
+import { portsFromArgv } from '../../../lib/options.js'
+import { getImages } from '../../../lib/paths.js'
+import { portByName, resolvePorts } from '../../../lib/ports.js'
+import { HOST_DEPS, die, requireBins, which } from '../../../lib/util.js'
+import { ensureCloudImage } from '../../../tooling/platform-tooling.js'
 import { downloadImage } from '../../commands/download.js'
 import {
   classifyCloudInitOutcome,
@@ -19,13 +24,8 @@ import {
   setDomainSerialTcp,
   virsh,
 } from '../../libs/libvirt.js'
-import { portsFromArgv } from '../../libs/options.js'
-import { getImages } from '../../libs/paths.js'
-import { ensureCloudImage } from '../../libs/platform-tooling.js'
-import { portByName, resolvePorts } from '../../libs/ports.js'
 import { ensureSeed, runSeed } from '../../libs/seed.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
-import { HOST_DEPS, die, requireBins, which } from '../../libs/util.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep, waitForLocalTcpPorts, waitForSerialOutcome } from '../../libs/wait.js'
 

@@ -10,6 +10,7 @@ import { join } from 'node:path'
 
 import { $, chalk } from 'zx'
 
+import { shellQuote } from '../lib/shell-quote.js'
 import { sftpPut, sshExecOk } from './ssh.js'
 
 /** @import { Client } from 'ssh2' */
@@ -43,13 +44,6 @@ export const SYNC_TAR_EXCLUDES = [
   ...SYNC_TAR_EXCLUDE_FILES,
   ...SYNC_TAR_EXCLUDE_UPLOAD_ONLY,
 ]
-
-/**
- * @param {string} s
- */
-function shellQuote(s) {
-  return `'${s.replace(/'/g, `'\\''`)}'`
-}
 
 /**
  * @param {string} localRoot

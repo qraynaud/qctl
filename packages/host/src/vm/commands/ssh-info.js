@@ -1,5 +1,5 @@
+import { addPasstPortOptions, portsFromArgv, sharedLibvirt } from '../../lib/options.js'
 import { loadDriver } from '../drivers/index.js'
-import { addPasstPortOptions, portsFromArgv, sharedLibvirt } from '../libs/options.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */

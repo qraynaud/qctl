@@ -1,7 +1,7 @@
 import { chalk } from 'zx'
 
+import { sharedDryRun, sharedLibvirt } from '../../lib/options.js'
 import { loadDriver } from '../drivers/index.js'
-import { sharedDryRun, sharedLibvirt } from '../libs/options.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */

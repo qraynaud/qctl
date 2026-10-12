@@ -8,14 +8,14 @@ import { existsSync } from 'node:fs'
 
 import { chalk, fs, path } from 'zx'
 
-import { ensureHostNativeHelper } from '../../native-helper.js'
-import { tryGetLocalGuestDist } from '../../qctl-source.js'
+import { getTooling } from '../lib/paths.js'
+import { die } from '../lib/util.js'
+import { ensureHostNativeHelper } from '../native-helper.js'
+import { tryGetLocalGuestDist } from '../qctl-source.js'
 import { touchPath } from './cache-gc.js'
 import { downloadGithubReleaseAsset } from './github-release.js'
-import { getTooling } from './paths.js'
 import { parsePlatformRef, resolvePlatformVersion } from './platform-ref.js'
 import { ensurePlatformModule, resolvePlatformRef } from './platform-tooling.js'
-import { die } from './util.js'
 
 /**
  * @typedef {object} GuestToolingResolved

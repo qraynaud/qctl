@@ -8,8 +8,9 @@ import { join } from 'node:path'
 
 import { $, chalk, path } from 'zx'
 
-import { ensureGuestTooling } from '../vm/libs/guest-tooling.js'
-import { tryGetRepoRoot } from '../vm/libs/paths.js'
+import { tryGetRepoRoot } from '../lib/paths.js'
+import { shellQuote } from '../lib/shell-quote.js'
+import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { sftpPut, sshExecOk } from './ssh.js'
 
 /** @import { Client } from 'ssh2' */
@@ -77,13 +78,6 @@ export async function resolveGuestToolingForSync(opts = {}) {
   }
 
   return { files, bootstrapDir, sourceLabel: resolved.sourceLabel }
-}
-
-/**
- * @param {string} s
- */
-function shellQuote(s) {
-  return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
 /**

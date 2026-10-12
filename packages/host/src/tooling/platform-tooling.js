@@ -12,18 +12,18 @@ import {
   loadCloudImageFromPlugin,
   setCloudImageCache,
   writeCloudImagePin,
-} from '../../cloud-image.js'
-import { tryGetLocalGuestDist } from '../../qctl-source.js'
-import { copySeedKit } from '../../seed-fs.js'
-import { getRockySeedRoot, isEmbeddedSeedRoot } from '../../seed-root.js'
+} from '../cloud-image.js'
+import { loadEnvSecretsOrThrow } from '../lib/load-config.js'
+import { getTooling, isSeedKitRoot, setSeedKitRoot } from '../lib/paths.js'
+import { die } from '../lib/util.js'
+import { tryGetLocalGuestDist } from '../qctl-source.js'
+import { copySeedKit } from '../seed-fs.js'
+import { getRockySeedRoot, isEmbeddedSeedRoot } from '../seed-root.js'
 import { touchPath } from './cache-gc.js'
 import { downloadGithubReleaseAsset } from './github-release.js'
-import { loadEnvSecretsOrThrow } from './load-config.js'
-import { getTooling, isSeedKitRoot, setSeedKitRoot } from './paths.js'
 import { parsePlatformRef, resolvePlatformVersion } from './platform-ref.js'
-import { die } from './util.js'
 
-/** @import { RockyCloudImage } from '../../cloud-image.js' */
+/** @import { RockyCloudImage } from '../cloud-image.js' */
 /** @import { PlatformRef } from './platform-ref.js' */
 
 /**

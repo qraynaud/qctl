@@ -1,5 +1,8 @@
 import { $, chalk } from 'zx'
 
+import { portsFromArgv } from '../../../lib/options.js'
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { HOST_DEPS, die, errMessage, requireBins } from '../../../lib/util.js'
 import { downloadImage } from '../../commands/download.js'
 import { matchInitTankFatal, startSerialTcpFollow } from '../../libs/console.js'
 import { ensureDisks } from '../../libs/disks.js'
@@ -9,10 +12,7 @@ import {
   waitForSuccessOrGuestFatal,
 } from '../../libs/guest-fatal.js'
 import { domainExists, ensureDefaultNetwork, removeDomain, virsh } from '../../libs/libvirt.js'
-import { portsFromArgv } from '../../libs/options.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
 import { ensureSeed, runSeed } from '../../libs/seed.js'
-import { HOST_DEPS, die, errMessage, requireBins } from '../../libs/util.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep } from '../../libs/wait.js'
 import { destroyVm } from './destroy.js'

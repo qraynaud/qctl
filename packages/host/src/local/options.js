@@ -1,4 +1,4 @@
-import { ENVS } from '../vm/libs/target.js'
+import { ENVS } from '../lib/target.js'
 
 /** @import { Argv } from 'yargs' */
 

@@ -1,4 +1,4 @@
-import { MAX_APPS_SUBID_COUNT } from '../vm/libs/secrets-schema/users.js'
+import { MAX_APPS_SUBID_COUNT } from '../provision/secrets-schema/users.js'
 
 const DEFAULT_APPS_ID = 900
 /** Rootless host relative ids typically available (0 = caller, 1… = /etc/subuid). */

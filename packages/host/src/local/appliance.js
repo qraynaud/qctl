@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { shellQuote } from '../lib/shell-quote.js'
 import { execInAppliance } from './exec-in.js'
 import { podman, stripPodmanNoise } from './podman.js'
 import { provisionAppliance } from './provision.js'
@@ -353,12 +354,4 @@ cat /etc/subuid /etc/subgid 2>/dev/null || true
   const out = stripPodmanNoise(`${r.stdout}${r.stderr}`).trim()
   if (out) console.error(out)
   console.error('--- end failure logs ---')
-}
-
-/**
- * @param {string} s
- * @returns {string}
- */
-function shellQuote(s) {
-  return `'${s.replace(/'/g, `'\\''`)}'`
 }

@@ -1,6 +1,6 @@
-import { portsFromArgv } from '../../libs/options.js'
+import { portsFromArgv } from '../../../lib/options.js'
+import { requireBins } from '../../../lib/util.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
-import { requireBins } from '../../libs/util.js'
 
 /** @import { VmArgv } from '../../types.js' */
 

@@ -1,9 +1,9 @@
 import { chalk, fs, path } from 'zx'
 
+import { getImages } from '../../../lib/paths.js'
+import { die, errMessage } from '../../../lib/util.js'
+import { ensureCloudImage } from '../../../tooling/platform-tooling.js'
 import { IMAGE } from '../../commands/download.js'
-import { getImages } from '../paths.js'
-import { ensureCloudImage } from '../platform-tooling.js'
-import { die, errMessage } from '../util.js'
 
 /** @import { ProxmoxClient } from './client.js' */
 

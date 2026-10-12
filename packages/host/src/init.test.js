@@ -16,7 +16,7 @@ import {
   appsIdentityFromProvision,
   firstBootCredentialsFromProvision,
   parseSecretsFile,
-} from './vm/libs/secrets-schema.js'
+} from './provision/secrets-schema.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 /** @import { YamlMapping } from '@qctl/shared' */

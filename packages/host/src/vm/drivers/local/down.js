@@ -1,7 +1,7 @@
 import { chalk } from 'zx'
 
+import { die, requireBins } from '../../../lib/util.js'
 import { domainExists, domainState, setDomainSerialNull, virsh } from '../../libs/libvirt.js'
-import { die, requireBins } from '../../libs/util.js'
 import { sleep } from '../../libs/wait.js'
 
 /** @import { VmArgv } from '../../types.js' */

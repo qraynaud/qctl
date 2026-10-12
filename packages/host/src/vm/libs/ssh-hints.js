@@ -1,9 +1,9 @@
 /** Local (libvirt) SSH / console hints. */
 import { chalk } from 'zx'
 
+import { portByName, resolvePorts } from '../../lib/ports.js'
+import { which } from '../../lib/util.js'
 import { virsh } from './libvirt.js'
-import { portByName, resolvePorts } from './ports.js'
-import { which } from './util.js'
 
 /** @import { PortEntry, VmArgv } from '../types.js' */
 

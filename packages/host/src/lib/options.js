@@ -1,13 +1,13 @@
 import { loadProvisionDocument } from '@qctl/shared'
 
+import { parsePorts } from '../provision/secrets-schema.js'
 import { DATA_COUNT, SPECIAL_COUNT, tryGetRepoRoot } from './paths.js'
 import { addPasstPortOptions } from './ports.js'
-import { parsePorts } from './secrets-schema.js'
 import { ENVS, TARGETS } from './target.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { YamlValue } from '@qctl/shared' */
-/** @import { PortEntry, VmArgv, VmTarget } from '../types.js' */
+/** @import { PortEntry, VmArgv, VmTarget } from '../vm/types.js' */
 
 /** @typedef {{ memory?: string | number, cpu?: string | number }} BootResourceSection */
 

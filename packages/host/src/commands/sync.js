@@ -1,5 +1,5 @@
+import { sharedDryRun, sharedLibvirt } from '../lib/options.js'
 import { runSync } from '../sync/run.js'
-import { sharedDryRun, sharedLibvirt } from '../vm/libs/options.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../vm/types.js' */

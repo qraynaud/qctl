@@ -1,5 +1,5 @@
-import { DATA_COUNT, SPECIAL_COUNT } from './paths.js'
-import { virtInstallPasstNetworkArg } from './ports.js'
+import { DATA_COUNT, SPECIAL_COUNT } from '../../lib/paths.js'
+import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
 
 /** @import { PortEntry, VmArgv } from '../types.js' */
 /** @import { VmDiskPaths } from './disks.js' */

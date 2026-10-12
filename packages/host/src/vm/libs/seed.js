@@ -11,15 +11,16 @@ import { ISOWriter } from '@gcu/iso9660'
 import YAML from 'yaml'
 import { chalk, fs, path } from 'zx'
 
-import { gcQctlCache, touchPath } from './cache-gc.js'
+import { loadEnvSecrets } from '../../lib/load-config.js'
+import { getCloud, getSeed } from '../../lib/paths.js'
+import { die } from '../../lib/util.js'
+import { applyVcsFileDefaults } from '../../provision/secrets-schema/files.js'
+import { applyVcsPackageDefaults } from '../../provision/secrets-schema/packages.js'
+import { gcQctlCache, touchPath } from '../../tooling/cache-gc.js'
+import { ensureGuestTooling } from '../../tooling/guest-tooling.js'
+import { parsePlatformRef } from '../../tooling/platform-ref.js'
+import { ensurePlatformSeedKit } from '../../tooling/platform-tooling.js'
 import { renderNetworkConfigV2 } from './guest-net.js'
-import { ensureGuestTooling } from './guest-tooling.js'
-import { loadEnvSecrets } from './load-config.js'
-import { getCloud, getSeed } from './paths.js'
-import { parsePlatformRef } from './platform-ref.js'
-import { ensurePlatformSeedKit } from './platform-tooling.js'
-import { applyVcsFileDefaults } from './secrets-schema/files.js'
-import { applyVcsPackageDefaults } from './secrets-schema/packages.js'
 import {
   buildVars,
   injectGuestCredentialFiles,
@@ -27,11 +28,10 @@ import {
   injectProvisionFiles,
   renderTemplate,
 } from './seed-template.js'
-import { die } from './util.js'
 
+/** @import { GuestFile } from '../../provision/secrets-schema/files.js' */
+/** @import { NormalizedPackages } from '../../provision/secrets-schema/packages.js' */
 /** @import { SeedProfile as VmSeedProfile, VmArgv } from '../types.js' */
-/** @import { GuestFile } from './secrets-schema/files.js' */
-/** @import { NormalizedPackages } from './secrets-schema/packages.js' */
 
 /** @typedef {VmSeedProfile} SeedProfile */
 /** @typedef {Awaited<ReturnType<typeof loadEnvSecrets>>} LoadedSecrets */

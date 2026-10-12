@@ -4,8 +4,8 @@ import path from 'node:path'
 
 import { $, chalk } from 'zx'
 
-import { passtDesiredFingerprint, passtForwardsXml, passtSummary } from './ports.js'
-import { HOST_DEPS, die } from './util.js'
+import { passtDesiredFingerprint, passtForwardsXml, passtSummary } from '../../lib/ports.js'
+import { HOST_DEPS, die } from '../../lib/util.js'
 import { sleep } from './wait.js'
 
 /** @import { PortEntry, VmArgv } from '../types.js' */

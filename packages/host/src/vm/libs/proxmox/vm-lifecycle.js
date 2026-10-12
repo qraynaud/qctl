@@ -1,7 +1,7 @@
 import { chalk } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../paths.js'
-import { die } from '../util.js'
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { die } from '../../../lib/util.js'
 import { applyNetsToForm } from './config.js'
 import {
   assertNameFreeForCreate,

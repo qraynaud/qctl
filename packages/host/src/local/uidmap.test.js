@@ -1,4 +1,4 @@
-import { defaultAppsSubidRange } from '../vm/libs/secrets-schema/users.js'
+import { defaultAppsSubidRange } from '../provision/secrets-schema/users.js'
 import { appsUidMapPodmanArgs } from './uidmap.js'
 import { describe, expect, test } from 'bun:test'
 

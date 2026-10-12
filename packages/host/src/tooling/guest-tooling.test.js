@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
+import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
 import { ensureGuestTooling } from './guest-tooling.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
