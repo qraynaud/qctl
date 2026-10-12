@@ -1,7 +1,8 @@
 name: release
 
-# After merge to main: re-run checks, then optionally publish the GitHub release
-# (Review deployments on environment `release-qctl` only when v$version is new).
+# After merge to main: run pr-check once, then environment-gated publishes.
+# Approvals appear only when that version is unpublished (`release-qctl` /
+# `release-plugin`). npm OIDC trusted publisher = this workflow (`release.yml`).
 # `varlock-local-encrypt` is embedded in qctl-host/qctl-guest (not a separate asset).
 on:
   push:
@@ -13,6 +14,7 @@ concurrency:
 
 permissions:
   contents: write
+  id-token: write # npm trusted publishing (OIDC) — no NPM_TOKEN
 
 jobs:
   check:
@@ -22,9 +24,11 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     outputs:
-      needed: ${{ steps.plan.outputs.needed }}
-      version: ${{ steps.plan.outputs.version }}
-      tag: ${{ steps.plan.outputs.tag }}
+      qctl_needed: ${{ steps.plan.outputs.qctl_needed }}
+      qctl_version: ${{ steps.plan.outputs.qctl_version }}
+      qctl_tag: ${{ steps.plan.outputs.qctl_tag }}
+      plugin_needed: ${{ steps.plan.outputs.plugin_needed }}
+      plugin_version: ${{ steps.plan.outputs.plugin_version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,27 +39,29 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Plan qctl release
+      - name: Plan releases
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="$(bun ci/check-version.js)"
-          TAG="v${VERSION}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          QCTL_VERSION="$(bun ci/check-version.js)"
+          QCTL_TAG="v${QCTL_VERSION}"
+          echo "qctl_version=${QCTL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "qctl_tag=${QCTL_TAG}" >> "$GITHUB_OUTPUT"
+
           {
-            echo "### qctl release"
+            echo "### Release plan"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo "\`${TAG}\` already published — no approval." >> "$GITHUB_STEP_SUMMARY"
+
+          if gh release view "$QCTL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "qctl_needed=false" >> "$GITHUB_OUTPUT"
+            echo "- **qctl** \`${QCTL_TAG}\`: already published (no approval)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "qctl_needed=true" >> "$GITHUB_OUTPUT"
             {
-              echo "\`${TAG}\` not published — waiting for **release-qctl** approval."
+              echo "- **qctl** \`${QCTL_TAG}\`: waiting for **release-qctl** approval"
               echo ""
               echo "<details><summary>Changelog preview</summary>"
               echo ""
@@ -65,16 +71,30 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  approve:
+          PLUGIN_VERSION="$(bun -e 'console.log(require("./packages/vaultwarden-plugin/package.json").version)')"
+          echo "plugin_version=${PLUGIN_VERSION}" >> "$GITHUB_OUTPUT"
+          PKG="@qctl/vaultwarden-plugin@${PLUGIN_VERSION}"
+          if npm view "$PKG" version >/dev/null 2>&1; then
+            echo "plugin_needed=false" >> "$GITHUB_OUTPUT"
+            echo "- **plugin** \`${PKG}\`: already on npm (no approval)" >> "$GITHUB_STEP_SUMMARY"
+          elif npm stage view "$PKG" >/dev/null 2>&1; then
+            echo "plugin_needed=false" >> "$GITHUB_OUTPUT"
+            echo "- **plugin** \`${PKG}\`: already staged — \`npm stage approve ${PKG}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "plugin_needed=true" >> "$GITHUB_OUTPUT"
+            echo "- **plugin** \`${PKG}\`: waiting for **release-plugin** approval" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  approve-qctl:
     needs: plan
-    if: needs.plan.outputs.needed == 'true'
+    if: needs.plan.outputs.qctl_needed == 'true'
     runs-on: ubuntu-latest
     environment: release-qctl
     steps:
-      - run: echo "Approved qctl ${{ needs.plan.outputs.tag }}"
+      - run: echo "Approved qctl ${{ needs.plan.outputs.qctl_tag }}"
 
-  publish:
-    needs: [approve, plan]
+  publish-qctl:
+    needs: [approve-qctl, plan]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,7 +109,7 @@ jobs:
       - name: Refuse if already released
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.tag }}
+          TAG: ${{ needs.plan.outputs.qctl_tag }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -114,7 +134,7 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.tag }}
+          TAG: ${{ needs.plan.outputs.qctl_tag }}
         run: |
           set -euo pipefail
           NOTES_FILE="$(mktemp)"
@@ -127,3 +147,57 @@ jobs:
             release/qctl-guest \
             release/qctl-platform-rocky.mjs \
             release/SHA256SUMS
+
+  approve-plugin:
+    needs: plan
+    if: needs.plan.outputs.plugin_needed == 'true'
+    runs-on: ubuntu-latest
+    environment: release-plugin
+    steps:
+      - run: echo "Approved plugin @${{ needs.plan.outputs.plugin_version }}"
+
+  publish-plugin:
+    needs: [approve-plugin, plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Check npm stage support
+        run: |
+          set -euo pipefail
+          npm --version
+          npm stage --help >/dev/null
+
+      - name: Refuse if already published or staged
+        working-directory: packages/vaultwarden-plugin
+        env:
+          VERSION: ${{ needs.plan.outputs.plugin_version }}
+        run: |
+          set -euo pipefail
+          PKG="@qctl/vaultwarden-plugin@${VERSION}"
+          if npm view "$PKG" version >/dev/null 2>&1; then
+            echo "::error::${PKG} already published on npm."
+            exit 1
+          fi
+          if npm stage view "$PKG" >/dev/null 2>&1; then
+            echo "::error::${PKG} already staged — approve with: npm stage approve ${PKG}"
+            exit 1
+          fi
+
+      - name: Stage @qctl/vaultwarden-plugin on npm
+        working-directory: packages/vaultwarden-plugin
+        env:
+          VERSION: ${{ needs.plan.outputs.plugin_version }}
+        run: |
+          set -euo pipefail
+          # OIDC trusted publisher workflow filename: release.yml
+          # Prefer stage-only permissions so direct `npm publish` from CI is rejected.
+          npm stage publish --access public
+          echo "Staged @qctl/vaultwarden-plugin@${VERSION}"
+          echo "Approve (2FA): npm stage approve @qctl/vaultwarden-plugin@${VERSION}"
+          echo "Or: https://www.npmjs.com → Staged Packages"
