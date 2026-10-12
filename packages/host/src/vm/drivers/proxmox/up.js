@@ -22,11 +22,26 @@ import {
   uploadSeedIso,
 } from '../../libs/proxmox/vm.js'
 import { runSeed } from '../../libs/seed.js'
-import { isAbortError, waitForSerialOutcome } from '../../libs/wait.js'
+import { runVmUp } from '../../libs/up-pipeline.js'
 import { clientFrom, ping } from './shared.js'
 
-/** @import { SerialFollow } from '../../libs/console.js' */
+/** @import { VmUpBackend } from '../../libs/up-pipeline.js' */
 /** @import { VmArgv } from '../../types.js' */
+
+/**
+ * @typedef {object} ProxmoxExisting
+ * @property {Awaited<ReturnType<typeof clientFrom>>} client
+ * @property {number} vmid
+ * @property {string} name
+ */
+
+/**
+ * @typedef {object} ProxmoxCreated
+ * @property {Awaited<ReturnType<typeof clientFrom>>} client
+ * @property {number} vmid
+ * @property {string} name
+ * @property {string} isoVolid
+ */
 
 /**
  * @returns {Promise<void>}
@@ -37,66 +52,216 @@ async function printSshHint() {
 
 /**
  * @param {VmArgv} argv
- * @param {{ signal?: AbortSignal }} [opts]
  * @returns {Promise<void>}
  */
-async function startExisting(argv, { signal } = {}) {
-  const client = await clientFrom(argv)
-  const { name, noConsole, timeout, memory, vcpus, vwSize, dataSize, specialSize } = argv
+async function proxmoxDryRun(argv) {
+  const { name, env, wipeOs, timeout, noConsole } = argv
   const timeoutSec = timeout || 2700
-  const vmid = await client.findVmidByName(name)
-  if (vmid == null) die(`Proxmox VM ${name} not found — create with up first`)
+  console.log(
+    chalk.green(
+      `vm: dry-run Proxmox up name=${name} env=${env} `
+        + `(OS + /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT}`
+        + `${wipeOs ? '; wipe-os' : ''})`,
+    ),
+  )
+  console.log(chalk.dim('  would: appliance seed ISO, ensure image'))
+  console.log(
+    chalk.dim(
+      `  if VM exists → reconcile+start; else if holder with rocky-vw → promote; `
+        + `else create only when name and ${holderVmName(name)} are both free`,
+    ),
+  )
+  console.log(
+    chalk.dim(
+      noConsole
+        ? '  (no console wait)'
+        : `  then stream serial ≤${timeoutSec}s for cloud-init Final Stage; detach+delete seed ISO; restore virtio display`,
+    ),
+  )
+}
 
-  await reconcileRockyAppliance(client, {
-    vmid,
-    name,
-    memory,
-    vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
-  })
-
+/**
+ * @param {Awaited<ReturnType<typeof clientFrom>>} client
+ * @param {number} vmid
+ * @param {string} name
+ * @returns {Promise<void>}
+ */
+async function startProxmoxVm(client, vmid, name) {
   console.log(chalk.cyan(`vm: starting Proxmox VM ${name} (vmid=${vmid})…`))
   const upid = await client.post(
     `/nodes/${encodeURIComponent(client.config.node)}/qemu/${vmid}/status/start`,
     {},
   )
   if (upid) await client.waitTask(upid, { timeoutSec: 120 })
+}
 
-  if (noConsole) {
-    console.log(chalk.green(`vm: Proxmox VM ${name} started`))
-    await restoreProxmoxDisplay(client, vmid)
-    return
-  }
+/**
+ * @returns {VmUpBackend<ProxmoxExisting, ProxmoxCreated>}
+ */
+function proxmoxBackend() {
+  return {
+    assertReady: (argv) => {
+      assertProxmoxDiskPlan({ target: argv.target || 'proxmox', env: argv.env })
+    },
 
-  /** @type {SerialFollow | null} */
-  let consoleFollow = null
-  try {
-    consoleFollow = await startProxmoxSerialFollow(client, vmid, name, {
-      classify: classifyRebootReady,
-    })
-    console.log(chalk.green(`vm: Proxmox VM ${name} started — streaming serial until multi-user`))
-    const outcome = await waitForSerialOutcome(consoleFollow, timeoutSec, signal, {
-      waiting: `vm: waiting for multi-user target (timeout ${timeoutSec}s)…`,
-      timeoutLine: `multi-user target not seen within ${timeoutSec}s`,
-    })
-    await consoleFollow.stop()
-    consoleFollow = null
+    dryRun: (argv) => proxmoxDryRun(argv),
 
-    if (outcome.status === 'ok') {
-      console.log(chalk.green('vm: guest multi-user OK'))
-      console.log(chalk.dim(`  ${outcome.line}`))
-      await restoreProxmoxDisplay(client, vmid)
-      return
-    }
+    findRunnableExisting: async (argv) => {
+      if (argv.wipeOs) return null
+      const client = await ping(argv)
+      const vmid = await client.findVmidByName(argv.name)
+      if (vmid == null) return null
+      return { client, vmid, name: argv.name }
+    },
 
-    console.error(chalk.red('vm: guest boot failed (or timed out)'))
-    console.error(chalk.red(`  ${outcome.line}`))
-    console.error(chalk.yellow(`vm: VM ${name} left running for diagnosis (serial display kept)`))
-    process.exitCode = 1
-  } finally {
-    if (consoleFollow) await consoleFollow.stop()
+    reconcile: async (argv, existing) => {
+      const { memory, vcpus, vwSize, dataSize, specialSize } = argv
+      await reconcileRockyAppliance(existing.client, {
+        vmid: existing.vmid,
+        name: existing.name,
+        memory,
+        vcpus,
+        vwSize,
+        dataSize,
+        specialSize,
+      })
+    },
+
+    startWithoutSerial: async (_argv, existing) => {
+      await startProxmoxVm(existing.client, existing.vmid, existing.name)
+      console.log(chalk.green(`vm: Proxmox VM ${existing.name} started`))
+    },
+
+    startWithSerial: async (_argv, existing) => {
+      await startProxmoxVm(existing.client, existing.vmid, existing.name)
+      return startProxmoxSerialFollow(existing.client, existing.vmid, existing.name, {
+        classify: classifyRebootReady,
+      })
+    },
+
+    finishResumeNoConsole: async (_argv, existing) => {
+      await restoreProxmoxDisplay(existing.client, existing.vmid)
+      await printSshHint()
+    },
+
+    finishResumeOk: async (_argv, existing) => {
+      await restoreProxmoxDisplay(existing.client, existing.vmid)
+      await printSshHint()
+    },
+
+    resumeFailHint: (_argv, existing) =>
+      `vm: VM ${existing.name} left running for diagnosis (serial display kept)`,
+
+    createFirstBoot: async (argv, _signal, _opts) => {
+      const {
+        name,
+        memory,
+        vcpus,
+        vwSize,
+        dataSize,
+        specialSize,
+        wipeOs,
+        forceDownload,
+        env,
+        cidata,
+      } = argv
+
+      const client = await ping(argv)
+      let vmid = await client.findVmidByName(name)
+
+      console.log(chalk.cyan('vm: building appliance seed…'))
+      const seedResult = await runSeed({
+        profile: 'appliance',
+        out: cidata || undefined,
+        allowMissingTier0: false,
+        allowMissingFiles: false,
+        env,
+      })
+      const isoPath = seedResult.isoPath
+      if (!fs.existsSync(isoPath)) {
+        die(`appliance ISO missing at ${isoPath} — run \`qctl vm seed\``)
+      }
+
+      if (vmid != null && wipeOs) {
+        console.log(
+          chalk.yellow(`vm: --wipe-os — demote ${name} to holder, then promote with fresh OS`),
+        )
+        await destroyRockyVm(client, { vmid, name, keep: 'persistent' })
+        vmid = null
+      }
+
+      const importVolid = await ensureCloudImageImport(client, {
+        force: Boolean(forceDownload),
+      })
+      const isoVolid = await uploadSeedIso(client, isoPath, {
+        filename: `rocky-${name}-appliance.iso`,
+      })
+
+      const held = await loadDisksFromHolder(client, name)
+      if (held?.vw) {
+        const clash = await client.findVmidByName(name)
+        if (clash != null) {
+          die(`cannot promote ${holderVmName(name)}: VM ${name} already exists (vmid=${clash})`)
+        }
+        console.log(chalk.cyan(`vm: promoting holder ${holderVmName(name)} → ${name}`))
+        ;({ vmid } = await promoteHolderToAppliance(client, {
+          name,
+          memory,
+          vcpus,
+          importVolid,
+          isoVolid,
+        }))
+      } else {
+        await assertNameFreeForCreate(client, name)
+        console.log(
+          chalk.cyan(
+            `vm: no holder ${holderVmName(name)} — creating fresh VM `
+              + `(tank not initialized; run init-tank or create by hand)`,
+          ),
+        )
+        ;({ vmid } = await createAndStartRockyVm(client, {
+          name,
+          memory,
+          vcpus,
+          vwSize,
+          dataSize,
+          specialSize,
+          importVolid,
+          isoVolid,
+        }))
+      }
+
+      return {
+        created: { client, vmid: /** @type {number} */ (vmid), name, isoVolid },
+        follow: null,
+      }
+    },
+
+    openSerialAfterCreate: async (_argv, created) =>
+      startProxmoxSerialFollow(created.client, created.vmid, created.name, {
+        classify: classifyCloudInitOutcome,
+      }),
+
+    finishFirstBootNoConsole: async (_argv, created) => {
+      await restoreProxmoxDisplay(created.client, created.vmid)
+      await printSshHint()
+      console.log(chalk.dim(`  image: ${IMAGE.file}`))
+      console.log(
+        chalk.yellow(
+          `  seed ISO left at ${created.isoVolid} (--no-console); delete after first boot or re-run without --no-console`,
+        ),
+      )
+    },
+
+    finishFirstBootOk: async (_argv, created) => {
+      await detachAndDeleteSeedIso(created.client, created.vmid, created.isoVolid)
+      await restoreProxmoxDisplay(created.client, created.vmid)
+      await printSshHint()
+      console.log(chalk.dim(`  image: ${IMAGE.file}`))
+    },
+
+    firstBootFailHint: (_argv, created) =>
+      `vm: VM ${created.name} left running for diagnosis (seed ISO + serial display kept)`,
   }
 }
 
@@ -105,183 +270,5 @@ async function startExisting(argv, { signal } = {}) {
  * @returns {Promise<void>}
  */
 export async function up(argv) {
-  assertProxmoxDiskPlan({ target: argv.target || 'proxmox', env: argv.env })
-
-  const {
-    name,
-    memory,
-    vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
-    wipeOs,
-    dryRun,
-    forceDownload,
-    env,
-    cidata,
-    timeout,
-    noConsole,
-  } = argv
-  const timeoutSec = timeout || 2700
-
-  if (dryRun) {
-    console.log(
-      chalk.green(
-        `vm: dry-run Proxmox up name=${name} env=${env} `
-          + `(OS + /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT}`
-          + `${wipeOs ? '; wipe-os' : ''})`,
-      ),
-    )
-    console.log(chalk.dim('  would: appliance seed ISO, ensure image'))
-    console.log(
-      chalk.dim(
-        `  if VM exists → reconcile+start; else if holder with rocky-vw → promote; `
-          + `else create only when name and ${holderVmName(name)} are both free`,
-      ),
-    )
-    console.log(
-      chalk.dim(
-        noConsole
-          ? '  (no console wait)'
-          : `  then stream serial ≤${timeoutSec}s for cloud-init Final Stage; detach+delete seed ISO; restore virtio display`,
-      ),
-    )
-    return
-  }
-
-  const client = await ping(argv)
-  let vmid = await client.findVmidByName(name)
-
-  const ac = new AbortController()
-  const onSignal = () => ac.abort()
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
-
-  try {
-    if (vmid != null && !wipeOs) {
-      await startExisting(argv, { signal: ac.signal })
-      await printSshHint()
-      return
-    }
-
-    // Seed first (while prod/VW may still be up) so !env / vw() resolve before demote.
-    console.log(chalk.cyan('vm: building appliance seed…'))
-    const seedResult = await runSeed({
-      profile: 'appliance',
-      out: cidata || undefined,
-      allowMissingTier0: false,
-      allowMissingFiles: false,
-      env,
-    })
-    const isoPath = seedResult.isoPath
-    if (!fs.existsSync(isoPath)) {
-      die(`appliance ISO missing at ${isoPath} — run \`qctl vm seed\``)
-    }
-
-    if (vmid != null && wipeOs) {
-      console.log(
-        chalk.yellow(`vm: --wipe-os — demote ${name} to holder, then promote with fresh OS`),
-      )
-      await destroyRockyVm(client, { vmid, name, keep: 'persistent' })
-      vmid = null
-    }
-
-    const importVolid = await ensureCloudImageImport(client, {
-      force: Boolean(forceDownload),
-    })
-    const isoVolid = await uploadSeedIso(client, isoPath, {
-      filename: `rocky-${name}-appliance.iso`,
-    })
-
-    const held = await loadDisksFromHolder(client, name)
-    if (held?.vw) {
-      // Promote renames holder → name; name must be free (demote already did that).
-      const clash = await client.findVmidByName(name)
-      if (clash != null) {
-        die(`cannot promote ${holderVmName(name)}: VM ${name} already exists (vmid=${clash})`)
-      }
-      console.log(chalk.cyan(`vm: promoting holder ${holderVmName(name)} → ${name}`))
-      ;({ vmid } = await promoteHolderToAppliance(client, {
-        name,
-        memory,
-        vcpus,
-        importVolid,
-        isoVolid,
-      }))
-    } else {
-      // Holder present without rocky-vw, or appliance name taken → do not create.
-      await assertNameFreeForCreate(client, name)
-      console.log(
-        chalk.cyan(
-          `vm: no holder ${holderVmName(name)} — creating fresh VM `
-            + `(tank not initialized; run init-tank or create by hand)`,
-        ),
-      )
-      ;({ vmid } = await createAndStartRockyVm(client, {
-        name,
-        memory,
-        vcpus,
-        vwSize,
-        dataSize,
-        specialSize,
-        importVolid,
-        isoVolid,
-      }))
-    }
-
-    if (noConsole) {
-      await restoreProxmoxDisplay(client, vmid)
-      await printSshHint()
-      console.log(chalk.dim(`  image: ${IMAGE.file}`))
-      console.log(
-        chalk.yellow(
-          `  seed ISO left at ${isoVolid} (--no-console); delete after first boot or re-run without --no-console`,
-        ),
-      )
-      return
-    }
-
-    /** @type {SerialFollow | null} */
-    let consoleFollow = null
-    try {
-      consoleFollow = await startProxmoxSerialFollow(client, vmid, name, {
-        classify: classifyCloudInitOutcome,
-      })
-      const outcome = await waitForSerialOutcome(consoleFollow, timeoutSec, ac.signal, {
-        waiting: `vm: waiting for cloud-init Final Stage (timeout ${timeoutSec}s)…`,
-        timeoutLine: `cloud-init Final Stage not seen within ${timeoutSec}s`,
-      })
-      await consoleFollow.stop()
-      consoleFollow = null
-
-      if (outcome.status === 'ok') {
-        console.log(chalk.green('vm: cloud-init Final Stage OK'))
-        console.log(chalk.dim(`  ${outcome.line}`))
-        await detachAndDeleteSeedIso(client, vmid, isoVolid)
-        await restoreProxmoxDisplay(client, vmid)
-        await printSshHint()
-        console.log(chalk.dim(`  image: ${IMAGE.file}`))
-        return
-      }
-
-      console.error(chalk.red('vm: cloud-init Final Stage failed (or timed out)'))
-      console.error(chalk.red(`  ${outcome.line}`))
-      console.error(
-        chalk.yellow(`vm: VM ${name} left running for diagnosis (seed ISO + serial display kept)`),
-      )
-      process.exitCode = 1
-    } finally {
-      if (consoleFollow) await consoleFollow.stop()
-    }
-  } catch (err) {
-    if (isAbortError(err) || ac.signal.aborted) {
-      console.log(chalk.yellow('vm: up interrupted — VM left running'))
-      process.exitCode = 130
-      return
-    }
-    throw err
-  } finally {
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
-  }
+  await runVmUp(argv, proxmoxBackend())
 }
