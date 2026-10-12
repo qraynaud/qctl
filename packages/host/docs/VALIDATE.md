@@ -51,7 +51,7 @@ qctl vm seed
 
 - [ ] VM gets connectivity (`--network user` → `ssh -p 2222 <admin>@127.0.0.1`, or lease on `default`)
 - [ ] SSH as `rocky` (default if Login incomplete) or VW Login `rocky` username with injected admin key (`root` denied; `apps` has no SSH)
-- [ ] Cockpit admin: VW Login user (password sudo); or key-only `rocky` + NOPASSWD (no Cockpit password); `https://<guest>:9090`
+- [ ] Cockpit admin: VW Login user (password sudo); or key-only `admin` + NOPASSWD (no password until `passwd` over SSH); `https://<guest>:9090`
 - [ ] `cloud-init status --wait` → done; no fatal errors in `/var/log/cloud-init.log`
 - [ ] `systemctl is-active rocky-first-boot.service` → `active` (or succeeded oneshot)
 - [ ] Stamp present: `test -f /var/lib/rocky/first-boot.done`

@@ -1,3 +1,5 @@
+Provision topology (`tank`, `users`, `networking`, overlays) → [provision.md](./provision.md).
+
 Two different paths — do not mix them:
 
 | Path | Where keys live | How values arrive | Used for |

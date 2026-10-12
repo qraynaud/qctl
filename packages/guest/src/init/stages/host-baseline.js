@@ -12,6 +12,14 @@ import vwMount from './vw-mount.js'
 
 /**
  * @param {StageContext} ctx
+ * @returns {string}
+ */
+function appsUser(ctx) {
+  return ctx.env.ROCKY_QUADLET_USER?.trim() || 'apps'
+}
+
+/**
+ * @param {StageContext} ctx
  * @param {string} argv0
  * @param {string[]} rest
  */
@@ -67,21 +75,24 @@ function nextSubidStart(file) {
  * @param {StageContext} ctx
  */
 async function ensureAppsHome(ctx) {
-  const id = await ctx.exec(['id', 'apps'])
-  if (id.code !== 0) throw new Error('user apps missing (cloud-init should create UID/GID 900)')
-  const homeR = await ctx.exec(['getent', 'passwd', 'apps'])
+  const user = appsUser(ctx)
+  const id = await ctx.exec(['id', user])
+  if (id.code !== 0) {
+    throw new Error(`user ${user} missing (cloud-init should create it from provision users.apps)`)
+  }
+  const homeR = await ctx.exec(['getent', 'passwd', user])
   let home = homeR.stdout.split(':')[5] || ''
-  if (!home || home === '/' || home === '/nonexistent') home = '/home/apps'
+  if (!home || home === '/' || home === '/nonexistent') home = `/home/${user}`
   if (!existsSync(home)) {
-    ctx.log(`rocky-baseline: creating apps home ${home} (Podman rootless)`)
+    ctx.log(`rocky-baseline: creating ${user} home ${home} (Podman rootless)`)
     await mkdir(home, { recursive: true })
-    await must(ctx, 'chown', 'apps:apps', home)
+    await must(ctx, 'chown', `${user}:${user}`, home)
     await must(ctx, 'chmod', '0750', home)
   }
-  const cur = (await ctx.exec(['getent', 'passwd', 'apps'])).stdout.split(':')[5] || ''
+  const cur = (await ctx.exec(['getent', 'passwd', user])).stdout.split(':')[5] || ''
   if (cur !== home) {
-    ctx.log(`rocky-baseline: usermod -d ${home} apps (was ${cur})`)
-    await must(ctx, 'usermod', '-d', home, 'apps')
+    ctx.log(`rocky-baseline: usermod -d ${home} ${user} (was ${cur})`)
+    await must(ctx, 'usermod', '-d', home, user)
   }
   await ctx.exec(['restorecon', '-RF', home])
 }
@@ -90,42 +101,47 @@ async function ensureAppsHome(ctx) {
  * @param {StageContext} ctx
  */
 async function ensureAppsJournalGroup(ctx) {
+  const user = appsUser(ctx)
   const g = await ctx.exec(['getent', 'group', 'systemd-journal'])
   if (g.code !== 0) throw new Error('group systemd-journal missing')
-  const groups = await ctx.exec(['id', '-nG', 'apps'])
+  const groups = await ctx.exec(['id', '-nG', user])
   if (groups.stdout.trim().split(/\s+/).includes('systemd-journal')) return
-  ctx.log('rocky-baseline: usermod -aG systemd-journal apps')
-  await must(ctx, 'usermod', '-aG', 'systemd-journal', 'apps')
+  ctx.log(`rocky-baseline: usermod -aG systemd-journal ${user}`)
+  await must(ctx, 'usermod', '-aG', 'systemd-journal', user)
 }
 
 /**
  * @param {StageContext} ctx
  */
 async function ensureAppsSubids(ctx) {
-  const count = Number(ctx.env.ROCKY_APPS_SUBID_COUNT || 65536) || 65536
+  const user = appsUser(ctx)
+  const uidCount = Number(ctx.env.ROCKY_APPS_SUBID_COUNT || 32768) || 32768
+  const gidCount =
+    Number(ctx.env.ROCKY_APPS_SUBGID_COUNT || ctx.env.ROCKY_APPS_SUBID_COUNT || 32768) || 32768
   const subuid = await Bun.file('/etc/subuid')
     .text()
     .catch(() => '')
-  if (!/^apps:/m.test(subuid)) {
+  const userLine = new RegExp(`^${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`, 'm')
+  if (!userLine.test(subuid)) {
     const start = Number(ctx.env.ROCKY_APPS_SUBID_START) || nextSubidStart('/etc/subuid')
-    const end = start + count - 1
-    ctx.log(`rocky-baseline: usermod --add-subuids ${start}-${end} apps`)
-    await must(ctx, 'usermod', '--add-subuids', `${start}-${end}`, 'apps')
+    const end = start + uidCount - 1
+    ctx.log(`rocky-baseline: usermod --add-subuids ${start}-${end} ${user}`)
+    await must(ctx, 'usermod', '--add-subuids', `${start}-${end}`, user)
   }
   const subgid = await Bun.file('/etc/subgid')
     .text()
     .catch(() => '')
-  if (!/^apps:/m.test(subgid)) {
+  if (!userLine.test(subgid)) {
     const start =
       Number(ctx.env.ROCKY_APPS_SUBGID_START)
       || Number(ctx.env.ROCKY_APPS_SUBID_START)
       || nextSubidStart('/etc/subgid')
-    const end = start + count - 1
-    ctx.log(`rocky-baseline: usermod --add-subgids ${start}-${end} apps`)
-    await must(ctx, 'usermod', '--add-subgids', `${start}-${end}`, 'apps')
+    const end = start + gidCount - 1
+    ctx.log(`rocky-baseline: usermod --add-subgids ${start}-${end} ${user}`)
+    await must(ctx, 'usermod', '--add-subgids', `${start}-${end}`, user)
   }
-  await ctx.exec(['runuser', '-u', 'apps', '--', 'podman', 'system', 'migrate'])
-  const home = (await ctx.exec(['getent', 'passwd', 'apps'])).stdout.split(':')[5] || ''
+  await ctx.exec(['runuser', '-u', user, '--', 'podman', 'system', 'migrate'])
+  const home = (await ctx.exec(['getent', 'passwd', user])).stdout.split(':')[5] || ''
   const containers = `${home}/.local/share/containers`
   if (existsSync(containers)) {
     await ctx.exec(['restorecon', '-RF', containers])
@@ -136,19 +152,20 @@ async function ensureAppsSubids(ctx) {
  * @param {StageContext} ctx
  */
 async function ensureAppsPodmanApiSocket(ctx) {
-  const uidR = await ctx.exec(['id', '-u', 'apps'])
-  if (uidR.code !== 0) throw new Error('user apps missing')
+  const user = appsUser(ctx)
+  const uidR = await ctx.exec(['id', '-u', user])
+  if (uidR.code !== 0) throw new Error(`user ${user} missing`)
   const uid = uidR.stdout.trim()
   const rt = `/run/user/${uid}`
   const bus = `${rt}/bus`
   await ctx.exec(['systemctl', 'start', `user@${uid}.service`])
   if (!existsSync(bus)) {
-    throw new Error(`no user bus at ${bus} after user@${uid}.service (linger apps?)`)
+    throw new Error(`no user bus at ${bus} after user@${uid}.service (linger ${user}?)`)
   }
   const r = await ctx.exec([
     'runuser',
     '-u',
-    'apps',
+    user,
     '--',
     'env',
     `XDG_RUNTIME_DIR=${rt}`,
@@ -166,7 +183,7 @@ async function ensureAppsPodmanApiSocket(ctx) {
   if (!existsSync(sock)) {
     throw new Error(`podman.socket enabled but ${sock} missing`)
   }
-  ctx.log(`rocky-baseline: apps podman.socket enabled → ${sock}`)
+  ctx.log(`rocky-baseline: ${user} podman.socket enabled → ${sock}`)
 }
 
 export default {
@@ -177,10 +194,11 @@ export default {
    */
   plan(ctx) {
     const tz = ctx.env.ROCKY_TIMEZONE?.trim() || 'Europe/Paris'
+    const user = appsUser(ctx)
     return [
       `timedatectl set-timezone ${tz}`,
       'login.defs SUB_*_COUNT=0 + umask 022',
-      'linger apps + subids + podman.socket',
+      `linger ${user} + subids + podman.socket`,
       'modprobe zfs; firewall-offline-cmd ssh/cockpit/http/https',
       ...vwMount.plan(ctx),
     ]
@@ -191,6 +209,7 @@ export default {
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('host-baseline', 'must run as root')
     const tz = ctx.env.ROCKY_TIMEZONE?.trim() || 'Europe/Paris'
+    const user = appsUser(ctx)
 
     try {
       ctx.log('rocky-baseline: start')
@@ -206,7 +225,7 @@ export default {
       const drop = '/etc/profile.d/rocky-umask.sh'
       await writeFile(
         drop,
-        `# Rocky: keep world-readable defaults so apps can ExecStartPre scripts under /tank/rocky.
+        `# Rocky: keep world-readable defaults so ${user} can ExecStartPre scripts under /tank/rocky.
 # (hg applies the process umask when updating the working tree.)
 umask 022
 `,
@@ -217,7 +236,7 @@ umask 022
       await ensureAppsHome(ctx)
       await ensureAppsJournalGroup(ctx)
       await ensureAppsSubids(ctx)
-      await must(ctx, 'loginctl', 'enable-linger', 'apps')
+      await must(ctx, 'loginctl', 'enable-linger', user)
       await ensureAppsPodmanApiSocket(ctx)
 
       await mkdir('/etc/modules-load.d', { recursive: true })
