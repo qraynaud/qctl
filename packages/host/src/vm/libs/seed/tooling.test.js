@@ -1,16 +1,10 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
-import { initInstance } from '../../init.js'
-import { getSeed, repoHash, resetRepoRootCache } from '../../lib/paths.js'
-import { HG_HGRC_PATH, HG_PIPX_DEFAULT } from '../../provision/secrets-schema.js'
-import {
-  embedGuestTooling,
-  filesForSeedProfile,
-  packagesForSeedProfile,
-  resolveSeedPaths,
-} from './seed.js'
+import { makeTempDir, removeTempDir } from '../../../../../shared/src/test-helpers.js'
+import { initInstance } from '../../../init.js'
+import { resetRepoRootCache } from '../../../lib/paths.js'
+import { embedGuestTooling } from './tooling.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 const origCwd = process.cwd()
@@ -45,46 +39,8 @@ afterEach(() => {
   }
 })
 
-describe('seed', () => {
-  test('packagesForSeedProfile keeps user pipx; auto mercurial only on appliance+hg', () => {
-    const pkgs = {
-      distro: ['nano'],
-      pipx: [{ package: 'cowsay', inject: [] }],
-      http: [{ url: 'https://example.com/bw.zip', bin: 'bw', dest: null, test: null }],
-    }
-    expect(packagesForSeedProfile('init-tank', pkgs, 'hg')).toEqual(pkgs)
-    const appliance = packagesForSeedProfile('appliance', pkgs, 'hg')
-    expect(appliance.pipx[0]).toEqual({
-      package: HG_PIPX_DEFAULT.package,
-      inject: [...HG_PIPX_DEFAULT.inject],
-    })
-    expect(appliance.pipx[1]).toEqual({ package: 'cowsay', inject: [] })
-    expect(packagesForSeedProfile('appliance', pkgs, 'git').pipx).toEqual(pkgs.pipx)
-  })
-
-  test('filesForSeedProfile adds hgrc only on appliance+hg', () => {
-    expect(filesForSeedProfile('init-tank', [], 'hg')).toEqual([])
-    const appliance = filesForSeedProfile('appliance', [], 'hg')
-    expect(appliance).toHaveLength(1)
-    expect(appliance[0].path).toBe(HG_HGRC_PATH)
-  })
-
-  test('resolveSeedPaths is under XDG cache repos/<hash>/seed', () => {
-    const base = makeTempDir()
-    temps.push(base)
-    const root = realpathSync(initInstance(join(base, 'inst')).root)
-    process.chdir(root)
-    const seedRoot = getSeed()
-    const cacheHome = /** @type {string} */ (process.env.QCTL_CACHE_HOME)
-    expect(seedRoot).toBe(join(cacheHome, 'repos', repoHash(root), 'seed'))
-    const p = resolveSeedPaths('appliance', 'dev')
-    expect(p.isoPath).toBe(join(seedRoot, 'dev', 'nocloud.iso'))
-    expect(p.instanceIdPath).toBe(join(seedRoot, 'dev', 'instance-id'))
-    const t = resolveSeedPaths('init-tank', 'dev')
-    expect(t.isoPath).toBe(join(seedRoot, 'dev', 'init-tank', 'nocloud.iso'))
-  })
-
-  test('embedGuestTooling copies compiled guest binaries when present', async () => {
+describe('embedGuestTooling', () => {
+  test('copies compiled guest binaries when present', async () => {
     const base = makeTempDir()
     temps.push(base)
     const root = realpathSync(initInstance(join(base, 'inst')).root)
@@ -103,11 +59,10 @@ describe('seed', () => {
     expect(existsSync(join(out, 'qctl-guest', 'qctl-guest'))).toBe(true)
     expect(existsSync(join(out, 'qctl-guest', 'qctl-platform-rocky.mjs'))).toBe(true)
     expect(existsSync(join(out, 'qctl-guest', 'qctl-platform-rocky'))).toBe(false)
-    // Plugins are installed on the guest (`qctl plugins ensure`), not baked into seed.
     expect(existsSync(join(out, 'qctl-guest', 'varlock', 'plugins-cache'))).toBe(false)
   })
 
-  test('embedGuestTooling stages varlock-local-encrypt (no bootstrap graph)', async () => {
+  test('stages varlock-local-encrypt (no bootstrap graph)', async () => {
     const base = makeTempDir()
     temps.push(base)
     const root = realpathSync(initInstance(join(base, 'inst')).root)
@@ -132,7 +87,7 @@ describe('seed', () => {
     expect(existsSync(join(root, 'provision', '.env.schema'))).toBe(true)
   })
 
-  test('embedGuestTooling without dist binaries still creates qctl-guest dir', async () => {
+  test('without dist binaries still creates qctl-guest dir', async () => {
     const base = makeTempDir()
     temps.push(base)
     const root = realpathSync(initInstance(join(base, 'inst')).root)

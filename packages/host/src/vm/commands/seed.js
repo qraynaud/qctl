@@ -1,5 +1,5 @@
 import { sharedTarget } from '../../lib/options.js'
-import { runSeed } from '../libs/seed.js'
+import { runSeed } from '../libs/seed/run.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */

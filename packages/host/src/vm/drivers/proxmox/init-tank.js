@@ -27,7 +27,7 @@ import {
   uploadSeedIso,
   waitUntilVmStopped,
 } from '../../libs/proxmox/vm.js'
-import { runSeed } from '../../libs/seed.js'
+import { runSeed } from '../../libs/seed/run.js'
 import { isAbortError } from '../../libs/wait.js'
 import { ping } from './shared.js'
 

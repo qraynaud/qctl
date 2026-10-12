@@ -17,7 +17,8 @@ import {
   removeDomain,
   virsh,
 } from '../../libs/libvirt/index.js'
-import { ensureSeed, runSeed } from '../../libs/seed.js'
+import { ensureSeed } from '../../libs/seed/iso.js'
+import { runSeed } from '../../libs/seed/run.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep } from '../../libs/wait.js'
 import { destroyVm } from './destroy.js'
