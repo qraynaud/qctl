@@ -13,7 +13,7 @@ Related: [README.md](README.md) (index), [`cloud-init/README.md`](cloud-init/REA
 ### Workstation (libvirt)
 
 ```bash
-qctl vm seed                 # Tier-0 from .env.host; topology + SSH from provision/*.yaml
+qctl vm seed                 # Tier-0 from provision/.env.*; topology + SSH from provision/*.yaml
 qctl vm destroy --keep-data  # drop OS only; keep /vw + tank vdevs
 qctl vm up --wipe-os         # fresh OS overlay + same seed → first-boot Path A
 ```
@@ -51,7 +51,7 @@ On-box VW **container** data belongs on `/tank`.
 
 `/vw` survived with a previously synced Bitwarden CLI vault:
 
-1. New OS + seed with Tier-0 systemd creds (`@tag(guest)` on `.env.host`).
+1. New OS + seed with Tier-0 systemd creds (`@tag(guest)` on `provision/.env.*`).
 2. First-boot mounts `/vw` → `@initVw` offline unlock → re-seed tank key from bootstrap
    if needed → import/mount `tank` (stock ZFS units).
 3. Start Quadlets (on-box VW data already on `/tank`). No hand-paste of the pool key; VW

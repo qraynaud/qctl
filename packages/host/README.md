@@ -54,7 +54,7 @@ exec). Defaults match other host commands (`--env dev`, `--target local`).
 
 Pushes the working tree and, by default, deletes guest files missing locally
 (rsync `--delete` semantics). Never uploads/deletes under `.hg`, `.git`,
-`node_modules`, `.env.host`, editor dirs, `volumes/`, `restic-repo/`. A stray
+`node_modules`, `build.env`, editor dirs, `volumes/`, `restic-repo/`. A stray
 repo-root `.env` on the guest is removed (use `.env.dev` / `.env.prod` only).
 `--include-tooling` uses checkout `dist/` when the host runs from a qctl repo,
 otherwise the GitHub release (`QCTL_GUEST_DIST` / `QCTL_PLATFORM_MODULE` override).
@@ -184,8 +184,8 @@ networking; `init-tank` does not (no guest SSH/cockpit).
 Topology and secrets wiring live in the instance:
 
 - `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlay)
-- `!env` fields resolve from `.env.host` then optional `.env.host.local` via the bundled varlock graph API
-- Tier-0 credentials: `# @tag(guest)` keys on `.env.host` (seeded into `/var/lib/rocky/tier0-pending/<KEY>`)
+- `!env` fields resolve from `provision/.env.<env>` (+ optional `.env.local`) via the bundled varlock graph API
+- Tier-0 credentials: `# @tag(guest)` keys on provision env (seeded into `/var/lib/rocky/tier0-pending/<KEY>`)
 - Platform selection: `qctl.platform` (`rocky` or `github:owner/repo[@x.y.z]`)
 
 See [docs/instance.md](../../docs/instance.md).

@@ -14,7 +14,7 @@ import { GUEST_TAG } from './tags.js'
  * @typedef {object} LoadGraphOptions
  * @property {Record<string, string | undefined>} [env]  base process env (default `process.env`)
  * @property {string} [qctlEnv]  `currentEnvFallback` + exported as `QCTL_ENV` for hub `enabled=`
- * @property {string[]} [extraEntryPaths]  additional absolute entry files (e.g. root `.env.host`)
+ * @property {string[]} [extraEntryPaths]  additional absolute entry files
  * @property {boolean} [skipSensitive]  resolve only items without an explicit `@sensitive`
  *                               decorator (plus their dependencies): never runs `vw()` & co.
  *                               Quadlet render path — mark template keys `@public` so they
@@ -107,7 +107,7 @@ async function resolveEnvValues(graph, onlyKeys) {
  * Load + resolve the varlock graph for a schema directory.
  *
  * Entry = the directory itself (`currentEnvFallback` autoloads `.env.<env>`). Optional
- * `extraEntryPaths` (e.g. `.env.host` for host provision) are appended.
+ * `extraEntryPaths` are appended.
  *
  * Throws on schema errors and on any item resolution/validation error.
  *

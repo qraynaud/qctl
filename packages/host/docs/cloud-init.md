@@ -81,7 +81,7 @@ Cache downloads under `~/.cache/qctl/images/`.
 
 ## Workstation: NoCloud seed
 
-1. Fill `.env.host` (Tier-0) + `bootstrap/.env.<env>`; topology in `provision/<env>.yaml`.
+1. Fill `provision/.env.<env>` (Tier-0) + topology in `provision/<env>.yaml`.
 2. Run `qctl vm seed` → writes under `~/.cache/qctl/repos/<hash>/seed/<env>/` (ISO labeled `cidata` / `CIDATA` with `user-data`, `meta-data`, `network-config`).
 3. Run `qctl vm up` → OS + **/vw** + **5 data** + **2 special** + seed
    (see [`../local/README.md`](../local/README.md) for host packages; `--dry-run` needs none).
@@ -115,7 +115,7 @@ Rendered into user-data / systemd credentials by `qctl vm seed`:
 | Input | Source | Consumed as |
 |-------|--------|-------------|
 | Admin SSH public key(s) | `ssh.authorized_keys` in `provision/<env>.yaml` (or `~/.ssh` fallback) | `/etc/rocky/admin_ssh_authorized_keys`; `admin-user` stage installs on VW admin (not root) |
-| Tier-0 VW credentials | `.env.host` keys with `@tag(guest)` | `/etc/credstore.encrypted/*` + `LoadCredentialEncrypted` on `rocky-first-boot` |
+| Tier-0 VW credentials | `provision/.env.*` keys with `@tag(guest)` | `/etc/credstore.encrypted/*` + `LoadCredentialEncrypted` on `rocky-first-boot` |
 | Pre-clone / registry secrets | [`bootstrap/`](../../bootstrap/) | Baked into seed; used before `hg-clone` |
 | Tank passphrase | Prefer omit from seed | `tank-import` / `tank-create` re-seed `/etc/credstore/rocky/tank_passphrase` from bootstrap |
 

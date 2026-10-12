@@ -13,6 +13,6 @@
  *   const secrets = resolvedSensitive(graph);
  *
  * Always registers CLI builtins (`varlock()`, `keychain()`) that raw `internal.loadEnvGraph`
- * omits — required for `varlock(prompt)` / `varlock("local:…")` in `.env.host` etc.
+ * omits — required for `varlock(prompt)` / `varlock("local:…")` in provision env files.
  */
 export * from './varlock/index.js'

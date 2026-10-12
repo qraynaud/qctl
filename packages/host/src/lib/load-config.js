@@ -1,10 +1,9 @@
 /**
  * VM config: `provision/<env>.yaml` (+ `<env>.<target>.yaml`) via
  * `@qctl/shared` `loadProvision` (`!env` from process.env /
- * `.env.host`[+`.env.host.local`] via loadHostEnv),
- * then zod-validated by the secrets schema. Tier-0 credentials come from
- * First-boot secrets: provision YAML (`tank` / `admin` / `repo.deploy_key` / …)
- * via `!env` from `provision/.env.<env>` (or legacy `.env.host`). Optional extra
+ * `provision/.env.<env>` via loadHostEnv), then zod-validated by the secrets
+ * schema. Tier-0 credentials come from provision YAML
+ * (`tank` / `admin` / `repo.deploy_key` / …) via `!env`. Optional extra
  * `@tag(guest)` keys are still sealed. Admin SSH pubkeys: `ssh.authorized_keys`.
  */
 import { existsSync, readFileSync } from 'node:fs'

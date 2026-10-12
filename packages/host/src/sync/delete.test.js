@@ -21,14 +21,14 @@ afterEach(async () => {
 })
 
 describe('sync --delete', () => {
-  test('removes stale files and stray .env; keeps .hg and .env.host', async () => {
+  test('removes stale files and stray .env; keeps .hg and build.env', async () => {
     const root = mkdtempSync(join(tmpdir(), 'qctl-del-'))
     temps.push(root)
     const remote = join(root, 'remote')
     mkdirSync(remote)
     writeFileSync(join(remote, 'README.md'), 'hi\n')
     writeFileSync(join(remote, '.env'), 'STALE=1\n')
-    writeFileSync(join(remote, '.env.host'), 'HOST=1\n')
+    writeFileSync(join(remote, 'build.env'), 'KEEP=1\n')
     writeFileSync(join(remote, 'stale.txt'), 'gone\n')
     mkdirSync(join(remote, '.hg'))
     writeFileSync(join(remote, '.hg', 'requires'), 'x\n')
@@ -47,7 +47,7 @@ describe('sync --delete', () => {
     expect(r.exitCode).toBe(0)
     expect(existsSync(join(remote, 'stale.txt'))).toBe(false)
     expect(existsSync(join(remote, '.env'))).toBe(false)
-    expect(existsSync(join(remote, '.env.host'))).toBe(true)
+    expect(existsSync(join(remote, 'build.env'))).toBe(true)
     expect(existsSync(join(remote, '.hg', 'requires'))).toBe(true)
     expect(existsSync(join(remote, 'README.md'))).toBe(true)
   })
