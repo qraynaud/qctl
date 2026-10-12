@@ -3,7 +3,7 @@
 Appliance **guest** CLI — shipped as the `qctl-guest` release asset. Seed install places
 it at `/usr/local/bin/qctl` and adds `/usr/local/bin/quadlet` → `qctl quadlet`.
 
-Owns first-boot stages, Quadlet lifecycle, and Podman secret sync.
+Owns first-boot stages, Quadlet lifecycle, varlock plugin cache, and Podman secret sync.
 The thin OS adapter is a separate staged ESM module (`qctl-platform-rocky.mjs`)
 with packages + networking hooks. The Rocky seed kit lives in
 `@qctl/host` `seed/` (embedded into `qctl-host` for `vm seed` / `seed-kit`).
@@ -11,6 +11,7 @@ with packages + networking hooks. The Rocky seed kit lives in
 ```bash
 qctl --help
 qctl init --help
+qctl plugins ensure --help
 qctl quadlet --help
 qctl secret --help
 ```
@@ -35,6 +36,23 @@ Platform module: `$QCTL_PLATFORM_MODULE` → sole `qctl-platform-*.mjs` under
 ### `qctl list` / `qctl stage`
 
 List or run a single init stage (debugging / resume).
+
+### `qctl plugins ensure`
+
+Download `# @plugin(name@version)` pins into the local varlock plugins-cache
+(like `varlock install-plugin`). Cloud-init runs this after installing `bootstrap/`;
+graph loads also ensure pins when needed.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--dir` | bootstrap dir | Env-spec directory to scan (repeatable). Default: `/usr/local/lib/qctl/bootstrap` or `$QCTL_BOOTSTRAP_DIR` |
+
+Writes to `$XDG_CONFIG_HOME/varlock/plugins-cache` (default `~/.config/varlock/plugins-cache`).
+
+```bash
+qctl plugins ensure
+qctl plugins ensure --dir /usr/local/lib/qctl/bootstrap
+```
 
 ### `qctl quadlet …`
 
@@ -65,7 +83,45 @@ qctl quadlet down caddy active-directory
 
 ### `qctl secret …`
 
-Sync Podman secrets from varlock schemas.
+Resolve unit-schema `@sensitive` values through the varlock graph and compare or write
+Podman secrets. Prefers root via passwordless sudo (shared plugin cache + rootful store);
+without sudo, operates on the rootless store only.
+
+Shared options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--root` | `$QCTL_ROOT` or walk-up | Instance root |
+| `--env` | (detect) | Override `QCTL_ENV` for schema `@import` |
+
+| Subcommand | Description |
+|------------|-------------|
+| `check` | Compare graph-resolved `@sensitive` values to Podman secrets (`qctl.sha256` labels); exit 1 on drift |
+| `sync` | Create/replace Podman secrets from the graph (skip unchanged) |
+
+#### `qctl secret sync`
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--dry-run` | `false` | Print actions only |
+| `--restart` | `false` | Restart apps whose secrets changed (omit from `ExecStartPre`) |
+
+Podman secret name = schema key as-is (`CADDY_DNS` → `CADDY_DNS`). Store follows each
+app’s `engine:` (rootful → rootful store; else rootless). Tag `# @tag(cross-engine)` to
+write into both stores. Unit schemas: `applications/<app>/<unit>/.env.schema` and
+`common/<lib>/.env.schema`.
+
+```bash
+qctl secret check
+qctl secret sync
+qctl secret sync --restart
+qctl secret check && qctl secret sync --restart
+```
+
+Day-2 after vault changes: `check` then `sync --restart`. Quadlet hook:
+`ExecStartPre=qctl secret sync --root ${REPO_ROOT}`.
+
+See [docs/secrets.md](../../docs/secrets.md).
 
 ## Develop
 
