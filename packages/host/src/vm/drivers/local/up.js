@@ -24,7 +24,8 @@ import {
   setDomainSerialTcp,
   virsh,
 } from '../../libs/libvirt/index.js'
-import { ensureSeed, runSeed } from '../../libs/seed.js'
+import { ensureSeed } from '../../libs/seed/iso.js'
+import { runSeed } from '../../libs/seed/run.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
 import { runVmUp } from '../../libs/up-pipeline.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'

@@ -3,10 +3,11 @@ import { join } from 'node:path'
 
 import { ISOReader } from '@gcu/iso9660'
 
-import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
-import { initInstance } from '../../init.js'
-import { getSeed, resetRepoRootCache } from '../../lib/paths.js'
-import { resolveSeedPaths, runSeed } from './seed.js'
+import { makeTempDir, removeTempDir } from '../../../../../shared/src/test-helpers.js'
+import { initInstance } from '../../../init.js'
+import { getSeed, resetRepoRootCache } from '../../../lib/paths.js'
+import { resolveSeedPaths } from './iso.js'
+import { runSeed } from './run.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 const origCwd = process.cwd()

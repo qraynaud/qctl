@@ -21,7 +21,7 @@ import {
   restoreProxmoxDisplay,
   uploadSeedIso,
 } from '../../libs/proxmox/vm.js'
-import { runSeed } from '../../libs/seed.js'
+import { runSeed } from '../../libs/seed/run.js'
 import { runVmUp } from '../../libs/up-pipeline.js'
 import { clientFrom, ping } from './shared.js'
 
