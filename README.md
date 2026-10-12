@@ -101,7 +101,7 @@ in that repo’s `mise.toml`.
 ### CI / release
 
 - **PRs:** [`.github/workflows/pr.yml`](.github/workflows/pr.yml) → shared [`pr-check.yml`](.github/workflows/pr-check.yml) (version check, typecheck, tests, compile, smoke). No release jobs.
-- **After merge to `main`:** [`release.yml`](.github/workflows/release.yml) runs `pr-check` once, then **Review deployments** only for unpublished artifacts:
+- **After merge to `main`:** [`release.yml`](.github/workflows/release.yml) runs `pr-check` once, then **Review deployments** only for unpublished artifacts (skipped when the version contains \`-pre\`):
   - environment **`release-qctl`** → GitHub release `v$version` (changelog + `qctl-host` / `qctl-guest` / `qctl-platform-rocky.mjs`). `varlock-local-encrypt` is embedded in the binaries.
   - environment **`release-plugin`** → `npm stage publish` (OIDC); then 2FA via `npm stage approve` or npmjs.com → Staged Packages.
 - **Environments:** `release-qctl` and `release-plugin` (required reviewers). Adjust under **Settings → Environments**.
