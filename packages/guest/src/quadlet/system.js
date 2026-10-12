@@ -1,7 +1,7 @@
 /**
  * Host interaction seam: engine paths, podman, systemctl, ownership.
  * Real implementation shells out (runuser for the rootless `apps` user);
- * tests inject `createFakeSystem()` from `fake-system.js`.
+ * tests inject `createFakeSystem()` from `test/fake-system.js`.
  */
 import { spawnSync } from 'node:child_process'
 import { chownSync, statSync } from 'node:fs'

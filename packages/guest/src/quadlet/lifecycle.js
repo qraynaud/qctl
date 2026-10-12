@@ -20,7 +20,7 @@ import {
   stopAndRemoveApp,
   unitInstallName,
   unitValue,
-} from './apps.js'
+} from './apps/index.js'
 import { die } from './errors.js'
 
 /** @import { QuadletContext } from './context.js' */

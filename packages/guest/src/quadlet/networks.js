@@ -14,7 +14,7 @@ import {
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
-import { packageUnitFiles } from './apps.js'
+import { packageUnitFiles } from './apps/index.js'
 import { renderFile } from './env.js'
 /** @import { QuadletContext } from './context.js' */
 /** @import { RenderEnv } from './env.js' */

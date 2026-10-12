@@ -3,8 +3,13 @@
  */
 import { join } from 'node:path'
 
-import { makeTempDir, writeFile, writeMinimalInstance } from '../../../shared/src/test-helpers.js'
-import { createContext } from './context.js'
+import {
+  makeTempDir,
+  removeTempDir,
+  writeFile,
+  writeMinimalInstance,
+} from '../../../../shared/src/test-helpers.js'
+import { createContext } from '../context.js'
 import { createFakeSystem } from './fake-system.js'
 
 /**
@@ -139,6 +144,14 @@ export function makeQuadletInstance() {
   writeFile(root, 'networks/lan/.env.schema', packageSchema(['LAN_PARENT=']))
   writeFile(root, 'networks/lan/.env.dev', 'LAN_PARENT=eth9\n')
   return { root, sysDir }
+}
+
+/**
+ * @param {{ root: string, sysDir: string }} fx
+ */
+export function cleanupQuadletFixture(fx) {
+  removeTempDir(fx.root)
+  removeTempDir(fx.sysDir)
 }
 
 /**

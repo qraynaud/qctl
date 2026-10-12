@@ -3,7 +3,7 @@
  * bash tooling got from `set -a; source file`: quotes, `${VAR}`, `${VAR:-default}`,
  * `$VAR`, trailing `# comments`, optional `export`. No command substitution.
  */
-import { die } from './errors.js'
+import { die } from '../errors.js'
 
 /** @typedef {Record<string, string | undefined>} Scope */
 

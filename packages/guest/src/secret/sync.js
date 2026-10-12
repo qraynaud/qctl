@@ -18,7 +18,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
-import { readEngine } from '../quadlet/apps.js'
+import { readEngine } from '../quadlet/apps/index.js'
 import { createContext } from '../quadlet/context.js'
 import { detectQctlEnvFor } from '../quadlet/env.js'
 import { runRestart } from '../quadlet/lifecycle.js'

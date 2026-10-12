@@ -15,7 +15,7 @@ import {
   readEngine,
   resolveAppName,
   unmarkEnabled,
-} from './apps.js'
+} from './apps/index.js'
 import { loadNetworkRenderEnv, loadRenderEnv, runtimeUnitDirs } from './env.js'
 import { die } from './errors.js'
 import {
