@@ -16,7 +16,7 @@ import { createSystem } from './system.js'
  * @property {System} sys
  * @property {Record<string, string | undefined>} baseEnv
  * @property {string} seedDir
- *   seed-baked env dir (caddy-publish.env, vlan-parents.env, …)
+ *   seed-baked env dir (vlan-parents.env, …)
  * @property {(msg: string) => void} log   `quadlet: …`
  * @property {(msg: string) => void} print plain stdout line
  */

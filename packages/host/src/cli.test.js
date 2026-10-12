@@ -58,7 +58,7 @@ const VM_COMMANDS = [
 ]
 
 describe('host CLI', () => {
-  test('--help lists init, new, sync, vm, seed-kit', async () => {
+  test('--help lists init, new, sync, vm, seed-kit, local', async () => {
     const { stdout, code } = await runHost(['--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('init')
@@ -66,6 +66,15 @@ describe('host CLI', () => {
     expect(stdout).toContain('sync')
     expect(stdout).toContain('vm')
     expect(stdout).toContain('seed-kit')
+    expect(stdout).toContain('local')
+  })
+
+  test('local --help lists up/test/down/shell/ps/logs', async () => {
+    const { stdout, code } = await runHost(['local', '--help'])
+    expect(code).toBe(0)
+    for (const name of ['up', 'test', 'down', 'shell', 'ps', 'logs']) {
+      expect(stdout).toContain(`qctl local ${name}`)
+    }
   })
 
   test('seed-kit path prints kit with user-data.yaml', async () => {

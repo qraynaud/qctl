@@ -40,7 +40,6 @@ describe('render env', () => {
       expect(renv.scope.VERSION).toBe('2.0-dev')
       expect(renv.scope.APPS_UID).toBe('1000')
       expect(renv.substKeys).toContain('REPO_ROOT')
-      expect(renv.substKeys).toContain('CADDY_PUBLISH_HTTP')
       expect(renv.appEnvLabel).toBe(join(fx.root, 'applications/web'))
       expect(renv.scope.VW_CLIENT_SECRET).toBeUndefined() // @sensitive never enters the scope
 
@@ -98,18 +97,15 @@ describe('render env', () => {
     }
   })
 
-  test('seed-baked env: caddy publish ports + VLAN*_PARENT substitutable', async () => {
+  test('seed-baked env: VLAN*_PARENT substitutable', async () => {
     const fx = makeQuadletInstance()
     try {
-      writeFile(fx.sysDir, 'seed/caddy-publish.env', 'CADDY_PUBLISH_HTTP=80\n')
       writeFile(fx.sysDir, 'seed/vlan-parents.env', 'VLAN2_PARENT=bond0\n')
       const renv = await loadRenderEnv(
         ctxOf(fx.root, join(fx.sysDir, 'seed')),
         join(fx.root, 'applications/proxy'),
       )
-      expect(renv.scope.CADDY_PUBLISH_HTTP).toBe('80')
-      expect(renv.scope.CADDY_PUBLISH_HTTPS).toBe('8443')
-      expect(substitute('${VLAN2_PARENT}:${CADDY_PUBLISH_HTTP}', renv, 'x')).toBe('bond0:80\n')
+      expect(substitute('${VLAN2_PARENT}', renv, 'x')).toBe('bond0\n')
     } finally {
       removeTempDir(fx.root)
       removeTempDir(fx.sysDir)

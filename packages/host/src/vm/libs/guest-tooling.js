@@ -71,10 +71,12 @@ async function ensureReleaseBinary(opts) {
  *   platform?: string,
  *   platformModule?: string,
  *   required?: boolean,
+ *   quiet?: boolean,
  * }} [opts]
  * @returns {Promise<GuestToolingResolved | null>}
  */
 export async function ensureGuestTooling(opts = {}) {
+  const quiet = opts.quiet === true
   const ref = opts.platform
     ? parsePlatformRef(opts.platform)
     : await resolvePlatformRef({ env: opts.env, target: opts.target, platform: opts.platform })
@@ -99,7 +101,7 @@ export async function ensureGuestTooling(opts = {}) {
       guestPath = localGuest
       sourceLabel = distKind === 'local checkout' ? `${distDir} (${distKind})` : distDir
     } else if (opts.required === false) {
-      console.log(chalk.dim(`  guest tooling: none found under ${distKind}=${distDir}`))
+      if (!quiet) console.log(chalk.dim(`  guest tooling: none found under ${distKind}=${distDir}`))
       return null
     } else if (distKind === 'QCTL_GUEST_DIST') {
       die(`QCTL_GUEST_DIST=${distDir} missing qctl-guest`)
@@ -122,7 +124,7 @@ export async function ensureGuestTooling(opts = {}) {
   }
 
   encryptPath = await ensureHostNativeHelper()
-  if (!encryptPath) {
+  if (!encryptPath && !quiet) {
     console.log(chalk.dim('  note: varlock-local-encrypt unavailable — seed continues without it'))
   }
 
@@ -131,9 +133,10 @@ export async function ensureGuestTooling(opts = {}) {
     target: opts.target,
     version: opts.version || version,
     platform: opts.platform || ref.raw,
+    quiet,
   })
 
-  console.log(chalk.dim(`  guest tooling: ← ${sourceLabel}`))
+  if (!quiet) console.log(chalk.dim(`  guest tooling: ← ${sourceLabel}`))
   return {
     guestPath,
     platformModulePath,

@@ -7,6 +7,7 @@ Scaffold an instance repo, then drive the appliance VM from `provision/*.yaml`.
 
 ```bash
 qctl --help
+qctl local --help
 qctl vm --help
 qctl seed-kit path
 ```
@@ -63,6 +64,47 @@ Replaces the old instance `scripts/sync-to-local.sh`.
 qctl sync
 qctl sync --include-tooling
 qctl sync --target proxmox --host 10.0.0.50
+```
+
+### `qctl local …`
+
+Run Quadlets in a nested systemd+Podman appliance on the workstation (no VM).
+Requires host **Podman**. Resolves the instance root from the current directory.
+
+The outer container uses explicit `--uidmap`/`--gidmap` that split the rootless
+host id budget: a dense low range for systemd/tooling (provision `users.apps.uid`/`gid`,
+default 900 → your user; optional `users.apps.username`, default `apps`), and the
+remaining ids mapped onto provision `users.apps.subuid` / `subgid` (`start:count`,
+count ≤ 32768; default `<uid|gid>×1000:32768`) so in-appliance `/etc/subuid` +
+`/etc/subgid` match the real env. Files under `volumes/` written by apps show up as your UID.
+`users` / `users.admin` / `users.apps` are all optional (admin defaults to `admin`/1000).
+Outer `-p` publishes every `networking.ports` entry that has a `forward`, except
+`ssh` and `cockpit` (host port = `forward`, container port = `dnat` or `forward`).
+App `PublishPort=` values come from each app’s `.env.schema` graph so they match
+those ports.
+
+Guest tooling (`qctl-guest` + platform module) is resolved like
+`qctl sync --include-tooling` (env → local `dist/` → GitHub release).
+
+| Subcommand | Description |
+|------------|-------------|
+| `qctl local up [app…]` | Ensure the appliance; optionally `quadlet up` listed apps (`--all` = every app) |
+| `qctl local test <app…>` | Disposable `-test-<id>` appliance: up → healthy → tear down (Ctrl+C/error safe; no host `-p`) |
+| `qctl local down [app…]` | Stop listed apps or all; remove the appliance when nothing is left running |
+| `qctl local shell` | Interactive shell in the appliance |
+| `qctl local ps [app…]` | Appliance status + `quadlet ps` |
+| `qctl local logs [app…]` | Journals / container logs (`-f` follows one app unit) |
+
+Shared: `--env` (default `dev`). Image override: `QCTL_LOCAL_IMAGE` (default
+`quay.io/podman/stable:latest`). Extra outer run args: `QCTL_LOCAL_PODMAN_RUN_ARGS`.
+
+```bash
+qctl local up
+qctl local up caddy
+qctl local up --all
+qctl local test caddy
+qctl local ps
+qctl local down
 ```
 
 ### `qctl new …`

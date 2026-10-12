@@ -113,14 +113,15 @@ function platformModuleCandidates(moduleFile) {
 
 /**
  * Ensure the selected platform ESM module is on disk (env override or GitHub download).
- * @param {{ env?: string, target?: string, version?: string, platform?: string }} [opts]
+ * @param {{ env?: string, target?: string, version?: string, platform?: string, quiet?: boolean }} [opts]
  * @returns {Promise<string>} absolute path to the module
  */
 export async function ensurePlatformModule(opts = {}) {
+  const quiet = opts.quiet === true
   const ref = await resolvePlatformRef(opts)
   for (const p of platformModuleCandidates(ref.moduleFile)) {
     if (existsSync(p)) {
-      console.log(chalk.dim(`  platform plugin: ${p} (${ref.raw})`))
+      if (!quiet) console.log(chalk.dim(`  platform plugin: ${p} (${ref.raw})`))
       return p
     }
   }
@@ -130,7 +131,7 @@ export async function ensurePlatformModule(opts = {}) {
   const dest = path.join(destDir, ref.moduleFile)
   if (existsSync(dest)) {
     touchPath(dest)
-    console.log(chalk.dim(`  platform plugin: ${dest}`))
+    if (!quiet) console.log(chalk.dim(`  platform plugin: ${dest}`))
     return dest
   }
 

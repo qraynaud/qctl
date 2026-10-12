@@ -109,11 +109,6 @@ function seedRenderEnv(ctx, qctlEnv) {
     sensitive: new Set(),
   }
 
-  sourceSeedEnv(renv.scope, join(ctx.seedDir, 'caddy-publish.env'))
-  renv.scope.CADDY_PUBLISH_HTTP ||= '8088'
-  renv.scope.CADDY_PUBLISH_HTTPS ||= '8443'
-  renv.substKeys.push('CADDY_PUBLISH_HTTP', 'CADDY_PUBLISH_HTTPS')
-
   sourceSeedEnv(renv.scope, join(ctx.seedDir, 'vlan-parents.env'))
   for (const k of Object.keys(renv.scope)) {
     if (/^VLAN.*(_PARENT|_IPV4)$/.test(k) && !renv.substKeys.includes(k)) renv.substKeys.push(k)
@@ -124,7 +119,7 @@ function seedRenderEnv(ctx, qctlEnv) {
 /**
  * Load the varlock graph for `dir` (non-sensitive items only) into the render env.
  * @param {RenderEnv} renv
- * @param {{ baseEnv: Scope }} ctx
+ * @param {{ baseEnv: Scope, seedDir: string }} ctx
  * @param {string} dir directory holding `.env.schema`
  */
 async function applyGraph(renv, ctx, dir) {
@@ -136,6 +131,26 @@ async function applyGraph(renv, ctx, dir) {
   renv.graphValues = resolvedNonSensitive(graph, { includeInternal: true })
   renv.sensitive = sensitiveKeys(graph)
   for (const [key, value] of Object.entries(renv.graphValues)) {
+    renv.scope[key] = value
+    absolutizePathKey(renv, key)
+    if (!renv.substKeys.includes(key)) renv.substKeys.push(key)
+  }
+  // Host `qctl local` writes this after graph load so tank/apps ids win over .env.*
+  applyLocalOverrides(renv, ctx.seedDir)
+}
+
+/**
+ * Optional seed-dir overrides (e.g. nested lab `TANK_ROOT`).
+ * @param {RenderEnv} renv
+ * @param {string} seedDir
+ */
+function applyLocalOverrides(renv, seedDir) {
+  const file = join(seedDir, 'local-overrides.env')
+  if (!existsSync(file)) return
+  /** @type {Scope} */
+  const over = {}
+  sourceSeedEnv(over, file)
+  for (const [key, value] of Object.entries(over)) {
     renv.scope[key] = value
     absolutizePathKey(renv, key)
     if (!renv.substKeys.includes(key)) renv.substKeys.push(key)

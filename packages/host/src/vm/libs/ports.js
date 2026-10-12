@@ -1,12 +1,14 @@
 /**
- * Ports from provision/<env>.yaml networking.ports — lab passt + guest DNAT / PublishPort.
+ * Ports from provision/<env>.yaml networking.ports — lab passt + guest DNAT.
  *
  * YAML is a map (normalized to a list with `.name`):
  *
  *   http:
  *     port: 80         # public port on the guest
  *     forward: 8088    # optional passt on hypervisor 127.0.0.1 → guest:port
- *     dnat: 8088       # optional firewalld DNAT guest:port → 127.0.0.1:dnat (+ PublishPort)
+ *     dnat: 8088       # optional firewalld DNAT guest:port → 127.0.0.1:dnat
+ *
+ * App Quadlet PublishPort= values come from the app `.env.schema` graph, not from here.
  */
 import { die } from './util.js'
 
