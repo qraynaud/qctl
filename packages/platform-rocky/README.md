@@ -4,7 +4,7 @@ Rocky Linux platform adapter staged onto the guest as `qctl-platform-rocky.mjs`:
 
 - capability → distro recipe map + `installPackages(string[])`
 - `networking` — NetworkManager egress + firewalld DNAT (guest init stages call these)
-- `cloud-image.json` / `CLOUD_IMAGE` — pinned Rocky GenericCloud qcow2; host reads it from the downloaded `qctl-platform-rocky.mjs` plugin (not embedded in `qctl-host`)
+- `cloud-image.json` / `CLOUD_IMAGE` — pinned Rocky GenericCloud qcow2; host dynamically imports `CLOUD_IMAGE` from `qctl-platform-rocky.mjs` (not embedded in `qctl-host`, not a separate `dist/cloud-image.json`)
 
 NoCloud / first-boot seed kit lives in [`@qctl/host` `seed/`](../host/seed/).
 
