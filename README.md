@@ -45,8 +45,8 @@ sizing — see [docs/provision.md](docs/provision.md) for every field and commen
 
 | Role | Binary | Docs |
 |------|--------|------|
-| Workstation | `qctl-host` → `qctl` | [packages/host/README.md](packages/host/README.md) — `init`, `new`, `vm …` |
-| Appliance | `qctl-guest` → `/usr/local/bin/qctl` | [packages/guest/README.md](packages/guest/README.md) — `init`, `quadlet …`, `secret …` |
+| Workstation | `qctl-host` → `qctl` | [packages/host/README.md](packages/host/README.md) — `init`, `new`, `sync`, `local …`, `vm …`, `seed-kit` |
+| Appliance | `qctl-guest` → `/usr/local/bin/qctl` | [packages/guest/README.md](packages/guest/README.md) — `init`, `list`/`stage`, `plugins ensure`, `quadlet …`, `secret check\|sync` |
 
 ## Docs
 
