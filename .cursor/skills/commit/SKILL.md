@@ -47,12 +47,27 @@ Follow the repo git safety rules: never update git config; never `--no-verify`
 unless asked; never force-push; do not push unless asked. Stage only the paths for
 the current phase (`git add` those paths), then commit with a HEREDOC message.
 
+### Commit message style
+
+```
+chore: scaffold Bun workspace for qctl tooling
+feat: release 0.1.0 of qctl (#1)
+chore: improve CI (#2)
+feat: build NoCloud seed ISO in-process with @gcu/iso9660 (#3)
+```
+
+- Subject: `type: description` (e.g. `feat:`, `chore:`, `docs:`, `fix:`, `ci:`)
+- Imperative / concise; no trailing period on the subject
+- Optional body (1–2 sentences) for why when needed
+- Do not invent `(#N)` locally — GitHub adds that on PR merge
+
 ### Loop
 
 1. In parallel: `git status` / `git diff` (staged + unstaged) / recent `git log`
-   (message style) — group paths into phases.
+   — group paths into phases. Use the style above even if you see commit messages
+   in the history that look different.
 2. Stage and commit one phase with an **explicit path list** and a HEREDOC message
-   focused on why, 1–2 sentences, matching this repo’s style.
+   in `type: description` form (optional why body).
 3. Re-check status; repeat until nothing intended remains. Do not push unless asked.
 
 Example:
@@ -60,7 +75,7 @@ Example:
 ```bash
 git add path/a path/b
 git commit -m "$(cat <<'EOF'
-Short why-focused subject.
+feat: short why-focused subject
 
 EOF
 )"
