@@ -5,7 +5,7 @@ import { ISOReader } from '@gcu/iso9660'
 
 import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
 import { initInstance } from '../../init.js'
-import { getSeed, resetRepoRootCache } from './paths.js'
+import { getSeed, resetRepoRootCache } from '../../lib/paths.js'
 import { resolveSeedPaths, runSeed } from './seed.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 

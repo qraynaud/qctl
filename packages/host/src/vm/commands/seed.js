@@ -1,4 +1,4 @@
-import { sharedTarget } from '../libs/options.js'
+import { sharedTarget } from '../../lib/options.js'
 import { runSeed } from '../libs/seed.js'
 
 /** @import { Argv } from 'yargs' */

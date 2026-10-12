@@ -12,14 +12,14 @@ import nunjucks from 'nunjucks'
 import YAML from 'yaml'
 import { chalk, fs, path } from 'zx'
 
+import { loadEnvSecrets } from '../../lib/load-config.js'
+import { getSeedKit } from '../../lib/paths.js'
+import { die } from '../../lib/util.js'
 import { vlanParentEnvLines } from './guest-net.js'
-import { loadEnvSecrets } from './load-config.js'
-import { getSeedKit } from './paths.js'
-import { die } from './util.js'
 
 /** @import { Environment } from 'nunjucks' */
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-/** @import { NormalizedPackages } from './secrets-schema/packages.js' */
+/** @import { NormalizedPackages } from '../../provision/secrets-schema/packages.js' */
 
 /** @typedef {Awaited<ReturnType<typeof loadEnvSecrets>>} LoadedSecrets */
 /** @typedef {YamlMapping} CloudConfig */

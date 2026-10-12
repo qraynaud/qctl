@@ -3,7 +3,7 @@
  */
 import { chalk } from 'zx'
 
-import { die } from '../util.js'
+import { die } from '../../../lib/util.js'
 
 /**
  * @import {

@@ -1,6 +1,6 @@
 import { chalk } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../paths.js'
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { applyNetsToForm, mergeNetPreserveMac } from './config.js'
 import { diskStateFromConfig } from './disk-holder.js'
 import { sizeToGiB } from './vm-images.js'

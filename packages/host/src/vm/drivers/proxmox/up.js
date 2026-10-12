@@ -1,8 +1,10 @@
 import { chalk, fs } from 'zx'
 
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { assertProxmoxDiskPlan } from '../../../lib/target.js'
+import { die } from '../../../lib/util.js'
 import { IMAGE } from '../../commands/download.js'
 import { classifyCloudInitOutcome, classifyRebootReady } from '../../libs/console.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
 import {
   assertNameFreeForCreate,
   holderVmName,
@@ -20,8 +22,6 @@ import {
   uploadSeedIso,
 } from '../../libs/proxmox/vm.js'
 import { runSeed } from '../../libs/seed.js'
-import { assertProxmoxDiskPlan } from '../../libs/target.js'
-import { die } from '../../libs/util.js'
 import { isAbortError, waitForSerialOutcome } from '../../libs/wait.js'
 import { clientFrom, ping } from './shared.js'
 

@@ -1,11 +1,11 @@
 /** Proxmox (PVE API) target-check. */
 import { path } from 'zx'
 
+import { loadEnvSecrets } from '../../../lib/load-config.js'
+import { errMessage } from '../../../lib/util.js'
 import { createCheckReport } from '../../libs/check-report.js'
-import { loadEnvSecrets } from '../../libs/load-config.js'
 import { createProxmoxClient } from '../../libs/proxmox/client.js'
 import { formatNetsLabel, tryLoadProxmoxConfig } from '../../libs/proxmox/config.js'
-import { errMessage } from '../../libs/util.js'
 
 /** @import { ProxmoxConfig } from '../../libs/proxmox/types.js' */
 /** @import { VmArgv } from '../../types.js' */

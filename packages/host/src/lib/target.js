@@ -3,7 +3,7 @@
  */
 import { die } from './util.js'
 
-/** @import { VmArgv, VmEnv, VmTarget } from '../types.js' */
+/** @import { VmArgv, VmEnv, VmTarget } from '../vm/types.js' */
 
 export const TARGETS = /** @type {const} */ (['local', 'proxmox'])
 export const ENVS = /** @type {const} */ (['dev', 'prod'])

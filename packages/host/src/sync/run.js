@@ -3,10 +3,10 @@
  */
 import { chalk } from 'zx'
 
-import { loadEnvSecretsOrThrow } from '../vm/libs/load-config.js'
-import { tryGetRepoRoot } from '../vm/libs/paths.js'
-import { parsePlatformRef } from '../vm/libs/platform-ref.js'
-import { errMessage } from '../vm/libs/util.js'
+import { loadEnvSecretsOrThrow } from '../lib/load-config.js'
+import { tryGetRepoRoot } from '../lib/paths.js'
+import { errMessage } from '../lib/util.js'
+import { parsePlatformRef } from '../tooling/platform-ref.js'
 import { logEndpoint, resolveSyncEndpoint } from './endpoint.js'
 import { SYNC_TAR_EXCLUDES, syncRepo } from './repo.js'
 import { withSsh } from './ssh.js'

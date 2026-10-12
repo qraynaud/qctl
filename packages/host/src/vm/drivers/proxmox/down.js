@@ -1,6 +1,6 @@
 import { chalk } from 'zx'
 
-import { die } from '../../libs/util.js'
+import { die } from '../../../lib/util.js'
 import { clientFrom } from './shared.js'
 
 /** @import { VmArgv } from '../../types.js' */

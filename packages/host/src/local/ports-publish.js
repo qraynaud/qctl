@@ -1,4 +1,4 @@
-import { passtForwards } from '../vm/libs/ports.js'
+import { passtForwards } from '../lib/ports.js'
 
 /** @import { PortEntry } from '../vm/types.js' */
 

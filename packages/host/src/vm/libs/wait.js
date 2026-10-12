@@ -165,7 +165,7 @@ export async function waitForLocalTcpPorts({
     await sleep(2000, signal)
   }
 
-  const { die } = await import('./util.js')
+  const { die } = await import('../../lib/util.js')
   die(
     `${label} not reachable on ${list.map((p) => `${host}:${p}`).join(', ')} within ${timeoutSec}s`,
   )

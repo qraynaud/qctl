@@ -1,5 +1,6 @@
 import { chalk } from 'zx'
 
+import { shellQuote } from '../lib/shell-quote.js'
 import { applianceExists, applianceRunning } from './appliance.js'
 import { createLocalContext } from './context.js'
 import { execInAppliance } from './exec-in.js'
@@ -30,14 +31,6 @@ export function builder(yargs) {
  * @property {string} [env]
  * @property {string | string[]} [apps]
  */
-
-/**
- * @param {string} s
- * @returns {string}
- */
-function shellQuote(s) {
-  return `'${s.replace(/'/g, `'\\''`)}'`
-}
 
 /**
  * @param {LocalPsArgv} argv

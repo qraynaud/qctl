@@ -4,10 +4,10 @@ import { createReadStream } from 'node:fs'
 import { $, chalk, fs, path } from 'zx'
 
 import { IMAGE } from '../../cloud-image.js'
-import { gcQctlCache, touchPath } from '../libs/cache-gc.js'
-import { getImages } from '../libs/paths.js'
-import { ensureCloudImage } from '../libs/platform-tooling.js'
-import { die, requireBins } from '../libs/util.js'
+import { getImages } from '../../lib/paths.js'
+import { die, requireBins } from '../../lib/util.js'
+import { gcQctlCache, touchPath } from '../../tooling/cache-gc.js'
+import { ensureCloudImage } from '../../tooling/platform-tooling.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { RockyCloudImage } from '../../cloud-image.js' */

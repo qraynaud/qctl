@@ -1,8 +1,8 @@
 import { chalk } from 'zx'
 
+import { sharedLibvirt } from '../../lib/options.js'
+import { die } from '../../lib/util.js'
 import { loadDriver } from '../drivers/index.js'
-import { sharedLibvirt } from '../libs/options.js'
-import { die } from '../libs/util.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */

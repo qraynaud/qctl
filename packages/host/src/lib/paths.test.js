@@ -1,8 +1,8 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
-import { initInstance } from '../../init.js'
+import { makeTempDir, removeTempDir } from '../../../shared/src/test-helpers.js'
+import { initInstance } from '../init.js'
 import {
   DATA_COUNT,
   SPECIAL_COUNT,

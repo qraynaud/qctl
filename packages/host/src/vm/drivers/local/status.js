@@ -1,11 +1,11 @@
 import { chalk, fs } from 'zx'
 
+import { portsFromArgv } from '../../../lib/options.js'
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { requireBins } from '../../../lib/util.js'
 import { vmPaths } from '../../libs/disks.js'
 import { virsh } from '../../libs/libvirt.js'
-import { portsFromArgv } from '../../libs/options.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
-import { requireBins } from '../../libs/util.js'
 
 /** @import { VmArgv } from '../../types.js' */
 

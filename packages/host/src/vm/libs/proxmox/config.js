@@ -1,9 +1,9 @@
 /**
  * Proxmox API config from provision/<env>.yaml + provision/<env>.proxmox.yaml
  */
-import { loadEnvSecrets } from '../load-config.js'
-import { tryGetRepoRoot } from '../paths.js'
-import { die } from '../util.js'
+import { loadEnvSecrets } from '../../../lib/load-config.js'
+import { tryGetRepoRoot } from '../../../lib/paths.js'
+import { die } from '../../../lib/util.js'
 
 export {
   applyNetsToForm,

@@ -14,13 +14,13 @@ import { chalk, path } from 'zx'
 
 import { loadHostGuestCredentials, loadProvision } from '@qctl/shared'
 
+import { firstBootCredentialsFromProvision, parseSecretsFile } from '../provision/secrets-schema.js'
 import { getProvision, tryGetRepoRoot } from './paths.js'
-import { firstBootCredentialsFromProvision, parseSecretsFile } from './secrets-schema.js'
 import { TARGETS } from './target.js'
 import { die } from './util.js'
 
 /** @import { YamlMapping } from '@qctl/shared' */
-/** @import { FirstBootCredentials } from './secrets-schema/first-boot.js' */
+/** @import { FirstBootCredentials } from '../provision/secrets-schema/first-boot.js' */
 
 /** Preferred pubkey filenames (ed25519 first). */
 const SSH_PUB_CANDIDATES = ['id_ed25519.pub', 'id_rsa.pub']

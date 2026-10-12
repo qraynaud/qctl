@@ -13,7 +13,7 @@
 import { die } from './util.js'
 
 /** @import { Argv } from 'yargs' */
-/** @import { PortEntry, VmArgv } from '../types.js' */
+/** @import { PortEntry, VmArgv } from '../vm/types.js' */
 
 /**
  * @typedef {{ option: string, argvKey: keyof VmArgv & string }} PortCli

@@ -3,8 +3,8 @@ import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '../../../../shared/src/test-helpers.js'
 import { initInstance } from '../../init.js'
-import { getSeed, repoHash, resetRepoRootCache } from './paths.js'
-import { HG_HGRC_PATH, HG_PIPX_DEFAULT } from './secrets-schema.js'
+import { getSeed, repoHash, resetRepoRootCache } from '../../lib/paths.js'
+import { HG_HGRC_PATH, HG_PIPX_DEFAULT } from '../../provision/secrets-schema.js'
 import {
   embedGuestTooling,
   filesForSeedProfile,

@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 
 import { $, chalk, fs, path } from 'zx'
 
-import { die } from './util.js'
+import { die } from '../lib/util.js'
 
 /**
  * @param {{

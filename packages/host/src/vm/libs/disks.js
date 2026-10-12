@@ -1,7 +1,7 @@
 import { $, chalk, fs, path } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT, getVms } from './paths.js'
-import { requireBins } from './util.js'
+import { DATA_COUNT, SPECIAL_COUNT, getVms } from '../../lib/paths.js'
+import { requireBins } from '../../lib/util.js'
 
 /**
  * @typedef {{

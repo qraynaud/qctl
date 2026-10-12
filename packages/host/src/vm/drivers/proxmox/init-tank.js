@@ -1,13 +1,15 @@
 import { chalk, fs } from 'zx'
 
+import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { assertProxmoxDiskPlan } from '../../../lib/target.js'
+import { die, errMessage } from '../../../lib/util.js'
+import { ensureCloudImage } from '../../../tooling/platform-tooling.js'
 import { matchInitTankFatal } from '../../libs/console.js'
 import {
   isGuestFatalError,
   reportGuestFatalLeaveRunning,
   waitForSuccessOrGuestFatal,
 } from '../../libs/guest-fatal.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../libs/paths.js'
-import { ensureCloudImage } from '../../libs/platform-tooling.js'
 import { applyNetsToForm } from '../../libs/proxmox/config.js'
 import {
   assertNameFreeForCreate,
@@ -26,8 +28,6 @@ import {
   waitUntilVmStopped,
 } from '../../libs/proxmox/vm.js'
 import { runSeed } from '../../libs/seed.js'
-import { assertProxmoxDiskPlan } from '../../libs/target.js'
-import { die, errMessage } from '../../libs/util.js'
 import { isAbortError } from '../../libs/wait.js'
 import { ping } from './shared.js'
 

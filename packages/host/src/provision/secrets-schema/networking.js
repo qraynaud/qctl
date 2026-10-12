@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { normalizeMac } from '../proxmox/net.js'
+import { normalizeMac } from '../../vm/libs/proxmox/net.js'
 import { BRIDGE_RE, IFACE_RE, namedMapToList } from './zod-utils.js'
 
 /** @import { YamlValue } from '@qctl/shared' */

@@ -1,9 +1,9 @@
 /**
  * Hypervisor drivers: local (libvirt) and proxmox (PVE API).
  */
-import { resolveBootResources } from '../libs/options.js'
-import { resolveVmName } from '../libs/target.js'
-import { die } from '../libs/util.js'
+import { resolveBootResources } from '../../lib/options.js'
+import { resolveVmName } from '../../lib/target.js'
+import { die } from '../../lib/util.js'
 
 /** @import { VmArgv, VmDriver } from '../types.js' */
 
