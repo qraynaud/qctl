@@ -1,4 +1,7 @@
-/** Barrel: only symbols imported via `../secrets-schema.js`. */
+/**
+ * Zod schemas for provision/<env>.yaml (+ optional <env>.<target>.yaml).
+ * Named collections (ports, uplinks, vlans, proxmox.net) are maps keyed by name.
+ */
 export {
   HG_HGRC_DEFAULT,
   HG_HGRC_PATH,

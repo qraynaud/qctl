@@ -16,7 +16,7 @@ See `src/index.js`. High-signal modules:
 
 | Module | Role |
 |--------|------|
-| `varlock-graph.js` | `internal.loadEnvGraph` wrapper + resolve helpers |
+| `varlock/` | `internal.loadEnvGraph` wrapper + resolve helpers |
 | provision helpers | Parse `provision/<env>.yaml`; `!env` via `loadHostEnv` (`provision/.env.*`) |
 | path / instance root | `findInstanceRoot`, `isInstanceRoot`, shared constants |
 | `yargs.js` | `registerCommands` for host / guest / platform |

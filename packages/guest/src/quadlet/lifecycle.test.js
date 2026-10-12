@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { MARKER_DIR } from './apps/index.js'
 import { formatTable, runDown, runPs, runRestart, runStartStop } from './lifecycle.js'
 import { cleanupQuadletFixture, makeContext, makeQuadletInstance } from './test/fixture.js'
-import { runUp } from './up.js'
+import { runUp } from './up/index.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('quadlet lifecycle', () => {

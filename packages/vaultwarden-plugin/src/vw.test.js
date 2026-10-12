@@ -19,7 +19,7 @@ const {
   pickAttachment,
   resolveVwAccountId,
   valueCacheKey,
-} = require('./vw.js')
+} = require('./vw/index.js')
 
 /** @type {BwItem} */
 const ITEM = {

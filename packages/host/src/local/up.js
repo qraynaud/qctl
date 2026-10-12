@@ -1,4 +1,5 @@
-import { ensureAppliance, quadletUp, quadletUpAll } from './appliance.js'
+import { ensureAppliance } from './appliance-lifecycle.js'
+import { quadletUp, quadletUpAll } from './appliance-quadlet.js'
 import { listInstanceApps } from './apps.js'
 import { createLocalContext } from './context.js'
 import { sharedLocalEnv } from './options.js'

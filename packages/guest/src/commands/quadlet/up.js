@@ -1,5 +1,5 @@
 import { argvApps, runQuadletCommand, withRootOption } from '../../quadlet/cli.js'
-import { runUp } from '../../quadlet/up.js'
+import { runUp } from '../../quadlet/up/index.js'
 /** @import { Argv } from 'yargs' */
 /** @import { QuadletArgv } from '../../quadlet/cli.js' */
 

@@ -59,7 +59,7 @@ const {
   parseVwArgs,
   resolveVwAccountId,
   valueCacheKey,
-} = require('./vw.js')
+} = require('./vw/index.js')
 
 const { SchemaError, ResolutionError } = plugin.ERRORS
 

@@ -1,4 +1,4 @@
-import { HG_HGRC_PATH, HG_PIPX_DEFAULT } from '../../../provision/secrets-schema.js'
+import { HG_HGRC_PATH, HG_PIPX_DEFAULT } from '../../../provision/secrets-schema/index.js'
 import { filesForSeedProfile, packagesForSeedProfile } from './profiles.js'
 import { describe, expect, test } from 'bun:test'
 
