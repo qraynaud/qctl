@@ -5,7 +5,7 @@ Two different paths — do not mix them:
 | Path | Where keys live | How values arrive | Used for |
 |------|-----------------|-------------------|----------|
 | **Host provision env** | `provision/.env.schema` + `.env.<QCTL_ENV>` | Host resolves `vw()` / literals at seed | Values for `!env` in YAML |
-| **Provision YAML** | `provision/<env>.yaml` (`tank`, `admin`, `repo`, …) | `!env` → seed Tier-0 pending | First-boot secrets on the guest |
+| **Provision YAML** | `provision/<env>.yaml` (`tank`, `users`, `repo`, …) | `!env` → seed Tier-0 pending | First-boot secrets on the guest |
 | **Podman secrets** | `@sensitive` on **unit** schemas | `qctl secret sync` | App container `Secret=` |
 
 Lab vs prod is whatever the active `QCTL_ENV` graphs declare (literals in

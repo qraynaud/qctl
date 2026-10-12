@@ -47,6 +47,22 @@ Shared option:
 |--------|---------|-------------|
 | `--root` | `$QCTL_ROOT` or walk-up | Instance root (`provision/` + `qctl:` block) |
 
+| Subcommand | Description |
+|------------|-------------|
+| `up [apps…]` | Reconcile listed apps (plus companions); omit = all |
+| `down <apps…>` | Stop and unregister apps (data stays) |
+| `enable <apps…>` | Render/install units (`--no-install` skips autostart) |
+| `start` / `stop` / `restart <apps…>` | `systemctl` for each app’s units |
+| `ps [apps…]` | Container status (omit = all installed) |
+
+```bash
+qctl quadlet up
+qctl quadlet up caddy active-directory
+qctl quadlet ps caddy
+qctl quadlet restart caddy
+qctl quadlet down caddy active-directory
+```
+
 ### `qctl secret …`
 
 Sync Podman secrets from varlock schemas.
