@@ -64,11 +64,12 @@ Use **GenericCloud Base** x86_64 (not EC2-specific). Root filesystem is **XFS**.
 
 The pin lives in `@qctl/platform-rocky` as [`cloud-image.json`](../../platform-rocky/cloud-image.json)
 (`file` / `url` / `sha256`) and is exported as `CLOUD_IMAGE` from
-`qctl-platform-rocky.mjs`. Host does **not** embed it — after downloading the
-platform plugin (GitHub release via `qctl.platform`, or `QCTL_PLATFORM_MODULE` /
-`QCTL_GUEST_DIST`),
-it reads the pin from that module. Override with `QCTL_ROCKY_CLOUD_IMAGE`
-pointing at a JSON file of the same shape.
+`qctl-platform-rocky.mjs`. Host does **not** embed it or stage a nameless
+`dist/cloud-image.json` — `ensureCloudImage` resolves the selected
+`qctl-platform-*.mjs` (GitHub release via `qctl.platform`, checkout `dist/`,
+`QCTL_PLATFORM_MODULE` / `QCTL_GUEST_DIST`) and dynamically imports
+`CLOUD_IMAGE`. Override with `QCTL_ROCKY_CLOUD_IMAGE` pointing at a JSON file
+of the same shape.
 
 Directory: https://download.rockylinux.org/pub/rocky/9/images/x86_64/
 

@@ -7,12 +7,7 @@ import { existsSync } from 'node:fs'
 
 import { chalk, fs, path } from 'zx'
 
-import {
-  loadCloudImage,
-  loadCloudImageFromPlugin,
-  setCloudImageCache,
-  writeCloudImagePin,
-} from '../cloud-image.js'
+import { loadCloudImageFromPlugin, tryLoadCloudImageFromEnv } from '../cloud-image.js'
 import { loadEnvSecretsOrThrow } from '../lib/load-config.js'
 import { getTooling, isSeedKitRoot, setSeedKitRoot } from '../lib/paths.js'
 import { die } from '../lib/util.js'
@@ -146,25 +141,20 @@ export async function ensurePlatformModule(opts = {}) {
 }
 
 /**
- * Resolve the Rocky cloud image pin from the platform plugin (download if needed).
- * @param {{ env?: string, target?: string, version?: string }} [opts]
+ * Resolve the cloud image pin from the selected platform plugin
+ * (`CLOUD_IMAGE` via dynamic import). Optional `QCTL_ROCKY_CLOUD_IMAGE` JSON override.
+ * @param {{ env?: string, target?: string, version?: string, platform?: string }} [opts]
  * @returns {Promise<RockyCloudImage>}
  */
 export async function ensureCloudImage(opts = {}) {
-  try {
-    return loadCloudImage()
-  } catch {
-    // need plugin
+  const fromEnv = tryLoadCloudImageFromEnv()
+  if (fromEnv) {
+    console.log(chalk.dim(`  cloud image pin: ${fromEnv.file} ← QCTL_ROCKY_CLOUD_IMAGE`))
+    return fromEnv
   }
 
   const modPath = await ensurePlatformModule(opts)
   const pin = await loadCloudImageFromPlugin(modPath)
-  try {
-    writeCloudImagePin(path.dirname(modPath), pin)
-  } catch {
-    // cache write is best-effort
-  }
-  setCloudImageCache(pin)
   console.log(chalk.dim(`  cloud image pin: ${pin.file} ← ${modPath}`))
   return pin
 }

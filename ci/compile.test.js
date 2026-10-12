@@ -23,6 +23,9 @@ describe('ci/compile.js', () => {
     expect(src).toContain('bundlePlatformModule')
     expect(src).not.toContain("outfile: 'qctl-platform-rocky'")
     expect(src).not.toContain('stageRockySeed')
+    // Pin comes from importing the platform module, not a staged JSON sibling.
+    expect(src).not.toMatch(/cp\(.*cloud-image\.json/)
+    expect(src).not.toContain("join(OUT, 'cloud-image.json')")
   })
 
   test('resolveNativeHelperBinary finds the platform helper when installed', () => {

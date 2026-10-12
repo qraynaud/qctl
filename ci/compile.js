@@ -141,13 +141,6 @@ async function bundlePlatformModule() {
   })
   const code = await proc.exited
   if (code !== 0) throw new Error(`platform module bundle failed (exit ${code})`)
-  const pinSrc = join(ROOT, 'packages/platform-rocky/cloud-image.json')
-  if (existsSync(pinSrc)) {
-    await cp(pinSrc, join(OUT, 'cloud-image.json'))
-    console.log(
-      `staged ${join(OUT, 'cloud-image.json')} ← packages/platform-rocky/cloud-image.json`,
-    )
-  }
 }
 
 async function main() {
