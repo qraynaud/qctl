@@ -3,7 +3,7 @@ import { chalk } from 'zx'
 
 import { portByName, resolvePorts } from '../../lib/ports.js'
 import { which } from '../../lib/util.js'
-import { virsh } from './libvirt.js'
+import { virsh } from './libvirt/index.js'
 
 /** @import { PortEntry, VmArgv } from '../types.js' */
 
@@ -14,7 +14,7 @@ const ADMIN_HINT = 'rocky' // or VW Login rocky username when that Login has cre
  *   connect: string,
  *   name: string,
  *   ports: PortEntry[],
- *   argv?: VmArgv | Record<string, unknown>,
+ *   argv?: Partial<VmArgv>,
  *   network?: string,
  * }} opts
  * @returns {Promise<void>}
