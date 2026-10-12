@@ -54,9 +54,12 @@ chore: scaffold Bun workspace for qctl tooling
 feat: release 0.1.0 of qctl (#1)
 chore: improve CI (#2)
 feat: build NoCloud seed ISO in-process with @gcu/iso9660 (#3)
+chore: extract shared init-tank guest-fatal wait helpers
 ```
 
-- Subject: `type: description` (e.g. `feat:`, `chore:`, `docs:`, `fix:`, `ci:`)
+- Subject: `type: description` — use `feat:`, `chore:`, `docs:`, `fix:`, `ci:`
+- **Refactors are `chore:`** — do not use a `refactor:` type. Internal restructuring,
+  extractions, renames, and cleanup without user-facing behavior change → `chore:`
 - Imperative / concise; no trailing period on the subject
 - Optional body (1–2 sentences) for why when needed
 - Do not invent `(#N)` locally — GitHub adds that on PR merge
