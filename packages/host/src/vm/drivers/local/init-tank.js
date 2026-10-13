@@ -118,6 +118,7 @@ export async function initTank(argv) {
     allowMissingTier0: false,
     allowMissingFiles: false,
     env,
+    target: argv.target || 'local',
   })
 
   if (await domainExists(connect, name)) {

@@ -176,6 +176,7 @@ function proxmoxBackend() {
         allowMissingTier0: false,
         allowMissingFiles: false,
         env,
+        target: argv.target || 'proxmox',
       })
       const isoPath = seedResult.isoPath
       if (!fs.existsSync(isoPath)) {
