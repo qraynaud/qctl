@@ -128,8 +128,9 @@ export const INIT_TANK_FATAL_PATTERNS = [
   /Failed to start Cloud-init: Final Stage/i,
   /Failed to start Rocky init-tank/i,
   /rocky-init-tank:\s*ERROR:/i,
-  /stage tank-import:/i,
-  /stage tank-create:/i,
+  // StageError format from guest `qctl init` (`stage <name>: …`)
+  /stage (?:tier0-seal|vw-mount|tank-import|tank-create|poweroff):/i,
+  // Legacy shell-style prefixes (pre-StageError)
   /rocky-vw-mount:\s*ERROR:/i,
 ]
 
