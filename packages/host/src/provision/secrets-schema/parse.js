@@ -6,15 +6,14 @@ import { alignProxmoxNets, networkingSchema, portsSchema } from './networking.js
 import { normalizePackages, packagesSchema } from './packages.js'
 import { localSchema, proxmoxSchema } from './targets.js'
 import { usersSchema } from './users.js'
-import { formatSecretsError, parseSecretsSchema } from './zod-utils.js'
+import {
+  formatSecretsError,
+  optionalCredentialBytes,
+  optionalTrimmedText,
+  parseSecretsSchema,
+} from './zod-utils.js'
 
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-
-const optionalTrimmed = z.union([z.string(), z.null(), z.undefined()]).transform((v) => {
-  if (v == null) return null
-  const t = String(v).trim()
-  return t === '' ? null : t
-})
 
 export const secretsFileSchema = z
   .object({
@@ -24,8 +23,8 @@ export const secretsFileSchema = z
     ssh: z
       .object({
         authorized_keys: z.union([z.array(z.string()), z.string()]).optional(),
-        /** gzip tar of /etc/ssh/ssh_host_* (often base64); optional. */
-        host_keys: optionalTrimmed.optional(),
+        /** gzip tar of /etc/ssh/ssh_host_* (bytes or base64 text); optional. */
+        host_keys: optionalCredentialBytes.optional(),
       })
       .passthrough()
       .optional(),
@@ -39,13 +38,13 @@ export const secretsFileSchema = z
       .object({
         /** Instance VCS for the clone stage. Default `git` when omitted. */
         vcs: z.enum(['git', 'hg']).optional(),
-        branch: optionalTrimmed.optional(),
+        branch: optionalTrimmedText.optional(),
         /** Clone URL (baked as ROCKY_HG_URL / ROCKY_REPO_URL). */
-        url: optionalTrimmed.optional(),
+        url: optionalTrimmedText.optional(),
         /** Guest checkout path (default /tank/rocky). */
-        dir: optionalTrimmed.optional(),
+        dir: optionalTrimmedText.optional(),
         /** Deploy private key (host-resolved → Tier-0 DEPLOY_KEY). */
-        deploy_key: optionalTrimmed.optional(),
+        deploy_key: optionalCredentialBytes.optional(),
       })
       .passthrough()
       .optional(),

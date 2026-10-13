@@ -182,6 +182,7 @@ repo:
   url: ssh://git@git.example/org/repo
   dir: /tank/rocky
   deploy_key: !env DEPLOY_KEY
+  # deploy_key: !env { name: DEPLOY_KEY, encoding: base64 }
   # branch: !env REPO_BRANCH
 
 # registries:

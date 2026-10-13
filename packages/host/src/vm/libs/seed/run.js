@@ -100,7 +100,7 @@ export async function runSeed(argv) {
     injectProvisionFiles(
       injectGuestCredentialFiles(
         renderTemplate(userDataPath, vars, allowMissingFiles),
-        /** @type {Record<string, string> | undefined} */ (vars.secrets?.guest),
+        /** @type {Record<string, string | Buffer> | undefined} */ (vars.secrets?.guest),
       ),
       /** @type {typeof sec.files | undefined} */ (vars.secrets?.files) || sec.files,
     ),

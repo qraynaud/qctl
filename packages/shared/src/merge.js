@@ -7,11 +7,19 @@
 /** @import { YamlMapping, YamlValue } from './yaml.js' */
 
 /**
- * @param {YamlValue} v
+ * Plain YAML mapping (not array / scalar / bytes).
+ *
+ * @param {YamlValue | null | undefined} v
  * @returns {v is YamlMapping}
  */
-function isPlainObject(v) {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
+export function isYamlMapping(v) {
+  return (
+    v != null
+    && typeof v === 'object'
+    && !Array.isArray(v)
+    && !(v instanceof Uint8Array)
+    && !(typeof Buffer !== 'undefined' && Buffer.isBuffer(v))
+  )
 }
 
 /**
@@ -22,14 +30,14 @@ function isPlainObject(v) {
 export function deepMerge(base, overlay) {
   if (overlay === undefined) return base
   if (overlay === null) return null
-  if (!isPlainObject(base) || !isPlainObject(overlay)) return overlay
+  if (!isYamlMapping(base) || !isYamlMapping(overlay)) return overlay
 
   /** @type {YamlMapping} */
   const out = { ...base }
   for (const [key, val] of Object.entries(overlay)) {
     if (Array.isArray(val)) {
-      out[key] = val.map((x) => (isPlainObject(x) ? { ...x } : x))
-    } else if (isPlainObject(val) && isPlainObject(out[key])) {
+      out[key] = val.map((x) => (isYamlMapping(x) ? { ...x } : x))
+    } else if (isYamlMapping(val) && isYamlMapping(out[key])) {
       out[key] = deepMerge(out[key], val)
     } else {
       out[key] = val

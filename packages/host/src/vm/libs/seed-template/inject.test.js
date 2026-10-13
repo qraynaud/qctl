@@ -49,7 +49,7 @@ describe('injectGuestCredentialFiles', () => {
     expect(tank?.encoding).toBeUndefined()
   })
 
-  test('base64-encodes credentials with C0/DEL so cloud-init YAML stays valid', () => {
+  test('base64-encodes utf8 credentials with C0/DEL so cloud-init YAML stays valid', () => {
     const binary = `gzip\u007f${String.fromCharCode(0x1f, 0x8b)}\n`
     const out = injectGuestCredentialFiles({ write_files: [] }, { SSH_HOST_KEYS: binary })
     const entry = writeFilesOf(out).find(
@@ -58,6 +58,29 @@ describe('injectGuestCredentialFiles', () => {
     expect(entry?.encoding).toBe('base64')
     expect(entry?.content).toBe(Buffer.from(binary, 'utf8').toString('base64'))
     expect(String(entry?.content)).not.toMatch(/\u007f/)
+  })
+
+  test('writes non-utf8 Buffer credentials as base64 text (utf8-hydrate safe)', () => {
+    const raw = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xff])
+    const out = injectGuestCredentialFiles({ write_files: [] }, { SSH_HOST_KEYS: raw })
+    const entry = writeFilesOf(out).find(
+      (w) => w.path === '/var/lib/rocky/tier0-pending/SSH_HOST_KEYS',
+    )
+    expect(entry?.encoding).toBeUndefined()
+    expect(entry?.content).toBe(`${raw.toString('base64')}\n`)
+  })
+
+  test('writes Buffer PEM as plain utf8 text', () => {
+    const pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n'
+    const out = injectGuestCredentialFiles(
+      { write_files: [] },
+      { DEPLOY_KEY: Buffer.from(pem, 'utf8') },
+    )
+    const entry = writeFilesOf(out).find(
+      (w) => w.path === '/var/lib/rocky/tier0-pending/DEPLOY_KEY',
+    )
+    expect(entry?.encoding).toBeUndefined()
+    expect(entry?.content).toBe(pem.endsWith('\n') ? pem : `${pem}\n`)
   })
 })
 

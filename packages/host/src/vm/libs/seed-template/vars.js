@@ -3,6 +3,8 @@
  */
 import { chalk } from 'zx'
 
+import { isEmptyCredential } from '@qctl/shared'
+
 import { loadEnvSecrets } from '../../../lib/load-config.js'
 import { die } from '../../../lib/util.js'
 import { vlanParentEnvLines } from '../guest-net.js'
@@ -44,12 +46,14 @@ export async function buildVars({
     )
   }
 
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, string | Buffer>} */
   const guest = { ...(sec.guest || {}) }
   /** @type {string[]} */
   const missing = []
   // First-boot SoT is provision YAML → fixed Tier-0 names (host-resolved at seed).
-  if (!guest.TANK_PASSPHRASE) missing.push('TANK_PASSPHRASE (provision tank.passphrase)')
+  if (isEmptyCredential(guest.TANK_PASSPHRASE)) {
+    missing.push('TANK_PASSPHRASE (provision tank.passphrase)')
+  }
   if (missing.length && !allowMissingTier0) {
     die(`missing first-boot Tier-0 (${missing.join(', ')}) (or pass --allow-missing-tier0)`)
   }
@@ -67,9 +71,14 @@ export async function buildVars({
     uplinks: sec.uplinks,
     vlans: sec.vlans,
   }
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, string | Buffer>} */
   const guestForSeed = {}
   for (const [key, value] of Object.entries(guest)) {
+    if (isEmptyCredential(value)) continue
+    if (Buffer.isBuffer(value)) {
+      guestForSeed[key] = value
+      continue
+    }
     const withNl = withTrailingNewline(value)
     if (withNl) guestForSeed[key] = withNl
   }

@@ -6,6 +6,30 @@ export const IFACE_RE = /^[A-Za-z][A-Za-z0-9._-]*$/
 export const BRIDGE_RE = /^[A-Za-z][A-Za-z0-9._-]*$/
 
 /**
+ * Provision scalars may be plain strings or `Buffer` from resolved `!env`.
+ */
+export const bufferOrString = z.union([z.instanceof(Buffer), z.string(), z.null(), z.undefined()])
+
+/**
+ * Text slot: Buffer → utf8, then trim. Empty → null.
+ */
+export const optionalTrimmedText = bufferOrString.transform((v) => {
+  if (v == null) return null
+  const t = (Buffer.isBuffer(v) ? v.toString('utf8') : String(v)).trim()
+  return t === '' ? null : t
+})
+
+/**
+ * Opaque credential bytes: keep `Buffer`, trim strings. Empty → null.
+ */
+export const optionalCredentialBytes = bufferOrString.transform((v) => {
+  if (v == null) return null
+  if (Buffer.isBuffer(v)) return v.length ? v : null
+  const t = v.trim()
+  return t === '' ? null : t
+})
+
+/**
  * Named YAML map entry after `namedMapToList` (name key + original fields).
  *
  * @typedef {{ name: string } & YamlMapping} NamedYamlEntry

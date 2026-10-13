@@ -1,4 +1,7 @@
 import { z } from 'zod'
+
+import { optionalTrimmedText } from './zod-utils.js'
+
 /** @import { RefinementCtx } from 'zod' */
 
 /** Max subordinate count for apps subuid/subgid (nested / local map budget). */
@@ -8,11 +11,7 @@ export const DEFAULT_APPS_USERNAME = 'apps'
 export const DEFAULT_ADMIN_UID = 1000
 export const DEFAULT_ADMIN_USERNAME = 'admin'
 
-const optionalTrimmed = z.union([z.string(), z.null(), z.undefined()]).transform((v) => {
-  if (v == null) return null
-  const t = String(v).trim()
-  return t === '' ? null : t
-})
+const optionalTrimmed = optionalTrimmedText
 
 const uidGid = z.union([z.number(), z.string(), z.null(), z.undefined()]).transform((v, ctx) => {
   if (v == null || v === '') return null

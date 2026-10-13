@@ -173,7 +173,7 @@ export async function loadEnvSecretsOrThrow({ env = 'dev', target = 'local' } = 
   // First-boot secrets from provision YAML (!env-resolved) + optional @tag(guest) extras.
   const fromProvision = firstBootCredentialsFromProvision(/** @type {YamlMapping} */ (data))
   const fromGuestTag = await loadHostGuestCredentials(root, processEnv)
-  /** @type {FirstBootCredentials & Record<string, string>} */
+  /** @type {FirstBootCredentials & Record<string, string | Buffer>} */
   const guest = { ...fromGuestTag, ...fromProvision }
 
   return {

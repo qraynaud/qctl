@@ -14,6 +14,7 @@ export {
   ENV_REF,
   collectEnvRefs,
   envRef,
+  isEmptyCredential,
   isEnvRef,
   parseProvisionYaml,
   resolveEnvRefs,

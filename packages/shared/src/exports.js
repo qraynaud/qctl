@@ -18,7 +18,7 @@ export {
   resolveBootstrapDir,
 } from './bootstrap.js'
 export { findInstanceRoot, hasQctlProvision, isInstanceRoot } from './instance.js'
-export { deepMerge } from './merge.js'
+export { deepMerge, isYamlMapping } from './merge.js'
 export {
   emptyPackages,
   mergePackages,
@@ -44,6 +44,7 @@ export {
   PROVISION_DIR,
   collectEnvRefs,
   envRef,
+  isEmptyCredential,
   isEnvRef,
   loadHostEnv,
   loadHostEnvDetailed,

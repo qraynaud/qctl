@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** @import { YamlValue } from '@qctl/shared' */
+/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
 
 const pathStr = z.string().trim().min(1)
 const modeStr = z
@@ -56,16 +56,19 @@ export function normalizeFiles(raw) {
   /** @type {GuestFile[]} */
   const out = []
   for (const item of raw) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
-    const p = String(item.path || '').trim()
+    if (!item || typeof item !== 'object' || Array.isArray(item) || item instanceof Uint8Array) {
+      continue
+    }
+    const rec = /** @type {YamlMapping} */ (item)
+    const p = String(rec.path || '').trim()
     if (!p) continue
-    const owner = item.owner != null ? String(item.owner).trim() : 'root:root'
-    const permRaw = item.permissions ?? item.mode ?? '0644'
+    const owner = rec.owner != null ? String(rec.owner).trim() : 'root:root'
+    const permRaw = rec.permissions ?? rec.mode ?? '0644'
     let permissions = String(permRaw).trim()
     if (/^\d+$/.test(permissions) && !permissions.startsWith('0') && permissions.length <= 3) {
       permissions = `0${permissions}`
     }
-    const content = item.content != null ? String(item.content) : ''
+    const content = rec.content != null ? String(rec.content) : ''
     out.push({
       path: p,
       owner: owner || 'root:root',
