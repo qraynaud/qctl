@@ -1,6 +1,6 @@
 {
   "name": "qctl",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -23,14 +23,12 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@types/bun": "latest",
+    "@types/npmcli__arborist": "^6.3.3",
     "@types/yargs": "^17.0.35",
     "comment-parser": "^1.4.9",
     "knip": "^6.41.0",
     "typescript": "^7.0.2",
     "yargs": "^18.2.0",
     "zx": "^8.8.5"
-  },
-  "patchedDependencies": {
-    "varlock@1.22.0": "patches/varlock@1.22.0.patch"
   }
 }

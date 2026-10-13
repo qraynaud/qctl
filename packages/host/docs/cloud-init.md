@@ -167,9 +167,9 @@ On-box VW **container** data belongs on `/tank`.
 
 cloud-init installs the guest tooling from the NoCloud ISO (`lib/install-qctl-guest.sh`:
 `qctl-guest` → `/usr/local/bin/qctl`, `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/` (guest import),
-`varlock-local-encrypt` (SEA sibling for disk cache; no varlock CLI), bootstrap under
-`/usr/local/lib/qctl/`, then **`qctl plugins ensure`**
-so bootstrap `# @plugin` pins land in `/root/.config/varlock/plugins-cache`), installs packages,
+`varlock-local-encrypt` (SEA sibling for disk cache; no varlock CLI) under
+`/usr/local/lib/qctl/`. Instance `# @plugin` packages resolve from the repo
+`node_modules` (install via `qctl plugins ensure` / graph load), installs packages,
 enables linger for `apps`, installs OpenZFS, runs `install-packages.sh` (Mercurial via
 pipx when `repo.vcs: hg` on appliance), enables
 `rocky-tier0-seal` + `rocky-first-boot`, then **`wait-qctl-init.sh`** runs

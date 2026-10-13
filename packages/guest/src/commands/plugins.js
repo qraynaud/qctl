@@ -5,7 +5,7 @@ import * as ensure from './plugins/ensure.js'
 /** @import { Argv } from 'yargs' */
 
 export const command = 'plugins'
-export const describe = 'Ensure varlock third-party plugins are in the local plugins-cache'
+export const describe = 'Ensure instance package.json plugins are installed into node_modules'
 
 /**
  * @param {Argv} yargs

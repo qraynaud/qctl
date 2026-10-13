@@ -6,6 +6,7 @@ import { isInstanceRoot } from '@qctl/shared'
 import {
   GITIGNORE,
   MISE_TOML,
+  PACKAGE_JSON,
   PROVISION_DEV_LOCAL_YAML,
   PROVISION_DEV_PROXMOX_YAML,
   PROVISION_DEV_YAML,
@@ -62,6 +63,7 @@ export function initInstance(dir, opts = {}) {
   }
 
   put('mise.toml', MISE_TOML)
+  put('package.json', PACKAGE_JSON)
   put('.env.schema', ROOT_ENV_SCHEMA)
   put('.env.dev', ROOT_ENV_DEV)
   put('.env.prod', ROOT_ENV_PROD)

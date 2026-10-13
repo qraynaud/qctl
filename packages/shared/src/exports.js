@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.3.0'
+export const QCTL_VERSION = '0.4.0'
 
 /**
  * @param {never} value
@@ -59,24 +59,29 @@ export {
 export {
   CONTAINER_REGISTRY_TAG,
   GUEST_TAG,
-  collectNpmPluginPins,
-  collectNpmPluginPinsFromDir,
+  VARLOCK_UNRESOLVED_PLUGIN_RE,
   configureNativeHelperEmbed,
   declaresSensitive,
-  ensureNpmPluginsFromDir,
+  ensurePackageDependencies,
   ensureVarlockLocalEncrypt,
+  findPackageRoot,
   hydrateSystemdCredentials,
+  installPackageDependencies,
   isCompiledQctlBinary,
+  isPackageInstalled,
   isSensitiveItem,
+  isVarlockUnresolvedPluginError,
   keysWithTag,
   loadEnvGraph,
   loadEnvGraphForDir,
-  prefetchNpmPlugins,
+  packageDepsSatisfied,
+  readPackageDependencyMap,
   registerVarlockBuiltins,
   resolveNativeHelperFromNpm,
   resolvedNonSensitive,
   resolvedSensitive,
   sensitiveKeys,
+  shouldUseFrozenPackageInstall,
   varlockLocalEncryptName,
 } from './varlock/index.js'
 export {

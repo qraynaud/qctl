@@ -14,7 +14,7 @@ For command flags see [packages/host/README.md](../packages/host/README.md) and
 | `qctl-host` | Workstation: `init`, `new`, `sync`, `vm`, `seed-kit` | mise → `qctl` |
 | `qctl-guest` | Appliance: `init` stages, `quadlet`, `secret` | seed → `/usr/local/bin/qctl` |
 | `qctl-platform-rocky.mjs` | Thin Rocky package map + install | `/usr/local/lib/qctl/` (guest `import()`) |
-| `@qctl/vaultwarden-plugin` | `vw()` / `@initVw` for varlock | npm `# @plugin(…)` pin |
+| `@qctl/vaultwarden-plugin` | `vw()` / `@initVw` for varlock | instance `package.json` + `# @plugin(…)` |
 
 **Varlock is not a separate install.** The `varlock` package is a dependency of
 `@qctl/shared` and is compiled into host and guest. Schemas load only through the
@@ -23,6 +23,7 @@ For command flags see [packages/host/README.md](../packages/host/README.md) and
 ## Tree
 
 ```text
+package.json                         # plugin deps (qctl → node_modules); commit package-lock.json
 .env.schema                          # root graph (imports .env.dev / .env.prod by QCTL_ENV)
 .env.dev / .env.prod                 # non-secret root values (# @internal in schema)
 applications/                          # package schemas @import repo root
@@ -43,7 +44,7 @@ mise.toml                            # host: pin qctl-host (or _.path to sibling
 #          ~/.local/share/qctl/repos/<hash>/vms
 ```
 
-`qctl init` writes the root schemas, provision stubs, and empty
+`qctl init` writes the root schemas, `package.json`, provision stubs, and empty
 `applications/` / `common/` / `networks/` trees. `qctl new app|common|network`
 adds a package `.env.schema` + README.
 
@@ -55,7 +56,9 @@ adds a package `.env.schema` + README.
   directory’s `.env.schema` (duplicates `@initVw` / values).
 - Package / unit schemas `# @import(../../)` / `# @import(../../../)` the **repo
   root** (shared `.env.dev` / `.env.prod`). Optional: pin `@qctl/vaultwarden-plugin`
-  + `@initVw(…)` on root `.env.prod` — see [secrets.md](./secrets.md) and
+  + `@initVw(…)` on root `.env.prod`, and list the same package in root
+  `package.json` `dependencies` (`qctl` installs `node_modules`; commit
+  `package-lock.json` for CI / non-`dev`) — see [secrets.md](./secrets.md) and
   [packages/vaultwarden-plugin/README.md](../packages/vaultwarden-plugin/README.md).
 - Package-root graphs are for Quadlet `${VAR}` render. Do **not** assign
   `@sensitive` keys there — put secrets in the unit folder (`Secret=`).
@@ -65,6 +68,7 @@ adds a package `.env.schema` + README.
 
 | File | Role |
 |------|------|
+| `package.json` (+ `package-lock.json`) | Plugin deps; qctl → `node_modules` (frozen when `CI=true` or env ≠ `dev`) |
 | `.env.dev` / `.env.prod` (repo root) | Shared non-secrets (optional prod `@plugin` / `@initVw`); `# @internal` in root schema |
 | `provision/.env.schema` + `.env.<env>` | Host provision secrets for `!env` / `@tag(guest)`; optional `vw()` |
 | `provision/.env.local` | Machine-local overlay of provision env (gitignored) |
@@ -82,7 +86,8 @@ qctl:
 Host/guest binaries follow the running `qctl` (mise). `qctl.platform` selects
 which platform adapter module to seed/import; its release tag defaults to the
 host version. Varlock plugins are **not** provision pins — declare them in
-schemas with `# @plugin(@pkg@version)`.
+`package.json` `dependencies` (version SoT) and schemas with `# @plugin(@pkg)`
+(no `@version` in the decorator).
 
 - Committable: `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlays).
 - Host resolves `!env` via `loadHostEnv` (bundled graph API over
