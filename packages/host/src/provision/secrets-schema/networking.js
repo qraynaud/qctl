@@ -3,8 +3,6 @@ import { z } from 'zod'
 import { normalizeMac } from '../../vm/libs/proxmox/net.js'
 import { BRIDGE_RE, IFACE_RE, namedMapToList } from './zod-utils.js'
 
-/** @import { YamlValue } from '@qctl/shared' */
-
 const portNum = z.coerce.number().int().min(1).max(65535)
 const vlanId = z.coerce.number().int().min(1).max(4094)
 const ifaceName = z.string().trim().min(1).regex(IFACE_RE, 'must be a Linux interface name')
@@ -64,7 +62,7 @@ export const portEntrySchema = z.object({
 
 export const portsSchema = z.preprocess(
   (raw, ctx) => {
-    const list = namedMapToList(/** @type {YamlValue} */ (raw), ctx, [])
+    const list = namedMapToList(raw, ctx, [])
     return list === z.NEVER ? z.NEVER : list
   },
   z.array(portEntrySchema).min(1, 'ports must be a non-empty map'),
@@ -77,7 +75,7 @@ export const uplinkSchema = z.object({
 
 export const uplinksSchema = z.preprocess((raw, ctx) => {
   if (raw == null) return [{ name: 'eth0', dhcp4: true }]
-  const list = namedMapToList(/** @type {YamlValue} */ (raw), ctx, [])
+  const list = namedMapToList(raw, ctx, [])
   return list === z.NEVER ? z.NEVER : list
 }, z.array(uplinkSchema).min(1))
 
@@ -160,7 +158,7 @@ export const proxmoxNetEntrySchema = z
  */
 export const proxmoxNetMapSchema = z.preprocess((raw, ctx) => {
   if (raw == null) return null
-  const list = namedMapToList(/** @type {YamlValue} */ (raw), ctx, [])
+  const list = namedMapToList(raw, ctx, [])
   return list === z.NEVER ? z.NEVER : list
 }, z.array(proxmoxNetEntrySchema).min(1).nullable())
 
@@ -171,7 +169,7 @@ export const networkingSchema = z
     vlans: z
       .preprocess((raw, ctx) => {
         if (raw == null) return []
-        const list = namedMapToList(/** @type {YamlValue} */ (raw), ctx, [])
+        const list = namedMapToList(raw, ctx, [])
         return list === z.NEVER ? z.NEVER : list
       }, z.array(vlanEntrySchema))
       .optional(),

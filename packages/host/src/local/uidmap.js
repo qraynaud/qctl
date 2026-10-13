@@ -1,11 +1,7 @@
 import { MAX_APPS_SUBID_COUNT } from '../provision/secrets-schema/users.js'
 
-const DEFAULT_APPS_ID = 900
 /** Rootless host relative ids typically available (0 = caller, 1… = /etc/subuid). */
 const DEFAULT_HOST_RANGE = 65536
-
-/** Default apps uid/gid when provision omits them (schema usually supplies both). */
-export const DEFAULT_APPS_IDS = { appsUid: DEFAULT_APPS_ID, appsGid: DEFAULT_APPS_ID }
 
 /**
  * Split one id dimension (uid or gid) of the rootless host budget:
