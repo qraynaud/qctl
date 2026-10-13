@@ -1,6 +1,6 @@
 {
   "name": "qctl",
-  "version": "0.4.0",
+  "version": "0.5.0-pre",
   "private": true,
   "type": "module",
   "workspaces": [
