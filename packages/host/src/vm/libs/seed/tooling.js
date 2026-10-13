@@ -29,8 +29,9 @@ export async function embedGuestTooling(stageDir, opts = {}) {
     target: opts.target,
     platform: opts.platform,
     platformModule: opts.platformModule,
-    // Soft-fail only when an explicit local dist override is incomplete (tests / dry paths).
-    required: !process.env.QCTL_GUEST_DIST?.trim(),
+    // Always required: a seed without qctl-guest boots into a dead first-boot.
+    // Incomplete QCTL_GUEST_DIST / checkout dist must fail loudly.
+    required: true,
   })
   if (!resolved) return []
 

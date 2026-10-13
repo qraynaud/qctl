@@ -6,7 +6,7 @@ import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 import { initInstance } from '../../../init.js'
 import { resetRepoRootCache } from '../../../lib/paths.js'
 import { embedGuestTooling } from './tooling.js'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 
 const origCwd = process.cwd()
 const origDist = process.env.QCTL_GUEST_DIST
@@ -88,7 +88,7 @@ describe('embedGuestTooling', () => {
     expect(existsSync(join(root, 'provision', '.env.schema'))).toBe(true)
   })
 
-  test('without dist binaries still creates qctl-guest dir', async () => {
+  test('QCTL_GUEST_DIST without qctl-guest fails hard', async () => {
     const base = makeTempDir()
     temps.push(base)
     const root = realpathSync(initInstance(join(base, 'inst')).root)
@@ -96,8 +96,14 @@ describe('embedGuestTooling', () => {
     process.env.QCTL_GUEST_DIST = join(base, 'nope')
     const out = join(base, 'cidata')
     mkdirSync(out, { recursive: true })
-    expect(await embedGuestTooling(out)).toEqual([])
-    expect(existsSync(join(out, 'qctl-guest', 'qctl-guest'))).toBe(false)
-    expect(existsSync(join(out, 'qctl-guest', 'bootstrap'))).toBe(false)
+    const exit = spyOn(process, 'exit').mockImplementation(
+      /** @param {number} [code] */
+      (code) => {
+        throw new Error(`exit ${code}`)
+      },
+    )
+    await expect(embedGuestTooling(out)).rejects.toThrow(/exit 1/)
+    expect(exit).toHaveBeenCalledWith(1)
+    exit.mockRestore()
   })
 })
