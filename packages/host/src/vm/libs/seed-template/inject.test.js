@@ -8,7 +8,12 @@ import { describe, expect, test } from 'bun:test'
 /** @import { YamlMapping } from '@qctl/shared' */
 
 /**
- * @typedef {{ path?: string, content?: string, permissions?: string } & YamlMapping} WriteFile
+ * @typedef {{
+ *   path?: string,
+ *   content?: string,
+ *   encoding?: string,
+ *   permissions?: string,
+ * } & YamlMapping} WriteFile
  */
 
 /**
@@ -41,6 +46,18 @@ describe('injectGuestCredentialFiles', () => {
       (w) => w.path === '/var/lib/rocky/tier0-pending/TANK_PASSPHRASE',
     )
     expect(tank?.content).toBe('new\n')
+    expect(tank?.encoding).toBeUndefined()
+  })
+
+  test('base64-encodes credentials with C0/DEL so cloud-init YAML stays valid', () => {
+    const binary = `gzip\u007f${String.fromCharCode(0x1f, 0x8b)}\n`
+    const out = injectGuestCredentialFiles({ write_files: [] }, { SSH_HOST_KEYS: binary })
+    const entry = writeFilesOf(out).find(
+      (w) => w.path === '/var/lib/rocky/tier0-pending/SSH_HOST_KEYS',
+    )
+    expect(entry?.encoding).toBe('base64')
+    expect(entry?.content).toBe(Buffer.from(binary, 'utf8').toString('base64'))
+    expect(String(entry?.content)).not.toMatch(/\u007f/)
   })
 })
 

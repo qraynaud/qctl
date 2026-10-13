@@ -1,17 +1,39 @@
 /**
  * Post-render cloud-config write_files injectors (Tier-0, packages, provision files).
  */
-import { withTrailingNewline } from './util.js'
+import { isCloudInitYamlSafe, withTrailingNewline } from './util.js'
 
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
 /** @import { NormalizedPackages } from '../../../provision/secrets-schema/packages.js' */
 
 /** @typedef {YamlMapping} CloudConfig */
 /**
- * @typedef {{ path?: string, content?: YamlValue } & YamlMapping} CloudWriteFile
+ * @typedef {{
+ *   path?: string,
+ *   content?: YamlValue,
+ *   encoding?: string,
+ * } & YamlMapping} CloudWriteFile
  */
 
 const TIER0_PENDING_PREFIX = '/var/lib/rocky/tier0-pending/'
+
+/**
+ * Plain text → trailing newline. Binary / control-heavy → base64 so PyYAML
+ * (cloud-init) does not reject the whole user-data document.
+ *
+ * @param {string} value
+ * @returns {Pick<CloudWriteFile, 'content' | 'encoding'>}
+ */
+function cloudInitFileContent(value) {
+  const raw = String(value ?? '')
+  if (isCloudInitYamlSafe(raw)) {
+    return { content: withTrailingNewline(raw) }
+  }
+  return {
+    encoding: 'base64',
+    content: Buffer.from(raw, 'utf8').toString('base64'),
+  }
+}
 
 /**
  * Embed every `@tag(guest)` value as a Tier-0 pending write_files entry
@@ -37,7 +59,7 @@ export function injectGuestCredentialFiles(userData, guest) {
       path: `${TIER0_PENDING_PREFIX}${key}`,
       owner: 'root:root',
       permissions: '0400',
-      content: withTrailingNewline(value),
+      ...cloudInitFileContent(value),
     })
   }
   userData.write_files = kept
