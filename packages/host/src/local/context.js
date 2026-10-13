@@ -9,7 +9,7 @@ import { defaultAppsSubidRange } from '../provision/secrets-schema/users.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { localContainerName, localTestContainerName } from './name.js'
 import { localPublishPodmanArgs } from './ports-publish.js'
-import { DEFAULT_APPS_IDS, appsUidMapPodmanArgs } from './uidmap.js'
+import { DEFAULT_APPS_IDS, localApplianceUidMapArgs } from './uidmap.js'
 import { die } from './util.js'
 
 /** @import { YamlMapping } from '@qctl/shared' */
@@ -107,6 +107,6 @@ export async function createLocalContext(argv, opts = {}) {
     ports,
     // Disposable tests skip host publishes so concurrent runs do not fight for forwards.
     publishArgs: disposable ? [] : localPublishPodmanArgs(ports),
-    uidMapArgs: appsUidMapPodmanArgs(appsUid, appsGid, appsSubuid, appsSubgid),
+    uidMapArgs: localApplianceUidMapArgs(appsUid, appsGid, appsSubuid, appsSubgid),
   }
 }

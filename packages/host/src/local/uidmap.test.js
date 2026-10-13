@@ -1,5 +1,5 @@
 import { defaultAppsSubidRange } from '../provision/secrets-schema/users.js'
-import { appsUidMapPodmanArgs } from './uidmap.js'
+import { appsUidMapPodmanArgs, localApplianceUidMapArgs } from './uidmap.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('appsUidMapPodmanArgs', () => {
@@ -45,5 +45,25 @@ describe('appsUidMapPodmanArgs', () => {
         { start: 900000, count: 32768 },
       ),
     ).toThrow(/overlaps the internal map/)
+  })
+})
+
+describe('localApplianceUidMapArgs', () => {
+  test('returns maps when CI is unset', () => {
+    const sub = defaultAppsSubidRange(900)
+    expect(localApplianceUidMapArgs(900, 900, sub, sub, {})).toEqual(
+      appsUidMapPodmanArgs(900, 900, sub, sub),
+    )
+  })
+
+  test('skips maps when CI is set', () => {
+    const sub = defaultAppsSubidRange(900)
+    expect(localApplianceUidMapArgs(900, 900, sub, sub, { CI: 'true' })).toEqual([])
+    expect(localApplianceUidMapArgs(900, 900, sub, sub, { CI: '1' })).toEqual([])
+  })
+
+  test('ignores blank CI', () => {
+    const sub = defaultAppsSubidRange(900)
+    expect(localApplianceUidMapArgs(900, 900, sub, sub, { CI: '  ' }).length).toBeGreaterThan(0)
   })
 })

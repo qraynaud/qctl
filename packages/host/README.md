@@ -100,6 +100,9 @@ Guest tooling (`qctl-guest` + platform module) is resolved like
 
 Shared: `--env` (default `dev`). Image override: `QCTL_LOCAL_IMAGE` (default
 `quay.io/podman/stable:latest`). Extra outer run args: `QCTL_LOCAL_PODMAN_RUN_ARGS`.
+When `CI` is set, the outer appliance omits `--uidmap`/`--gidmap` so nested rootful
+CI can create dummy VLAN parents (`ip link add … type dummy`); local rootless keeps
+the maps.
 
 ```bash
 qctl local up
