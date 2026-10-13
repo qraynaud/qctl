@@ -144,6 +144,7 @@ async function prepareLocalUp(argv) {
     allowMissingTier0: false,
     allowMissingFiles: false,
     env: env || 'dev',
+    target: argv.target || 'local',
   })
   const seed = await ensureSeed({
     isoPath: seedResult.isoPath,

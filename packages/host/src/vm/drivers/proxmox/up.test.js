@@ -1,12 +1,21 @@
+import * as seedRun from '../../libs/seed/run.js'
 import * as pipeline from '../../libs/up-pipeline.js'
+import * as shared from './shared.js'
 import { up } from './up.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
+/** @import { VmUpBackend } from '../../libs/up-pipeline.js' */
 /** @import { VmArgv } from '../../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
   pipeline.runVmUp.mockRestore?.()
+  // @ts-expect-error restore
+  seedRun.runSeed.mockRestore?.()
+  // @ts-expect-error restore
+  shared.ping.mockRestore?.()
+  // @ts-expect-error restore
+  process.exit.mockRestore?.()
 })
 
 describe('proxmox up', () => {
@@ -25,6 +34,69 @@ describe('proxmox up', () => {
       dryRun: expect.any(Function),
       findRunnableExisting: expect.any(Function),
       createFirstBoot: expect.any(Function),
+    })
+  })
+
+  test('createFirstBoot passes target=proxmox to runSeed', async () => {
+    const bag = {
+      /** @type {VmUpBackend<string, string>['createFirstBoot'] | null} */
+      createFirstBoot: null,
+    }
+    spyOn(pipeline, 'runVmUp').mockImplementation(async (_argv, b) => {
+      bag.createFirstBoot = /** @type {NonNullable<(typeof bag)['createFirstBoot']>} */ (
+        /** @type {never} */ (b.createFirstBoot)
+      )
+    })
+    spyOn(shared, 'ping').mockResolvedValue(
+      /** @type {Awaited<ReturnType<typeof shared.ping>>} */ (
+        /** @type {never} */ ({
+          config: { node: 'pve' },
+          findVmidByName: async () => null,
+        })
+      ),
+    )
+    const seed = spyOn(seedRun, 'runSeed').mockResolvedValue({
+      isoPath: '/tmp/qctl-missing-appliance.iso',
+      imgPath: '/tmp/qctl-missing-appliance.img',
+      profile: 'appliance',
+      env: 'dev',
+      instanceId: 'rocky-dev',
+      keepDir: null,
+    })
+    spyOn(process, 'exit').mockImplementation(
+      /** @param {number} [code] */
+      (code) => {
+        throw new Error(`exit ${code}`)
+      },
+    )
+
+    await up(
+      /** @type {VmArgv} */ ({
+        name: 'rocky-dev',
+        target: 'proxmox',
+        env: 'dev',
+        dryRun: false,
+      }),
+    )
+    expect(bag.createFirstBoot).toBeTypeOf('function')
+    await expect(
+      /** @type {NonNullable<(typeof bag)['createFirstBoot']>} */ (bag.createFirstBoot)(
+        /** @type {VmArgv} */ ({
+          name: 'rocky-dev',
+          target: 'proxmox',
+          env: 'dev',
+          wipeOs: false,
+          forceDownload: false,
+        }),
+        new AbortController().signal,
+        { wantSerial: false },
+      ),
+    ).rejects.toThrow(/exit 1/)
+    expect(seed).toHaveBeenCalled()
+    expect(seed.mock.calls[0]?.[0]).toMatchObject({
+      profile: 'appliance',
+      target: 'proxmox',
+      env: 'dev',
     })
   })
 })
