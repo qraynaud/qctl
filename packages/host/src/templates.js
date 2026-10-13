@@ -85,18 +85,30 @@ HEPTAPOD_REGISTRY=
 # PROXMOX_API_TOKEN=
 `
 
-export const PROVISION_ENV_PROD = `# Prod host bindings — use vw() + @plugin as needed.
-# @plugin(@qctl/vaultwarden-plugin@0.1.2)
-# @initVw(serverUrl=https://vw.example/, sessionTtl=1h, cacheTtl=5m)
+export const PROVISION_ENV_PROD = `# Prod host bindings — enable vw() when ready (see docs/secrets.md):
+#   Add "@qctl/vaultwarden-plugin" to package.json dependencies, then:
+#   # @plugin(@qctl/vaultwarden-plugin)
+#   # @initVw(serverUrl=https://vw.example/, sessionTtl=1h, cacheTtl=5m)
+#   TANK_PASSPHRASE=vw("rocky", field="tank-passphrase")
+#   DEPLOY_KEY=vw("rocky", attachment="heptapod-deploy-key")
 # ---
-TANK_PASSPHRASE=vw("rocky", field="tank-passphrase")
+TANK_PASSPHRASE=
 SSH_HOST_KEYS=
 # Uncomment users.admin in provision YAML to wire these:
-# ADMIN_USERNAME=vw("rocky", field="username")
-# ADMIN_PASSWORD=vw("rocky", field="password")
-DEPLOY_KEY=vw("rocky", attachment="heptapod-deploy-key")
+# ADMIN_USERNAME=
+# ADMIN_PASSWORD=
+DEPLOY_KEY=
 HEPTAPOD_REGISTRY=
-# PROXMOX_API_TOKEN=vw("proxmox", field="api-token")
+# PROXMOX_API_TOKEN=
+`
+
+/** Instance package.json — add plugin deps when enabling \`# @plugin\` (see docs/secrets.md). */
+export const PACKAGE_JSON = `{
+  "name": "qctl-instance",
+  "private": true,
+  "type": "module",
+  "dependencies": {}
+}
 `
 
 /** Non-secret root values for QCTL_ENV=dev (literal values: varlock, not bash \`source\`). */
@@ -106,10 +118,10 @@ TZ=UTC
 `
 
 /** Non-secret root values for QCTL_ENV=prod (package schemas import the repo root). */
-export const ROOT_ENV_PROD = `# Shared prod values. For Vaultwarden unlock + vw() in unit graphs, pin a plugin here, e.g.:
-#   # @plugin(@qctl/vaultwarden-plugin@0.1.2)
+export const ROOT_ENV_PROD = `# Shared prod values. For Vaultwarden unlock + vw() in unit graphs:
+#   # @plugin(@qctl/vaultwarden-plugin)
 #   # @initVw(appDataDir=/vw, clientId=$VW_CLIENT_ID, clientSecret=$VW_CLIENT_SECRET, masterPassword=$VW_MASTER_PASSWORD, cacheTtl=5m)
-# and declare VW_* for unlock. First-boot secrets: provision/.env.<env>. See docs/secrets.md.
+# List the plugin in package.json dependencies (version via lockfile). See docs/secrets.md.
 # ---
 ENV=prod
 TANK_ROOT=/tank/apps

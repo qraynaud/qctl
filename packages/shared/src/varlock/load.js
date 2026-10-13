@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { loadEnvGraph } from './builtins.js'
 import { hydrateSystemdCredentials } from './hydrate.js'
-import { ensureNpmPluginsFromDir } from './plugins.js'
+import { ensurePackageDependencies, isVarlockUnresolvedPluginError } from './plugins.js'
 import { keysWithTag } from './project.js'
 import { declaresSensitive } from './sensitivity.js'
 import { GUEST_TAG } from './tags.js'
@@ -23,11 +23,11 @@ import { GUEST_TAG } from './tags.js'
  *   when true, disable varlock encrypted cache (default false so `@initVw`
  *   interactive unlock can persist `sessionTtl` like official `@initBwp`).
  * @property {boolean} [skipPluginEnsure]
- *   when true, skip `downloadPluginToCache` for `# @plugin` pins (tests / offline).
+ *   when true, skip one-shot package.json reify after a missing-plugin schema error.
  */
 
 /**
- * @param {unknown} err
+ * @param {unknown} err caught value (catch edge — narrowed to Error here)
  * @returns {string}
  */
 function errMessage(err) {
@@ -104,10 +104,23 @@ async function resolveEnvValues(graph, onlyKeys) {
 }
 
 /**
+ * @param {EnvGraph} graph
+ * @returns {string | null} joined schema error text, or null when graph is usable
+ */
+function schemaFailureBlob(graph) {
+  const schemaErrs = schemaErrorLines(graph)
+  if (graph.configItemsProcessed && schemaErrs.length === 0) return null
+  return schemaErrs.join('\n') || 'graph failed to load'
+}
+
+/**
  * Load + resolve the varlock graph for a schema directory.
  *
  * Entry = the directory itself (`currentEnvFallback` autoloads `.env.<env>`). Optional
  * `extraEntryPaths` are appended.
+ *
+ * On varlock’s unresolved-plugin schema error, reifies `package.json` **once** and
+ * reloads (no loop).
  *
  * Throws on schema errors and on any item resolution/validation error.
  *
@@ -127,37 +140,39 @@ export async function loadEnvGraphForDir(dir, opts = {}) {
 
   const extra = opts.extraEntryPaths ?? []
 
-  // Headless-safe: install-plugin equivalent before graph load (guest install + day-2).
-  if (opts.skipPluginEnsure !== true) {
+  /**
+   * @returns {Promise<EnvGraph>}
+   */
+  async function loadOnce() {
     try {
-      await ensureNpmPluginsFromDir(dir)
+      return await loadEnvGraph({
+        entryFilePaths: [dir, ...extra],
+        currentEnvFallback: qctlEnv,
+        overrideValues,
+        processEnvOverride: overrideValues,
+        skipCache: opts.skipCache === true,
+      })
     } catch (err) {
-      throw new Error(`varlock plugin ensure failed for ${dir}: ${errMessage(err)}`)
+      throw new Error(`varlock graph load failed for ${dir}: ${errMessage(err)}`)
     }
   }
 
   /** @type {EnvGraph} */
-  let graph
-  try {
-    graph = await loadEnvGraph({
-      entryFilePaths: [dir, ...extra],
-      currentEnvFallback: qctlEnv,
-      overrideValues,
-      processEnvOverride: overrideValues,
-      skipCache: opts.skipCache === true,
-    })
-  } catch (err) {
-    throw new Error(`varlock graph load failed for ${dir}: ${errMessage(err)}`)
+  let graph = await loadOnce()
+  let failBlob = schemaFailureBlob(graph)
+
+  if (failBlob && opts.skipPluginEnsure !== true && isVarlockUnresolvedPluginError(failBlob)) {
+    try {
+      await ensurePackageDependencies(dir, { qctlEnv, env: base })
+    } catch (err) {
+      throw new Error(`varlock plugin ensure failed for ${dir}: ${errMessage(err)}`)
+    }
+    graph = await loadOnce()
+    failBlob = schemaFailureBlob(graph)
   }
 
-  const schemaErrs = schemaErrorLines(graph)
-  if (!graph.configItemsProcessed) {
-    throw new Error(
-      `invalid schema in ${dir}:\n  ${schemaErrs.join('\n  ') || 'graph failed to load'}`,
-    )
-  }
-  if (schemaErrs.length > 0) {
-    throw new Error(`invalid schema in ${dir}:\n  ${schemaErrs.join('\n  ')}`)
+  if (failBlob) {
+    throw new Error(`invalid schema in ${dir}:\n  ${failBlob.split('\n').join('\n  ')}`)
   }
 
   try {

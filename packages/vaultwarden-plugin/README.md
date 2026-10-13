@@ -3,7 +3,7 @@
 [Varlock](https://varlock.dev) plugin for **Vaultwarden** / Bitwarden Password Manager via the official [`bw`](https://bitwarden.com/help/cli/) CLI.
 
 ```env
-# @plugin(@qctl/vaultwarden-plugin@0.1.1)
+# @plugin(@qctl/vaultwarden-plugin)
 # @initVw(sessionToken=$BW_SESSION, cacheTtl=5m)
 # @initVw(id=work, appDataDir=/vw-work, sessionToken=$BW_SESSION_WORK)
 # ---
@@ -42,13 +42,26 @@ It does **not** implement Secrets Manager (`bitwarden()`). For that, use the off
 
 ## Install
 
-Pin a version in your schema (varlock downloads it into the plugin cache when there is no local install):
+Version SoT is the instance `package.json` / lockfile. Add the dependency (qctl
+installs `node_modules` via Arborist — no npm CLI):
 
-```env
-# @plugin(@qctl/vaultwarden-plugin@0.1.1)
+```json
+{
+  "dependencies": {
+    "@qctl/vaultwarden-plugin": "0.1.5"
+  }
+}
 ```
 
-Or install as a normal dependency in a JS project and load by package name / path.
+Reference it in env-spec **without** an `@version` pin:
+
+```env
+# @plugin(@qctl/vaultwarden-plugin)
+```
+
+Varlock prefers `node_modules` over its plugins-cache. Do not rely on cache-only
+installs. Commit `package-lock.json` after a local `QCTL_ENV=dev` ensure/load —
+CI and non-`dev` envs use a **frozen** lockfile install.
 
 **Prerequisite:** `bw` on `PATH` for the process that resolves the graph.
 
@@ -57,7 +70,7 @@ Or install as a normal dependency in a JS project and load by package name / pat
 Initialize once in a file that other schemas import:
 
 ```env
-# @plugin(@qctl/vaultwarden-plugin@0.1.1)
+# @plugin(@qctl/vaultwarden-plugin)
 # @initVw(
 #   appDataDir=/vw,
 #   serverUrl=https://vw.example.com/,

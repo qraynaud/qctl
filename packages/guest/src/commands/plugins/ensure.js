@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs'
 
-import { BOOTSTRAP_DIR_DEFAULT, ensureNpmPluginsFromDir, resolveBootstrapDir } from '@qctl/shared'
+import { ensurePackageDependencies, findInstanceRoot, findPackageRoot } from '@qctl/shared'
 
 /** @import { Argv } from 'yargs' */
 
 export const command = 'ensure'
 export const describe =
-  'Download `# @plugin(name@version)` pins into plugins-cache (like `varlock install-plugin`)'
+  'Install instance package.json deps into node_modules (varlock # @plugin resolution)'
 
 /**
  * @param {Argv} yargs
@@ -15,47 +15,60 @@ export function builder(yargs) {
   return yargs
     .option('dir', {
       type: 'string',
-      array: true,
       describe:
-        'Env-spec directory to scan (repeatable). Default: bootstrap dir '
-        + `(${BOOTSTRAP_DIR_DEFAULT} or $QCTL_BOOTSTRAP_DIR)`,
+        'Directory to start from when locating package.json (default: instance root or cwd)',
     })
     .epilogue(
-      'Writes to `$XDG_CONFIG_HOME/varlock/plugins-cache` (default `~/.config/varlock/plugins-cache`).\n'
-        + 'Guest cloud-init runs this after installing bootstrap/; graph loads also ensure pins.',
+      'Varlock loads third-party plugins from node_modules. qctl runs an in-process '
+        + 'npm install (Arborist) — no npm CLI required. Graph loads also ensure deps '
+        + 'when needed. Frozen (package-lock only, no lock rewrite) when CI=true or '
+        + 'QCTL_ENV is not dev.',
     )
 }
 
 /**
  * @typedef {object} PluginsEnsureArgv
- * @property {string[]} [dir]
+ * @property {string} [dir]
  */
 
 /**
  * @param {PluginsEnsureArgv} argv
  */
 export async function handler(argv) {
-  const dirs =
-    Array.isArray(argv.dir) && argv.dir.length > 0
-      ? argv.dir.map((d) => String(d))
-      : [resolveBootstrapDir()]
+  const start =
+    typeof argv.dir === 'string' && argv.dir.trim()
+      ? argv.dir.trim()
+      : findInstanceRoot(process.cwd()) || process.cwd()
 
-  let any = false
-  for (const dir of dirs) {
-    if (!existsSync(dir)) {
-      console.error(`qctl plugins ensure: missing dir ${dir}`)
-      process.exitCode = 1
-      return
-    }
-    const { pins, cached } = await ensureNpmPluginsFromDir(dir)
-    if (pins.length === 0) {
-      console.log(`qctl plugins ensure: ${dir} — no @plugin pins`)
-      continue
-    }
-    any = true
-    for (let i = 0; i < pins.length; i++) {
-      console.log(`qctl plugins ensure: ${pins[i].descriptor} → ${cached[i] || '(cached)'}`)
-    }
+  if (!existsSync(start)) {
+    console.error(`qctl plugins ensure: missing dir ${start}`)
+    process.exitCode = 1
+    return
   }
-  if (!any) console.log('qctl plugins ensure: nothing to install')
+
+  const pkgRoot = findPackageRoot(start)
+  if (!pkgRoot) {
+    console.error(
+      `qctl plugins ensure: no package.json above ${start}\n`
+        + '  Add package.json with plugin dependencies (see qctl init).',
+    )
+    process.exitCode = 1
+    return
+  }
+
+  try {
+    const { installed, frozen } = await ensurePackageDependencies(pkgRoot, {
+      qctlEnv: process.env.QCTL_ENV,
+      env: process.env,
+    })
+    const mode = frozen ? 'frozen' : 'mutable'
+    if (installed) {
+      console.log(`qctl plugins ensure: installed deps in ${pkgRoot} (${mode})`)
+    } else {
+      console.log(`qctl plugins ensure: node_modules already satisfied (${pkgRoot}, ${mode})`)
+    }
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exitCode = 1
+  }
 }

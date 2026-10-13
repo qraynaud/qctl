@@ -34,12 +34,20 @@ qctl --help
 qctl init .
 ```
 
-That writes schemas, `provision/`, `applications/` / `networks/` stubs, and a matching
-`mise.toml` (existing `mise.toml` is left alone unless you pass `--force`).
+That writes schemas, root `package.json` (varlock plugin deps → `node_modules`),
+`provision/`, `applications/` / `networks/` stubs, and a matching `mise.toml`
+(existing `mise.toml` is left alone unless you pass `--force`).
 
 Edit `provision/<env>.yaml` (and optional `provision/<env>.local.yaml` /
 `provision/<env>.proxmox.yaml` overlays) for networking, users, tank, and hypervisor
 sizing — see [docs/provision.md](docs/provision.md) for every field and commented samples.
+
+Varlock `# @plugin` packages must be listed in the instance `package.json`
+`dependencies` (version SoT). In schemas use `# @plugin(@scope/name)` without a
+version pin. qctl installs them into `node_modules` (no npm CLI). Commit
+`package-lock.json` after a local `dev` install — CI and non-`dev` envs use a
+**frozen** lockfile install. Details: [docs/secrets.md](docs/secrets.md),
+[packages/guest/README.md](packages/guest/README.md).
 
 ## CLI reference
 

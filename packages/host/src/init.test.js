@@ -95,6 +95,7 @@ describe('initInstance', () => {
     const root = makeTempDir()
     temps.push(root)
     const { root: dir } = initInstance(join(root, 'demo'))
+    expect(existsSync(join(dir, 'package.json'))).toBe(true)
     expect(existsSync(join(dir, '.env.dev'))).toBe(true)
     expect(existsSync(join(dir, '.env.prod'))).toBe(true)
     const prodFile = readFileSync(join(dir, '.env.prod'), 'utf8')

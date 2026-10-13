@@ -1,118 +1,170 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-
-import { internal } from 'varlock'
-
 /**
- * @typedef {{ moduleName: string, version: string, descriptor: string }} NpmPluginPin
- */
-
-/** `# @plugin(name@version)` — local paths / unversioned pins are ignored. */
-const PLUGIN_RE = /#\s*@plugin\(\s*([^)\s]+)\s*\)/g
-
-/**
- * Collect exact npm `@plugin(name@version)` pins from env-spec text.
- * Skips local paths and unversioned specs (binary/cache mode needs an exact version).
+ * Varlock third-party plugins via instance `package.json` + `node_modules`.
  *
+ * Varlock prefers `node_modules/<pkg>` (walk from the env file). The plugins-cache
+ * / TTY-confirm path is unsuitable for non-self-contained plugins, so qctl installs
+ * deps with `@npmcli/arborist` (no npm CLI required).
+ *
+ * Graph loads do not scan `# @plugin` (imports are varlock’s job). On varlock’s
+ * “unable to resolve — install locally via package.json” error, ensure reifies once
+ * and the load is retried.
+ */
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+
+/**
+ * Distinctive varlock message when a `# @plugin` package is not in node_modules.
+ * Keep in sync with a real load failure — see plugins.test.js.
+ */
+export const VARLOCK_UNRESOLVED_PLUGIN_RE =
+  /Plugin "[^"]+" unable to resolve - install locally via your package\.json file/
+
+/**
  * @param {string} text
- * @returns {NpmPluginPin[]}
+ * @returns {boolean}
  */
-export function collectNpmPluginPins(text) {
-  /** @type {Map<string, NpmPluginPin>} */
-  const byDescriptor = new Map()
-  for (const match of text.matchAll(PLUGIN_RE)) {
-    const raw = match[1]?.trim()
-    if (!raw) continue
-    if (raw.startsWith('.') || raw.startsWith('/') || raw.startsWith('file:')) continue
-    const at = raw.lastIndexOf('@')
-    if (at <= 0) continue
-    const moduleName = raw.slice(0, at)
-    const version = raw.slice(at + 1)
-    if (!moduleName || !version || version.includes('/') || version.includes('..')) continue
-    const descriptor = `${moduleName}@${version}`
-    byDescriptor.set(descriptor, { moduleName, version, descriptor })
-  }
-  return [...byDescriptor.values()]
+export function isVarlockUnresolvedPluginError(text) {
+  return VARLOCK_UNRESOLVED_PLUGIN_RE.test(text)
 }
 
 /**
- * Scan a directory for `.env*` files and collect npm plugin pins.
+ * Walk `startDir` and parents for a `package.json` (instance root).
  *
- * @param {string} dir
- * @returns {NpmPluginPin[]}
+ * @param {string} startDir
+ * @returns {string | null} directory containing package.json
  */
-export function collectNpmPluginPinsFromDir(dir) {
-  /** @type {Map<string, NpmPluginPin>} */
-  const byDescriptor = new Map()
-  let names
+export function findPackageRoot(startDir) {
+  let current = startDir
+  for (;;) {
+    if (existsSync(join(current, 'package.json'))) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    current = parent
+  }
+}
+
+/**
+ * @param {string} pkgRoot
+ * @returns {Record<string, string>}
+ */
+export function readPackageDependencyMap(pkgRoot) {
+  const raw = readFileSync(join(pkgRoot, 'package.json'), 'utf8')
+  /** @type {{ dependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }} */
+  let pkg
   try {
-    names = readdirSync(dir)
-  } catch {
-    return []
+    pkg = JSON.parse(raw)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`invalid package.json in ${pkgRoot}: ${msg}`)
   }
-  for (const name of names) {
-    if (!name.startsWith('.env')) continue
-    let text
-    try {
-      text = readFileSync(join(dir, name), 'utf8')
-    } catch {
-      continue
-    }
-    for (const pin of collectNpmPluginPins(text)) {
-      byDescriptor.set(pin.descriptor, pin)
-    }
-  }
-  return [...byDescriptor.values()]
+  return { ...(pkg.optionalDependencies ?? {}), ...(pkg.dependencies ?? {}) }
 }
 
 /**
- * Download npm plugins into `$XDG_CONFIG_HOME/varlock/plugins-cache` (or the
- * default user varlock dir). Same path as `varlock install-plugin` — no TTY confirm.
- * Requires the bun patch that exposes `internal.downloadPluginToCache`.
- *
- * @param {NpmPluginPin[]} pins
- * @param {{ xdgConfigHome?: string }} [opts]
- * @returns {Promise<string[]>} cache directories for each pin
+ * @param {string} pkgRoot
+ * @param {string} moduleName
+ * @returns {boolean}
  */
-export async function prefetchNpmPlugins(pins, opts = {}) {
-  const download = internal.downloadPluginToCache
-  if (typeof download !== 'function') {
+export function isPackageInstalled(pkgRoot, moduleName) {
+  return existsSync(join(pkgRoot, 'node_modules', ...moduleName.split('/')))
+}
+
+/**
+ * True when every `dependencies` / `optionalDependencies` entry is present under node_modules.
+ *
+ * @param {string} pkgRoot
+ * @returns {boolean}
+ */
+export function packageDepsSatisfied(pkgRoot) {
+  const deps = readPackageDependencyMap(pkgRoot)
+  for (const name of Object.keys(deps)) {
+    if (!isPackageInstalled(pkgRoot, name)) return false
+  }
+  return true
+}
+
+/**
+ * Frozen install when `CI=true` or `QCTL_ENV` is set and not `dev`.
+ *
+ * @param {{ qctlEnv?: string, env?: Record<string, string | undefined> }} [opts]
+ * @returns {boolean}
+ */
+export function shouldUseFrozenPackageInstall(opts = {}) {
+  const env = opts.env ?? process.env
+  if (String(env.CI ?? '') === 'true') return true
+  const qctlEnv = opts.qctlEnv ?? env.QCTL_ENV ?? 'dev'
+  return String(qctlEnv) !== 'dev'
+}
+
+/**
+ * Install `package.json` deps into `node_modules` via Arborist (no npm CLI).
+ * Frozen mode requires `package-lock.json` and does not rewrite it (`save: false`).
+ *
+ * @param {string} pkgRoot
+ * @param {{ frozen?: boolean }} [opts]
+ * @returns {Promise<void>}
+ */
+export async function installPackageDependencies(pkgRoot, opts = {}) {
+  const frozen = opts.frozen === true
+  const lockPath = join(pkgRoot, 'package-lock.json')
+  if (frozen && !existsSync(lockPath)) {
     throw new Error(
-      'varlock.internal.downloadPluginToCache missing — apply patches/varlock@*.patch (bun install)',
+      `frozen install requires package-lock.json in ${pkgRoot}\n`
+        + '  Run a non-frozen install with QCTL_ENV=dev (and CI unset) to generate it, then commit the lockfile.',
     )
   }
-  if (pins.length === 0) return []
 
-  const prevXdg = process.env.XDG_CONFIG_HOME
-  if (opts.xdgConfigHome !== undefined) {
-    process.env.XDG_CONFIG_HOME = opts.xdgConfigHome
+  const { Arborist } = await import('@npmcli/arborist')
+  /** @type {{ path: string, save?: boolean, packageLock?: boolean }} */
+  const arbOpts = { path: pkgRoot }
+  if (frozen) {
+    arbOpts.save = false
+    arbOpts.packageLock = true
   }
-  try {
-    /** @type {string[]} */
-    const cached = []
-    for (const pin of pins) {
-      cached.push(await download(pin.moduleName, pin.version))
-    }
-    return cached
-  } finally {
-    if (opts.xdgConfigHome !== undefined) {
-      if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME
-      else process.env.XDG_CONFIG_HOME = prevXdg
-    }
-  }
+  const arb = new Arborist(arbOpts)
+  await arb.reify(arbOpts)
 }
 
 /**
- * Ensure every `# @plugin(name@version)` pin under `dir` is in plugins-cache
- * (guest install / graph load — replaces host seed prefetch).
+ * Ensure the nearest `package.json` above `startDir` has `node_modules` installed
+ * when declared dependencies are missing. No `# @plugin` scanning — package.json is SoT.
  *
- * @param {string} dir
- * @param {{ xdgConfigHome?: string }} [opts]
- * @returns {Promise<{ pins: NpmPluginPin[], cached: string[] }>}
+ * @param {string} startDir
+ * @param {{
+ *   skipInstall?: boolean,
+ *   qctlEnv?: string,
+ *   env?: Record<string, string | undefined>,
+ *   frozen?: boolean,
+ * }} [opts]
+ * @returns {Promise<{ root: string | null, installed: boolean, frozen: boolean }>}
  */
-export async function ensureNpmPluginsFromDir(dir, opts = {}) {
-  const pins = collectNpmPluginPinsFromDir(dir)
-  if (pins.length === 0) return { pins, cached: [] }
-  const cached = await prefetchNpmPlugins(pins, opts)
-  return { pins, cached }
+export async function ensurePackageDependencies(startDir, opts = {}) {
+  const pkgRoot = findPackageRoot(startDir)
+  const frozen =
+    opts.frozen === true || shouldUseFrozenPackageInstall({ qctlEnv: opts.qctlEnv, env: opts.env })
+
+  if (!pkgRoot) {
+    return { root: null, installed: false, frozen }
+  }
+
+  if (opts.skipInstall === true) {
+    return { root: pkgRoot, installed: false, frozen }
+  }
+
+  const declared = readPackageDependencyMap(pkgRoot)
+  if (Object.keys(declared).length === 0) {
+    return { root: pkgRoot, installed: false, frozen }
+  }
+
+  if (packageDepsSatisfied(pkgRoot)) {
+    return { root: pkgRoot, installed: false, frozen }
+  }
+
+  try {
+    await installPackageDependencies(pkgRoot, { frozen })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`npm install failed for ${pkgRoot}: ${msg}`)
+  }
+  return { root: pkgRoot, installed: true, frozen }
 }

@@ -29,10 +29,13 @@ Scaffold a new instance repository (default: `.`).
 | `[dir]` | `.` | Target directory |
 | `--force` | `false` | Overwrite existing scaffold files |
 
-Writes `mise.toml`, root `.env.schema` / `.env.dev` / `.env.prod`,
+Writes `mise.toml`, root `package.json` (plugin deps for varlock `# @plugin`;
+qctl installs `node_modules`), root `.env.schema` / `.env.dev` / `.env.prod`,
 `provision/.env.schema` + `.env.dev` / `.env.prod` (Tier-0 / provision `!env`
 bindings), `provision/` YAML stubs, and empty `applications/` / `common/` /
 `networks/` trees. An existing `mise.toml` is left alone unless `--force`.
+Generate and commit `package-lock.json` with a local `QCTL_ENV=dev` ensure/load
+before CI or non-`dev` (frozen installs require the lockfile).
 
 ### `qctl sync`
 

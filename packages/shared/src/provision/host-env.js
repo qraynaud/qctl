@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { GUEST_TAG, keysWithTag, loadEnvGraph } from '../varlock/index.js'
+import { GUEST_TAG, keysWithTag, loadEnvGraphForDir } from '../varlock/index.js'
 
 /** Directory under the instance root for host/provision env + YAML. */
 export const PROVISION_DIR = 'provision'
@@ -30,6 +30,8 @@ export function provisionEnvDir(root) {
  * from `provision/.env.schema` + `.env.<QCTL_ENV>` (+ `.env.local`).
  * When the provision schema is missing, returns process env only (no guest tags).
  *
+ * Plugin install: same one-shot reify-on-unresolved-plugin path as `loadEnvGraphForDir`.
+ *
  * @param {string} root
  * @param {NodeJS.ProcessEnv} [processEnv]
  * @returns {Promise<HostEnvLoad>}
@@ -47,56 +49,20 @@ export async function loadHostEnvDetailed(root, processEnv = process.env) {
     return { env: base, guest: {} }
   }
 
-  /** @type {string[]} */
-  const entryFilePaths = [provDir]
   const localPath = join(provDir, '.env.local')
-  if (existsSync(localPath)) entryFilePaths.push(localPath)
-  const label = 'provision/.env'
+  /** @type {Awaited<ReturnType<typeof loadEnvGraphForDir>>} */
+  const graph = await loadEnvGraphForDir(provDir, {
+    env: /** @type {Record<string, string | undefined>} */ (processEnv),
+    qctlEnv,
+    extraEntryPaths: existsSync(localPath) ? [localPath] : [],
+  })
 
-  /** @type {Awaited<ReturnType<typeof loadEnvGraph>>} */
-  let graph
-  try {
-    graph = await loadEnvGraph({
-      entryFilePaths,
-      currentEnvFallback: qctlEnv,
-      overrideValues: { ...processEnv },
-      processEnvOverride: { ...processEnv },
-      skipCache: false,
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`${label} graph load failed: ${msg}`)
-  }
-
-  /** @type {string[]} */
-  const schemaErrs = []
-  for (const src of graph.sortedDataSources) {
-    for (const e of src.errors) if (!e.isWarning) schemaErrs.push(`${src.label}: ${e.message}`)
-    for (const e of src.resolutionErrors) schemaErrs.push(`${src.label}: ${e.message}`)
-  }
-  if (!graph.configItemsProcessed || schemaErrs.length > 0) {
-    throw new Error(`invalid ${label}:\n  ${schemaErrs.join('\n  ') || 'graph failed to load'}`)
-  }
-
-  try {
-    await graph.resolveEnvValues()
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`${label} resolve failed: ${msg}`)
-  }
-
-  /** @type {string[]} */
-  const itemErrs = []
   /** @type {Record<string, string>} */
   const fromHost = {}
   for (const [key, item] of Object.entries(graph.configSchema)) {
-    for (const e of item.errors) if (!e.isWarning) itemErrs.push(`${key}: ${e.message}`)
     const v = item.resolvedValue
     // Keep empty strings so optional `!env` slots resolve to "" instead of "not set".
     if (v !== undefined && v !== null) fromHost[key] = String(v)
-  }
-  if (itemErrs.length > 0) {
-    throw new Error(`invalid ${label} values:\n  ${itemErrs.join('\n  ')}`)
   }
 
   const env = { ...fromHost, ...base }

@@ -39,19 +39,24 @@ List or run a single init stage (debugging / resume).
 
 ### `qctl plugins ensure`
 
-Download `# @plugin(name@version)` pins into the local varlock plugins-cache
-(like `varlock install-plugin`). Cloud-init runs this after installing `bootstrap/`;
-graph loads also ensure pins when needed.
+Install the instance `package.json` dependencies into `node_modules` (in-process
+Arborist — no npm CLI). Varlock resolves `# @plugin` packages from `node_modules`
+(not plugins-cache). Graph loads reify once on varlock’s unresolved-plugin error.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--dir` | bootstrap dir | Env-spec directory to scan (repeatable). Default: `/usr/local/lib/qctl/bootstrap` or `$QCTL_BOOTSTRAP_DIR` |
+| `--dir` | instance root / cwd | Directory used to locate `package.json` |
 
-Writes to `$XDG_CONFIG_HOME/varlock/plugins-cache` (default `~/.config/varlock/plugins-cache`).
+Install mode:
+
+- **Mutable** when `QCTL_ENV=dev` and `CI` is not `true` — may create/update
+  `package-lock.json`.
+- **Frozen** when `CI=true` or `QCTL_ENV` is not `dev` — requires a committed
+  `package-lock.json` and does not rewrite it.
 
 ```bash
 qctl plugins ensure
-qctl plugins ensure --dir /usr/local/lib/qctl/bootstrap
+qctl plugins ensure --dir /tank/rocky
 ```
 
 ### `qctl quadlet …`
