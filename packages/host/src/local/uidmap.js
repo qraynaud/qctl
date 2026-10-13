@@ -88,4 +88,30 @@ export function appsUidMapPodmanArgs(
   ]
 }
 
+/**
+ * Outer appliance `--uidmap` / `--gidmap` for `qctl local …`.
+ *
+ * When `CI` is set (GitLab/GitHub/…), return no maps: rootful nested Podman under a
+ * privileged job cannot create dummy VLAN parents if container root is remapped
+ * (`RTNETLINK … Operation not permitted`). Local rootless keeps the maps so apps
+ * aligns with the host user.
+ *
+ * @param {number} appsUid
+ * @param {number} appsGid
+ * @param {{ start: number, count: number }} appsSubuid
+ * @param {{ start: number, count: number }} appsSubgid
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string[]}
+ */
+export function localApplianceUidMapArgs(
+  appsUid,
+  appsGid,
+  appsSubuid,
+  appsSubgid,
+  env = process.env,
+) {
+  if (String(env.CI ?? '').trim()) return []
+  return appsUidMapPodmanArgs(appsUid, appsGid, appsSubuid, appsSubgid)
+}
+
 export { MAX_APPS_SUBID_COUNT as MAX_APPS_SUBUID_COUNT }
