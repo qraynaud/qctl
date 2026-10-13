@@ -1,20 +1,48 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
   collectNpmPluginPins,
   collectNpmPluginPinsFromDir,
-  ensureNpmPluginsFromDir,
-  prefetchNpmPlugins,
+  ensurePackageDependencies,
+  findPackageRoot,
+  installPackageDependencies,
+  isPackageInstalled,
+  packageDepsSatisfied,
+  parseNpmPluginDescriptor,
+  parseNpmPluginRef,
+  readPackageDependencyMap,
+  shouldUseFrozenPackageInstall,
 } from './plugins.js'
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+
+/** @type {string[]} */
+const temps = []
+
+afterEach(async () => {
+  const { rmSync } = await import('node:fs')
+  while (temps.length) {
+    const dir = temps.pop()
+    if (dir) rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * @returns {Promise<string>}
+ */
+async function tempDir() {
+  const dir = await mkdtemp(join(tmpdir(), 'qctl-pkg-'))
+  temps.push(dir)
+  return dir
+}
 
 describe('collectNpmPluginPins', () => {
-  test('extracts exact npm pins and skips local / unversioned', () => {
+  test('collects versioned and unversioned npm refs; skips local paths', () => {
     const pins = collectNpmPluginPins(
       [
-        '# @plugin(@qctl/vaultwarden-plugin@0.1.1)',
+        '# @plugin(@qctl/vaultwarden-plugin)',
         '# @plugin(./local-plugin)',
         '# @plugin(@varlock/bitwarden-plugin@1.2.3)',
         '# @plugin(@qctl/vaultwarden-plugin@0.1.1)',
@@ -25,66 +53,136 @@ describe('collectNpmPluginPins', () => {
     expect(pins.map((p) => p.descriptor).sort()).toEqual([
       '@qctl/vaultwarden-plugin@0.1.1',
       '@varlock/bitwarden-plugin@1.2.3',
+      'some-plugin',
     ])
   })
 })
 
 describe('collectNpmPluginPinsFromDir', () => {
   test('scans .env* files in a directory', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-plugin-pins-'))
-    await writeFile(join(dir, '.env.schema'), '# ---\nX=\n')
-    await writeFile(
-      join(dir, '.env.prod'),
-      '# @plugin(@qctl/vaultwarden-plugin@0.1.1)\nTANK_PASSPHRASE=\n',
-    )
-    await writeFile(join(dir, 'readme.txt'), '# @plugin(ignored@1.0.0)\n')
+    const dir = await tempDir()
+    writeFileSync(join(dir, '.env.schema'), '# ---\nX=\n')
+    writeFileSync(join(dir, '.env.prod'), '# @plugin(@qctl/vaultwarden-plugin)\nTANK_PASSPHRASE=\n')
+    writeFileSync(join(dir, 'readme.txt'), '# @plugin(ignored@1.0.0)\n')
     const pins = collectNpmPluginPinsFromDir(dir)
     expect(pins).toEqual([
       {
         moduleName: '@qctl/vaultwarden-plugin',
-        version: '0.1.1',
-        descriptor: '@qctl/vaultwarden-plugin@0.1.1',
+        descriptor: '@qctl/vaultwarden-plugin',
       },
     ])
   })
 })
 
-describe('prefetchNpmPlugins (bun patch)', () => {
-  test('downloadPluginToCache writes plugins-cache under XDG_CONFIG_HOME', async () => {
-    const xdg = await mkdtemp(join(tmpdir(), 'qctl-xdg-'))
-    await mkdir(xdg, { recursive: true })
-    const cached = await prefetchNpmPlugins(
-      [
-        {
-          moduleName: '@qctl/vaultwarden-plugin',
-          version: '0.1.1',
-          descriptor: '@qctl/vaultwarden-plugin@0.1.1',
-        },
-      ],
-      { xdgConfigHome: xdg },
-    )
-    expect(cached.length).toBe(1)
-    expect(cached[0]).toContain('plugins-cache')
-    expect(cached[0].startsWith(join(xdg, 'varlock'))).toBe(true)
-  }, 60_000)
-})
-
-describe('ensureNpmPluginsFromDir', () => {
-  test('no-op when no pins', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-plugin-empty-'))
-    await writeFile(join(dir, '.env.schema'), '# ---\nX=\n')
-    const r = await ensureNpmPluginsFromDir(dir)
-    expect(r.pins).toEqual([])
-    expect(r.cached).toEqual([])
+describe('parseNpmPluginRef / parseNpmPluginDescriptor', () => {
+  test('parses unversioned scoped name', () => {
+    expect(parseNpmPluginRef('@qctl/vaultwarden-plugin')).toEqual({
+      moduleName: '@qctl/vaultwarden-plugin',
+      descriptor: '@qctl/vaultwarden-plugin',
+    })
   })
 
-  test('downloads pins from dir into XDG plugins-cache', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-plugin-dir-'))
-    const xdg = await mkdtemp(join(tmpdir(), 'qctl-xdg-'))
-    await writeFile(join(dir, '.env.schema'), '# ---\nX=\n')
-    await writeFile(join(dir, '.env.dev'), '# @plugin(@qctl/vaultwarden-plugin@0.1.1)\nX=1\n')
-    const r = await ensureNpmPluginsFromDir(dir, { xdgConfigHome: xdg })
-    expect(r.pins.map((p) => p.descriptor)).toEqual(['@qctl/vaultwarden-plugin@0.1.1'])
-    expect(r.cached[0]).toContain('plugins-cache')
+  test('parses scoped name@version', () => {
+    expect(parseNpmPluginDescriptor('@qctl/vaultwarden-plugin@0.1.5')).toEqual({
+      moduleName: '@qctl/vaultwarden-plugin',
+      version: '0.1.5',
+      descriptor: '@qctl/vaultwarden-plugin@0.1.5',
+    })
+  })
+})
+
+describe('shouldUseFrozenPackageInstall', () => {
+  test('true when CI=true', () => {
+    expect(shouldUseFrozenPackageInstall({ env: { CI: 'true' }, qctlEnv: 'dev' })).toBe(true)
+  })
+
+  test('true when qctlEnv is not dev', () => {
+    expect(shouldUseFrozenPackageInstall({ env: {}, qctlEnv: 'prod' })).toBe(true)
+  })
+
+  test('false for local dev without CI', () => {
+    expect(shouldUseFrozenPackageInstall({ env: { CI: 'false' }, qctlEnv: 'dev' })).toBe(false)
+    expect(shouldUseFrozenPackageInstall({ env: {}, qctlEnv: 'dev' })).toBe(false)
+  })
+})
+
+describe('findPackageRoot / package deps', () => {
+  test('walks up to package.json', async () => {
+    const root = await tempDir()
+    const nested = join(root, 'provision')
+    mkdirSync(nested, { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"inst","private":true}\n')
+    expect(findPackageRoot(nested)).toBe(root)
+    expect(findPackageRoot(root)).toBe(root)
+  })
+
+  test('readPackageDependencyMap merges optional + dependencies', async () => {
+    const root = await tempDir()
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        dependencies: { a: '1.0.0' },
+        optionalDependencies: { b: '2.0.0' },
+      }),
+    )
+    expect(readPackageDependencyMap(root)).toEqual({ b: '2.0.0', a: '1.0.0' })
+  })
+
+  test('ensurePackageDependencies errors when pins lack package.json', async () => {
+    const dir = await tempDir()
+    writeFileSync(join(dir, '.env.dev'), '# @plugin(@qctl/vaultwarden-plugin)\n# ---\nX=1\n')
+    await expect(ensurePackageDependencies(dir)).rejects.toThrow(/requires a package\.json/)
+  })
+
+  test('ensurePackageDependencies errors when pin missing from dependencies', async () => {
+    const root = await tempDir()
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'x', private: true }))
+    writeFileSync(join(root, '.env.dev'), '# @plugin(@qctl/vaultwarden-plugin)\n# ---\nX=1\n')
+    await expect(ensurePackageDependencies(root)).rejects.toThrow(/missing dependencies/)
+  })
+
+  test('frozen install fails without package-lock.json', async () => {
+    const root = await tempDir()
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'inst', private: true, dependencies: { leftpad: '1.0.0' } }),
+    )
+    await expect(installPackageDependencies(root, { frozen: true })).rejects.toThrow(
+      /frozen install requires package-lock\.json/,
+    )
+  })
+
+  test('ensurePackageDependencies installs file: plugin into node_modules', async () => {
+    const root = await tempDir()
+    const pluginSrc = join(root, 'fake-plugin')
+    mkdirSync(join(pluginSrc, 'dist'), { recursive: true })
+    writeFileSync(
+      join(pluginSrc, 'package.json'),
+      JSON.stringify({
+        name: '@qctl/fake-plugin',
+        version: '1.0.0',
+        main: 'dist/index.cjs',
+      }),
+    )
+    writeFileSync(join(pluginSrc, 'dist/index.cjs'), 'module.exports = {}\n')
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'inst',
+        private: true,
+        dependencies: { '@qctl/fake-plugin': `file:${pluginSrc}` },
+      }),
+    )
+    writeFileSync(join(root, '.env.dev'), '# @plugin(@qctl/fake-plugin)\n# ---\nX=1\n')
+
+    expect(packageDepsSatisfied(root)).toBe(false)
+    const r = await ensurePackageDependencies(root)
+    expect(r.root).toBe(root)
+    expect(r.installed).toBe(true)
+    expect(isPackageInstalled(root, '@qctl/fake-plugin')).toBe(true)
+    expect(packageDepsSatisfied(root)).toBe(true)
+
+    const again = await ensurePackageDependencies(root)
+    expect(again.installed).toBe(false)
   }, 60_000)
 })

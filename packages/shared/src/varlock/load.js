@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { loadEnvGraph } from './builtins.js'
 import { hydrateSystemdCredentials } from './hydrate.js'
-import { ensureNpmPluginsFromDir } from './plugins.js'
+import { ensurePackageDependencies } from './plugins.js'
 import { keysWithTag } from './project.js'
 import { declaresSensitive } from './sensitivity.js'
 import { GUEST_TAG } from './tags.js'
@@ -23,11 +23,11 @@ import { GUEST_TAG } from './tags.js'
  *   when true, disable varlock encrypted cache (default false so `@initVw`
  *   interactive unlock can persist `sessionTtl` like official `@initBwp`).
  * @property {boolean} [skipPluginEnsure]
- *   when true, skip `downloadPluginToCache` for `# @plugin` pins (tests / offline).
+ *   when true, skip package.json / node_modules install (tests / offline).
  */
 
 /**
- * @param {unknown} err
+ * @param {unknown} err caught value (catch edge — narrowed to Error here)
  * @returns {string}
  */
 function errMessage(err) {
@@ -125,16 +125,15 @@ export async function loadEnvGraphForDir(dir, opts = {}) {
 
   if (!existsSync(join(dir, '.env.schema'))) throw new Error(`no .env.schema in ${dir}`)
 
-  const extra = opts.extraEntryPaths ?? []
-
-  // Headless-safe: install-plugin equivalent before graph load (guest install + day-2).
   if (opts.skipPluginEnsure !== true) {
     try {
-      await ensureNpmPluginsFromDir(dir)
+      await ensurePackageDependencies(dir, { qctlEnv, env: base })
     } catch (err) {
       throw new Error(`varlock plugin ensure failed for ${dir}: ${errMessage(err)}`)
     }
   }
+
+  const extra = opts.extraEntryPaths ?? []
 
   /** @type {EnvGraph} */
   let graph

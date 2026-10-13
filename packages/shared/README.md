@@ -26,6 +26,10 @@ See `src/index.js`. High-signal modules:
 `loadEnvGraphForDir(dir, opts)` is the only resolver used by host and guest. It wraps
 `internal.loadEnvGraph` with `entryFilePaths: [dir]`, `currentEnvFallback`, and
 registers CLI builtins (`varlock()`, `keychain()`) that raw `loadEnvGraph` omits.
+Before load it ensures the nearest `package.json` has `node_modules` installed
+(Arborist — no npm CLI); varlock resolves `# @plugin` packages from there.
+Installs are frozen (`package-lock.json` required, not rewritten) when `CI=true`
+or `QCTL_ENV` is not `dev`.
 
 | Export | Meaning |
 |--------|---------|

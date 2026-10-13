@@ -14,6 +14,9 @@
  *
  * Always registers CLI builtins (`varlock()`, `keychain()`) that raw `internal.loadEnvGraph`
  * omits — required for `varlock(prompt)` / `varlock("local:…")` in provision env files.
+ *
+ * Third-party `# @plugin` packages resolve from instance `node_modules` (varlock prefers
+ * that over plugins-cache). qctl installs `package.json` deps via Arborist before load.
  */
 export { loadEnvGraph, registerVarlockBuiltins } from './builtins.js'
 export { hydrateSystemdCredentials } from './hydrate.js'
@@ -28,8 +31,15 @@ export {
 export {
   collectNpmPluginPins,
   collectNpmPluginPinsFromDir,
-  ensureNpmPluginsFromDir,
-  prefetchNpmPlugins,
+  ensurePackageDependencies,
+  findPackageRoot,
+  installPackageDependencies,
+  isPackageInstalled,
+  packageDepsSatisfied,
+  parseNpmPluginDescriptor,
+  parseNpmPluginRef,
+  readPackageDependencyMap,
+  shouldUseFrozenPackageInstall,
 } from './plugins.js'
 export {
   keysWithTag,

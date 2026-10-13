@@ -86,7 +86,8 @@ HEPTAPOD_REGISTRY=
 `
 
 export const PROVISION_ENV_PROD = `# Prod host bindings — use vw() + @plugin as needed.
-# @plugin(@qctl/vaultwarden-plugin@0.1.2)
+# List the plugin in package.json dependencies (version SoT); no @version in @plugin.
+# @plugin(@qctl/vaultwarden-plugin)
 # @initVw(serverUrl=https://vw.example/, sessionTtl=1h, cacheTtl=5m)
 # ---
 TANK_PASSPHRASE=vw("rocky", field="tank-passphrase")
@@ -99,6 +100,17 @@ HEPTAPOD_REGISTRY=
 # PROXMOX_API_TOKEN=vw("proxmox", field="api-token")
 `
 
+/** Instance package.json — varlock plugins resolve from node_modules (not plugins-cache). */
+export const PACKAGE_JSON = `{
+  "name": "qctl-instance",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@qctl/vaultwarden-plugin": "0.1.5"
+  }
+}
+`
+
 /** Non-secret root values for QCTL_ENV=dev (literal values: varlock, not bash \`source\`). */
 export const ROOT_ENV_DEV = `ENV=dev
 TANK_ROOT=./volumes
@@ -106,10 +118,10 @@ TZ=UTC
 `
 
 /** Non-secret root values for QCTL_ENV=prod (package schemas import the repo root). */
-export const ROOT_ENV_PROD = `# Shared prod values. For Vaultwarden unlock + vw() in unit graphs, pin a plugin here, e.g.:
-#   # @plugin(@qctl/vaultwarden-plugin@0.1.2)
+export const ROOT_ENV_PROD = `# Shared prod values. For Vaultwarden unlock + vw() in unit graphs:
+#   # @plugin(@qctl/vaultwarden-plugin)
 #   # @initVw(appDataDir=/vw, clientId=$VW_CLIENT_ID, clientSecret=$VW_CLIENT_SECRET, masterPassword=$VW_MASTER_PASSWORD, cacheTtl=5m)
-# and declare VW_* for unlock. First-boot secrets: provision/.env.<env>. See docs/secrets.md.
+# List the plugin in package.json dependencies (version via lockfile). See docs/secrets.md.
 # ---
 ENV=prod
 TANK_ROOT=/tank/apps

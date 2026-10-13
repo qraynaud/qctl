@@ -11,6 +11,18 @@ Two different paths — do not mix them:
 Lab vs prod is whatever the active `QCTL_ENV` graphs declare (literals in
 `provision/.env.dev`, `vw()` + plugin in `provision/.env.prod`).
 
+### Varlock plugins (`# @plugin`)
+
+1. List the package (with version) in the instance root `package.json`
+   `dependencies` — that is the version SoT (plus `package-lock.json`).
+2. Reference it in env-spec **without** a version: `# @plugin(@scope/name)`.
+3. Let qctl install `node_modules` (Arborist — no npm CLI) on graph load or via
+   `qctl plugins ensure`.
+
+Do **not** rely on varlock’s plugins-cache. Commit `package-lock.json` after a
+local `QCTL_ENV=dev` install. Installs are **frozen** (lockfile required, not
+rewritten) when `CI=true` or `QCTL_ENV` is not `dev`.
+
 CLI: [packages/guest/README.md](../packages/guest/README.md).  
 Plugin: [packages/vaultwarden-plugin/README.md](../packages/vaultwarden-plugin/README.md).
 

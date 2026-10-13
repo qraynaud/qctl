@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir, writeFile, writeMinimalInstance } from '../test-helpers.js'
+import * as varlock from '../varlock/index.js'
 import {
   PROVISION_DIR,
   loadHostEnv,
@@ -8,7 +9,7 @@ import {
   loadHostGuestCredentials,
   provisionEnvDir,
 } from './host-env.js'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 /** @type {string[]} */
 const temps = []
@@ -84,6 +85,40 @@ describe('loadHostEnvDetailed', () => {
     })
     expect(env.VW_CLIENT_ID).toBe('from-process')
     expect(env.PATH).toBe('/usr/bin')
+  })
+
+  test('ensures package deps before loading the graph', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    writeProvisionEnv(root, 'VW_CLIENT_ID=from-file\n')
+    const ensure = spyOn(varlock, 'ensurePackageDependencies').mockResolvedValue({
+      root,
+      installed: false,
+      frozen: false,
+    })
+    try {
+      await loadHostEnv(root, { PATH: '/usr/bin', QCTL_ENV: 'dev' })
+      expect(ensure).toHaveBeenCalled()
+      expect(ensure.mock.calls[0]?.[0]).toBe(join(root, PROVISION_DIR))
+    } finally {
+      ensure.mockRestore()
+    }
+  })
+
+  test('surfaces plugin ensure failures', async () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    writeProvisionEnv(root, 'VW_CLIENT_ID=from-file\n')
+    const ensure = spyOn(varlock, 'ensurePackageDependencies').mockRejectedValue(
+      new Error('no package.json'),
+    )
+    try {
+      await expect(loadHostEnv(root, { PATH: '/usr/bin', QCTL_ENV: 'dev' })).rejects.toThrow(
+        /varlock plugin ensure failed for provision\/\.env/,
+      )
+    } finally {
+      ensure.mockRestore()
+    }
   })
 
   test('loadHostEnv returns the env map', async () => {

@@ -4,7 +4,12 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { GUEST_TAG, keysWithTag, loadEnvGraph } from '../varlock/index.js'
+import {
+  GUEST_TAG,
+  ensurePackageDependencies,
+  keysWithTag,
+  loadEnvGraph,
+} from '../varlock/index.js'
 
 /** Directory under the instance root for host/provision env + YAML. */
 export const PROVISION_DIR = 'provision'
@@ -52,6 +57,17 @@ export async function loadHostEnvDetailed(root, processEnv = process.env) {
   const localPath = join(provDir, '.env.local')
   if (existsSync(localPath)) entryFilePaths.push(localPath)
   const label = 'provision/.env'
+
+  try {
+    // Walks up to instance package.json and installs node_modules when needed.
+    await ensurePackageDependencies(provDir, {
+      qctlEnv,
+      env: /** @type {Record<string, string | undefined>} */ (processEnv),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`varlock plugin ensure failed for ${label}: ${msg}`)
+  }
 
   /** @type {Awaited<ReturnType<typeof loadEnvGraph>>} */
   let graph

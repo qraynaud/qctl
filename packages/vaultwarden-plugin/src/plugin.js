@@ -34,7 +34,7 @@
  *
  * Schema usage (aligned with official @initBwp / BWP_SESSION):
  *
- *   # @plugin(@qctl/vaultwarden-plugin@0.1.1)
+ *   # @plugin(@qctl/vaultwarden-plugin)
  *   # @initVw(appDataDir=/vw, sessionToken=$BW_SESSION, cacheTtl=5m, syncTtl=5m)
  *   # @initVw(id=work, appDataDir=/vw-work, sessionToken=$BW_SESSION_WORK)
  *   # ---
