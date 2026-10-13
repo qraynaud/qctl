@@ -80,12 +80,12 @@ describe('initInstance', () => {
     delete raw.qctl
     const parsed = parseSecretsFile(raw, loaded.basePath)
     expect(parsed.data.users.admin).toMatchObject({ username: 'admin', uid: 1000, gid: 1000 })
-    expect(appsIdentityFromProvision(/** @type {YamlMapping} */ (parsed.data))).toMatchObject({
+    expect(appsIdentityFromProvision(parsed.data)).toMatchObject({
       username: 'apps',
       uid: 900,
       subuidSpec: '900000:32768',
     })
-    const tier0 = firstBootCredentialsFromProvision(/** @type {YamlMapping} */ (parsed.data))
+    const tier0 = firstBootCredentialsFromProvision(parsed.data)
     expect(tier0.TANK_PASSPHRASE).toBeTruthy()
     expect(tier0.ADMIN_USERNAME).toBe('admin')
     expect(tier0.ADMIN_PASSWORD).toBeUndefined()

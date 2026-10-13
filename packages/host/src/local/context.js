@@ -5,11 +5,10 @@ import { findInstanceRoot, loadProvision } from '@qctl/shared'
 import { portsFromArgv } from '../lib/options.js'
 import { which } from '../lib/util.js'
 import { appsIdentityFromProvision, parseSecretsFile } from '../provision/secrets-schema/index.js'
-import { defaultAppsSubidRange } from '../provision/secrets-schema/users.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { localContainerName, localTestContainerName } from './name.js'
 import { localPublishPodmanArgs } from './ports-publish.js'
-import { DEFAULT_APPS_IDS, localApplianceUidMapArgs } from './uidmap.js'
+import { localApplianceUidMapArgs } from './uidmap.js'
 import { die } from './util.js'
 
 /** @import { YamlMapping } from '@qctl/shared' */
@@ -69,12 +68,12 @@ export async function createLocalContext(argv, opts = {}) {
   const raw = /** @type {YamlMapping} */ ({ ...loaded.data })
   delete raw.qctl
   const parsed = parseSecretsFile(raw, loaded.basePath)
-  const apps = appsIdentityFromProvision(/** @type {YamlMapping} */ (parsed.data))
-  const appsUsername = apps?.username ?? 'apps'
-  const appsUid = apps?.uid ?? DEFAULT_APPS_IDS.appsUid
-  const appsGid = apps?.gid ?? DEFAULT_APPS_IDS.appsGid
-  const appsSubuid = apps?.subuid ?? defaultAppsSubidRange(appsUid)
-  const appsSubgid = apps?.subgid ?? defaultAppsSubidRange(appsGid)
+  const apps = appsIdentityFromProvision(parsed.data)
+  const appsUsername = apps.username
+  const appsUid = apps.uid
+  const appsGid = apps.gid
+  const appsSubuid = apps.subuid
+  const appsSubgid = apps.subgid
 
   const tooling = await ensureGuestTooling({
     env,

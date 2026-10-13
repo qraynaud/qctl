@@ -1,7 +1,5 @@
 import { z } from 'zod'
 
-/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-
 const pathStr = z.string().trim().min(1)
 const modeStr = z
   .union([z.string(), z.number()])
@@ -44,36 +42,28 @@ export const filesSchema = z.array(filesItemSchema)
  */
 
 /**
- * Normalize `files:` for seed → write_files.
- * @param {YamlValue} [raw]
+ * Normalize parsed `files:` for seed → write_files (defaults for owner/mode).
+ * @param {z.infer<typeof filesSchema> | null | undefined} raw
  * @returns {GuestFile[]}
  */
 export function normalizeFiles(raw) {
   if (raw == null) return []
-  if (!Array.isArray(raw)) {
-    throw new Error('files: must be a list of { path, content, … }')
-  }
   /** @type {GuestFile[]} */
   const out = []
   for (const item of raw) {
-    if (!item || typeof item !== 'object' || Array.isArray(item) || item instanceof Uint8Array) {
-      continue
-    }
-    const rec = /** @type {YamlMapping} */ (item)
-    const p = String(rec.path || '').trim()
+    const p = item.path.trim()
     if (!p) continue
-    const owner = rec.owner != null ? String(rec.owner).trim() : 'root:root'
-    const permRaw = rec.permissions ?? rec.mode ?? '0644'
+    const owner = item.owner != null ? item.owner.trim() : 'root:root'
+    const permRaw = item.permissions ?? item.mode ?? '0644'
     let permissions = String(permRaw).trim()
     if (/^\d+$/.test(permissions) && !permissions.startsWith('0') && permissions.length <= 3) {
       permissions = `0${permissions}`
     }
-    const content = rec.content != null ? String(rec.content) : ''
     out.push({
       path: p,
       owner: owner || 'root:root',
       permissions: permissions || '0644',
-      content,
+      content: item.content ?? '',
     })
   }
   return out

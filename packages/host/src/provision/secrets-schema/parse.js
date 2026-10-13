@@ -11,9 +11,8 @@ import {
   optionalCredentialBytes,
   optionalTrimmedText,
   parseSecretsSchema,
+  trimmedText,
 } from './zod-utils.js'
-
-/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
 
 export const secretsFileSchema = z
   .object({
@@ -22,7 +21,7 @@ export const secretsFileSchema = z
     /** Admin SSH pubkeys + optional host-key tarball for seed. */
     ssh: z
       .object({
-        authorized_keys: z.union([z.array(z.string()), z.string()]).optional(),
+        authorized_keys: z.union([z.array(trimmedText), trimmedText]).optional(),
         /** gzip tar of /etc/ssh/ssh_host_* (bytes or base64 text); optional. */
         host_keys: optionalCredentialBytes.optional(),
       })
@@ -113,22 +112,24 @@ export const secretsFileSchema = z
   })
 
 /**
+ * Loose peek at unparsed root for legacy-path errors before Zod.
+ *
  * @typedef {object} SecretsRootPreview
- * @property {YamlValue} [ports]
- * @property {YamlValue} [admin]
- * @property {{ ports?: YamlValue }} [networking]
- * @property {YamlValue} [packages]
+ * @property {unknown} [ports]
+ * @property {unknown} [admin]
+ * @property {{ ports?: unknown }} [networking]
+ * @property {unknown} [packages]
  */
 
 /**
- * @param {YamlValue} raw parsed YAML root
+ * @param {unknown} raw untyped document (YAML load / `!env` resolve)
  * @param {string} [source] path for error prefix
  */
 export function parseSecretsFile(raw, source = 'secrets') {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error(`${source}: must be a mapping`)
   }
-  const root = /** @type {YamlMapping & SecretsRootPreview} */ (raw)
+  const root = /** @type {Record<string, unknown> & SecretsRootPreview} */ (raw)
   // Before nested parse: top-level ports alone never reaches superRefine (networking required).
   if (root.ports != null && root.networking?.ports == null) {
     throw new Error(
@@ -177,7 +178,7 @@ export function parseSecretsFile(raw, source = 'secrets') {
   // Normalize only — VCS defaults (mercurial / hgrc) are applied at seed for the
   // appliance profile (`vm up`), not for init-tank (no instance clone).
   const packages = normalizePackages(data.packages)
-  const files = normalizeFiles(/** @type {YamlValue} */ (data.files))
+  const files = normalizeFiles(data.files)
   data.packages = /** @type {typeof data.packages} */ ({
     ...(typeof data.packages === 'object' && data.packages && !Array.isArray(data.packages)
       ? data.packages
@@ -202,7 +203,7 @@ export function parseSecretsFile(raw, source = 'secrets') {
 }
 
 /**
- * @param {YamlValue} raw
+ * @param {unknown} raw
  * @param {string} [source]
  * @returns {z.infer<typeof portsSchema>}
  */

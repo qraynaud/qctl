@@ -1,7 +1,5 @@
 import { z } from 'zod'
 
-/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-
 export const IFACE_RE = /^[A-Za-z][A-Za-z0-9._-]*$/
 export const BRIDGE_RE = /^[A-Za-z][A-Za-z0-9._-]*$/
 
@@ -20,6 +18,13 @@ export const optionalTrimmedText = bufferOrString.transform((v) => {
 })
 
 /**
+ * Required trimmed text from a string or `!env` Buffer (e.g. registries lines).
+ */
+export const trimmedText = z.union([z.instanceof(Buffer), z.string()]).transform((v) => {
+  return (Buffer.isBuffer(v) ? v.toString('utf8') : String(v)).trim()
+})
+
+/**
  * Opaque credential bytes: keep `Buffer`, trim strings. Empty → null.
  */
 export const optionalCredentialBytes = bufferOrString.transform((v) => {
@@ -30,9 +35,9 @@ export const optionalCredentialBytes = bufferOrString.transform((v) => {
 })
 
 /**
- * Named YAML map entry after `namedMapToList` (name key + original fields).
+ * Named map entry after `namedMapToList` (name key + original fields).
  *
- * @typedef {{ name: string } & YamlMapping} NamedYamlEntry
+ * @typedef {{ name: string } & Record<string, unknown>} NamedYamlEntry
  */
 
 /**
@@ -60,10 +65,11 @@ export function formatSecretsError(error, source, pathPrefix = []) {
 
 /**
  * Parse `raw` with `schema`, formatting Zod failures like other secrets helpers.
+ * Input is `unknown` (same as `schema.safeParse`); output is `z.infer<S>`.
  *
  * @template {z.ZodType} S
  * @param {S} schema
- * @param {YamlValue} raw
+ * @param {unknown} raw
  * @param {string} [source]
  * @param {(string|number)[]} [pathPrefix]
  * @returns {z.infer<S>}
@@ -77,8 +83,8 @@ export function parseSecretsSchema(schema, raw, source = 'secrets', pathPrefix =
 }
 
 /**
- * YAML map → list of `{ name, ...fields }`. Rejects arrays (use maps for merge).
- * @param {YamlValue} raw
+ * Map → list of `{ name, ...fields }`. Rejects arrays (use maps for merge).
+ * @param {unknown} raw
  * @param {z.RefinementCtx} ctx
  * @param {(string|number)[]} path
  * @returns {NamedYamlEntry[] | typeof z.NEVER}
@@ -101,7 +107,7 @@ export function namedMapToList(raw, ctx, path) {
     })
     return z.NEVER
   }
-  return Object.entries(raw).map(([name, val]) => {
+  return Object.entries(/** @type {Record<string, unknown>} */ (raw)).map(([name, val]) => {
     if (val != null && (typeof val !== 'object' || Array.isArray(val))) {
       ctx.addIssue({
         code: 'custom',
@@ -112,7 +118,7 @@ export function namedMapToList(raw, ctx, path) {
     }
     return /** @type {NamedYamlEntry} */ ({
       name,
-      ...(val && typeof val === 'object' ? val : {}),
+      ...(val && typeof val === 'object' ? /** @type {Record<string, unknown>} */ (val) : {}),
     })
   })
 }
