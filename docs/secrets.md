@@ -32,9 +32,11 @@ Plugin: [packages/vaultwarden-plugin/README.md](../packages/vaultwarden-plugin/R
 1. Host loads `provision/.env.<env>` (optional `.env.local`) and resolves `vw()` /
    literals there. **`.env` key names are yours** — name them however you like.
 2. `provision/<env>.yaml` wires topology slots with `!env` to those keys, e.g.
-   `tank.passphrase: !env MY_TANK_PASS`, `repo.deploy_key: !env …`.
-3. `qctl vm seed` takes the **resolved YAML values** and maps them to the fixed
-   guest credential names stages expect.
+   `tank.passphrase: !env MY_TANK_PASS`, or
+   `repo.deploy_key: !env { name: DEPLOY_KEY, encoding: base64 }` when the host
+   value is transport-encoded (CI cannot hold `\n`).
+3. `qctl vm seed` takes the **resolved YAML values** (`Buffer` from `!env`) and
+   maps them to the fixed guest credential names stages expect.
 4. Guest stages read `$CREDENTIALS_DIRECTORY` / hydrated `ctx.env` — **no guest
    bootstrap graph**.
 

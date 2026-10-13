@@ -1,8 +1,11 @@
 import { z } from 'zod'
 
-import { formatSubuid } from './users.js'
+import { isYamlMapping } from '@qctl/shared'
 
-/** @import { YamlMapping } from '@qctl/shared' */
+import { formatSubuid } from './users.js'
+import { optionalTrimmedText } from './zod-utils.js'
+
+/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
 /** @import { SubuidRange } from './users.js' */
 
 /**
@@ -10,14 +13,7 @@ import { formatSubuid } from './users.js'
  */
 export const tankSchema = z
   .object({
-    passphrase: z
-      .union([z.string(), z.null(), z.undefined()])
-      .transform((v) => {
-        if (v == null) return null
-        const t = String(v).trim()
-        return t === '' ? null : t
-      })
-      .optional(),
+    passphrase: optionalTrimmedText.optional(),
   })
   .passthrough()
   .optional()
@@ -28,17 +24,55 @@ export const tankSchema = z
 export const registriesSchema = z.array(z.string()).optional()
 
 /**
+ * Tier-0 credential value: utf8 text or opaque bytes from `!env`.
+ *
+ * @typedef {string | Buffer} CredentialValue
+ */
+
+/**
  * Fixed Tier-0 / env credential names stages read after seed (host-resolved).
  * @typedef {object} FirstBootCredentials
- * @property {string} [TANK_PASSPHRASE]
- * @property {string} [DEPLOY_KEY]
+ * @property {CredentialValue} [TANK_PASSPHRASE]
+ * @property {CredentialValue} [DEPLOY_KEY]
  * @property {string} [ADMIN_USERNAME]
- * @property {string} [ADMIN_PASSWORD]
+ * @property {CredentialValue} [ADMIN_PASSWORD]
  * @property {string} [ADMIN_UID]
  * @property {string} [ADMIN_GID]
- * @property {string} [SSH_HOST_KEYS]
+ * @property {CredentialValue} [SSH_HOST_KEYS]
  * @property {string} [ROCKY_REGISTRIES] JSON array of registry|user|token
  */
+
+/**
+ * @param {YamlValue | undefined} value
+ * @returns {string}
+ */
+function asText(value) {
+  if (value == null) return ''
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    return Buffer.from(value).toString('utf8').trim()
+  }
+  return String(value).trim()
+}
+
+/**
+ * Preserve byte credentials; trim string credentials.
+ *
+ * @param {YamlValue | undefined} value
+ * @returns {CredentialValue | undefined}
+ */
+function asCredential(value) {
+  if (value == null) return undefined
+  if (Buffer.isBuffer(value)) return value.length ? value : undefined
+  if (value instanceof Uint8Array) {
+    return value.length ? Buffer.from(value) : undefined
+  }
+  if (typeof value === 'string') {
+    const t = value.trim()
+    return t === '' ? undefined : t
+  }
+  const t = String(value).trim()
+  return t === '' ? undefined : t
+}
 
 /**
  * Map resolved provision YAML → fixed guest credential names for Tier-0 pending.
@@ -50,48 +84,33 @@ export const registriesSchema = z.array(z.string()).optional()
 export function firstBootCredentialsFromProvision(data) {
   /** @type {FirstBootCredentials} */
   const out = {}
-  const tank =
-    data.tank && typeof data.tank === 'object' && !Array.isArray(data.tank)
-      ? /** @type {YamlMapping} */ (data.tank)
-      : null
-  const users =
-    data.users && typeof data.users === 'object' && !Array.isArray(data.users)
-      ? /** @type {YamlMapping} */ (data.users)
-      : null
-  const admin =
-    users?.admin && typeof users.admin === 'object' && !Array.isArray(users.admin)
-      ? /** @type {YamlMapping} */ (users.admin)
-      : null
-  const repo =
-    data.repo && typeof data.repo === 'object' && !Array.isArray(data.repo)
-      ? /** @type {YamlMapping} */ (data.repo)
-      : null
-  const ssh =
-    data.ssh && typeof data.ssh === 'object' && !Array.isArray(data.ssh)
-      ? /** @type {YamlMapping} */ (data.ssh)
-      : null
+  const tank = isYamlMapping(data.tank) ? data.tank : null
+  const users = isYamlMapping(data.users) ? data.users : null
+  const admin = isYamlMapping(users?.admin) ? users.admin : null
+  const repo = isYamlMapping(data.repo) ? data.repo : null
+  const ssh = isYamlMapping(data.ssh) ? data.ssh : null
 
-  const pass = tank?.passphrase != null ? String(tank.passphrase).trim() : ''
-  if (pass) out.TANK_PASSPHRASE = pass
+  const pass = asCredential(tank?.passphrase)
+  if (pass != null) out.TANK_PASSPHRASE = pass
 
-  const deploy = repo?.deploy_key != null ? String(repo.deploy_key).trim() : ''
-  if (deploy) out.DEPLOY_KEY = deploy
+  const deploy = asCredential(repo?.deploy_key)
+  if (deploy != null) out.DEPLOY_KEY = deploy
 
   // Schema defaults username/uid/gid; password optional (key-only admin).
-  const user = admin?.username != null ? String(admin.username).trim() : 'admin'
+  const user = asText(admin?.username) || 'admin'
   if (user) out.ADMIN_USERNAME = user
-  const pw = admin?.password != null ? String(admin.password).trim() : ''
-  if (pw) out.ADMIN_PASSWORD = pw
-  const uid = admin?.uid != null ? String(admin.uid).trim() : '1000'
+  const pw = asCredential(admin?.password)
+  if (pw != null) out.ADMIN_PASSWORD = pw
+  const uid = asText(admin?.uid) || '1000'
   if (uid) out.ADMIN_UID = uid
-  const gid = admin?.gid != null ? String(admin.gid).trim() : uid
+  const gid = asText(admin?.gid) || uid
   if (gid) out.ADMIN_GID = gid
 
-  const hostKeys = ssh?.host_keys != null ? String(ssh.host_keys).trim() : ''
-  if (hostKeys) out.SSH_HOST_KEYS = hostKeys
+  const hostKeys = asCredential(ssh?.host_keys)
+  if (hostKeys != null) out.SSH_HOST_KEYS = hostKeys
 
   if (Array.isArray(data.registries)) {
-    const regs = data.registries.map((r) => String(r ?? '').trim()).filter(Boolean)
+    const regs = data.registries.map((r) => asText(r)).filter(Boolean)
     if (regs.length) out.ROCKY_REGISTRIES = JSON.stringify(regs)
   }
 
@@ -112,12 +131,9 @@ export function firstBootCredentialsFromProvision(data) {
  * } | null}
  */
 export function appsIdentityFromProvision(data) {
-  const users =
-    data.users && typeof data.users === 'object' && !Array.isArray(data.users)
-      ? /** @type {YamlMapping} */ (data.users)
-      : null
+  const users = isYamlMapping(data.users) ? data.users : null
   const apps = users?.apps
-  if (!apps || typeof apps !== 'object' || Array.isArray(apps)) return null
+  if (!isYamlMapping(apps)) return null
   const a = /**
    * @type {{
    *   username?: string,

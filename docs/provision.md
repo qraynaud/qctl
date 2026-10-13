@@ -23,8 +23,8 @@ Load algorithm (`qctl vm …`, `qctl local …`, seed):
 2. If `provision/<env>.<target>.yaml` exists, **deep-merge** it onto the base
    (maps merge by key; **arrays are replaced** by the overlay).
 3. Drop the opposite hypervisor block (`local` vs `proxmox`).
-4. Resolve every `!env NAME` from process env + `provision/.env.*` graph
-   (empty process values do not win; missing keys error).
+4. Resolve every `!env` from process env + `provision/.env.*` graph to a
+   `Buffer` (empty process values do not win; missing keys error).
 5. Validate against the secrets schema (below). The `qctl:` block is host metadata
    and is stripped before that validation.
 
@@ -43,8 +43,17 @@ IPs, API tokens) in the overlay.
 ```yaml
 tank:
   passphrase: !env TANK_PASSPHRASE
+
+repo:
+  # CI / process env cannot hold newlines — store base64, decode at resolve:
+  deploy_key: !env { name: DEPLOY_KEY, encoding: base64 }
 ```
 
+- Scalar form: `!env NAME` (utf8).
+- Mapping form: `!env { name: NAME, encoding: base64 }` (`encoding` optional;
+  one of `utf8` | `base64` | `hex` | `latin1` | `ascii`; default `utf8`).
+- Resolves to a `Buffer` (`Buffer.from(env[NAME], encoding)`). Seed writers accept
+  `Buffer | string` and encode Tier-0 `write_files` appropriately.
 - `NAME` must exist in the merged host env (graph and/or process).
 - Empty string is allowed (optional slots); **unset** is an error.
 - Name the host keys however you like; Tier-0 guest names (`TANK_PASSPHRASE`,
@@ -78,7 +87,8 @@ ssh:
     # authorized_keys: |
     #   ssh-ed25519 AAAA... a
     #   ssh-ed25519 BBBB... b
-  # Optional gzip tar of /etc/ssh/ssh_host_* (often base64 via !env)
+  # Optional gzip tar of /etc/ssh/ssh_host_* (base64 transport → bytes):
+  # host_keys: !env { name: SSH_HOST_KEYS, encoding: base64 }
   host_keys: !env SSH_HOST_KEYS
 
 # --- Users (entire section optional) ---
@@ -109,6 +119,7 @@ repo:
   dir: /tank/rocky           # optional guest checkout path (default /tank/rocky)
   branch: !env REPO_BRANCH   # optional
   deploy_key: !env DEPLOY_KEY
+  # CI without newlines: !env { name: DEPLOY_KEY, encoding: base64 }
 
 # --- podman login lines → Tier-0 ROCKY_REGISTRIES JSON ---
 # Each string: registry|username|token

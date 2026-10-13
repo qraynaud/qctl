@@ -57,8 +57,8 @@ describe('loadEnvSecrets (provision adapter)', () => {
       ADMIN_USERNAME: 'admin',
       ADMIN_UID: '1000',
       ADMIN_GID: '1000',
-      DEPLOY_KEY: 'lab-deploy-key-placeholder',
     })
+    expect(sec.guest.DEPLOY_KEY).toEqual(Buffer.from('lab-deploy-key-placeholder', 'utf8'))
     expect(sec.guest.ADMIN_PASSWORD).toBeUndefined()
     expect(sec.ports.map((p) => p.name)).toEqual(['ssh', 'http', 'https'])
     expect(sec.ports[0]).toMatchObject({ name: 'ssh', port: 22, forward: 2222 })

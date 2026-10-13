@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { proxmoxNetMapSchema } from './networking.js'
+import { optionalTrimmedText } from './zod-utils.js'
 
 /** vCPU count (maps to CLI --vcpus / virt-install --vcpus / PVE cores). */
 export const cpuSchema = z.coerce.number().int().min(1).max(256)
@@ -18,11 +19,11 @@ export const localSchema = z.object(vmResourcesFields).passthrough()
 
 export const proxmoxSchema = z
   .object({
-    api_url: z.string().optional(),
-    api_token: z.string().optional(),
-    node: z.string().optional(),
-    storage: z.string().optional(),
-    image_storage: z.string().optional(),
+    api_url: optionalTrimmedText.optional(),
+    api_token: optionalTrimmedText.optional(),
+    node: optionalTrimmedText.optional(),
+    storage: optionalTrimmedText.optional(),
+    image_storage: optionalTrimmedText.optional(),
     vmid: z.coerce.number().int().optional(),
     net: proxmoxNetMapSchema.optional(),
     ...vmResourcesFields,

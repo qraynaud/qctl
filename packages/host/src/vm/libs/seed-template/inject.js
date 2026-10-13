@@ -1,6 +1,8 @@
 /**
  * Post-render cloud-config write_files injectors (Tier-0, packages, provision files).
  */
+import { isEmptyCredential } from '@qctl/shared'
+
 import { isCloudInitYamlSafe, withTrailingNewline } from './util.js'
 
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
@@ -18,21 +20,41 @@ import { isCloudInitYamlSafe, withTrailingNewline } from './util.js'
 const TIER0_PENDING_PREFIX = '/var/lib/rocky/tier0-pending/'
 
 /**
- * Plain text → trailing newline. Binary / control-heavy → base64 so PyYAML
- * (cloud-init) does not reject the whole user-data document.
+ * @param {string | Buffer} value
+ * @returns {Buffer}
+ */
+function toCredentialBuffer(value) {
+  if (Buffer.isBuffer(value)) return value
+  return Buffer.from(String(value ?? ''), 'utf8')
+}
+
+/**
+ * Encode a Tier-0 credential for cloud-init write_files.
  *
- * @param {string} value
+ * - Valid utf8 + YAML-safe → plain text (+ trailing newline).
+ * - Valid utf8 but YAML-unsafe → `encoding: base64` (raw utf8 bytes on disk).
+ * - Non-utf8 bytes → base64 *text* content (no encoding key) so
+ *   `$CREDENTIALS_DIRECTORY` utf8 hydrate + guest `decodeBootstrapBytes` work.
+ *
+ * @param {string | Buffer} value
  * @returns {Pick<CloudWriteFile, 'content' | 'encoding'>}
  */
 function cloudInitFileContent(value) {
-  const raw = String(value ?? '')
-  if (isCloudInitYamlSafe(raw)) {
-    return { content: withTrailingNewline(raw) }
+  const buf = toCredentialBuffer(value)
+  const asUtf8 = buf.toString('utf8')
+  const validUtf8 = Buffer.from(asUtf8, 'utf8').equals(buf)
+
+  if (validUtf8 && isCloudInitYamlSafe(asUtf8)) {
+    return { content: withTrailingNewline(asUtf8) ?? `${asUtf8}\n` }
   }
-  return {
-    encoding: 'base64',
-    content: Buffer.from(raw, 'utf8').toString('base64'),
+  if (validUtf8) {
+    return {
+      encoding: 'base64',
+      content: buf.toString('base64'),
+    }
   }
+  const b64 = buf.toString('base64')
+  return { content: withTrailingNewline(b64) ?? `${b64}\n` }
 }
 
 /**
@@ -40,11 +62,11 @@ function cloudInitFileContent(value) {
  * (`/var/lib/rocky/tier0-pending/<KEY>`). Replaces any prior entry for the same path.
  *
  * @param {CloudConfig} userData parsed cloud-config
- * @param {Record<string, string> | undefined} guest
+ * @param {Record<string, string | Buffer> | undefined} guest
  */
 export function injectGuestCredentialFiles(userData, guest) {
   if (!userData || typeof userData !== 'object') return userData
-  const entries = Object.entries(guest || {}).filter(([, v]) => v != null && String(v) !== '')
+  const entries = Object.entries(guest || {}).filter(([, v]) => !isEmptyCredential(v))
   if (!entries.length) return userData
 
   /** @type {CloudWriteFile[]} */

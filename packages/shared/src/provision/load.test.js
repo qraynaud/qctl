@@ -83,7 +83,7 @@ describe('loadProvision', () => {
 
     expect(overlayPath).toContain('dev.local.yaml')
     expect(envRefs).toContain('VW_CLIENT_ID')
-    expect(data.vaultwarden).toEqual({ client_id: 'user.1' })
+    expect(data.vaultwarden).toEqual({ client_id: Buffer.from('user.1', 'utf8') })
     expect(data.local).toEqual({ cpu: 2 })
     expect(data.proxmox).toBeUndefined()
   })
@@ -120,7 +120,7 @@ describe('loadProvision', () => {
       target: 'local',
       processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
     })
-    expect(data.vaultwarden).toEqual({ client_id: 'user.from-env' })
+    expect(data.vaultwarden).toEqual({ client_id: Buffer.from('user.from-env', 'utf8') })
   })
 
   test('provision/.env.local overlays .env.dev for !env resolution', async () => {
@@ -134,7 +134,7 @@ describe('loadProvision', () => {
       target: 'local',
       processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
     })
-    expect(data.vaultwarden).toEqual({ client_id: 'from-local' })
+    expect(data.vaultwarden).toEqual({ client_id: Buffer.from('from-local', 'utf8') })
   })
 })
 

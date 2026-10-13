@@ -1,6 +1,8 @@
 /** Proxmox (PVE API) target-check. */
 import { path } from 'zx'
 
+import { isEmptyCredential } from '@qctl/shared'
+
 import { loadEnvSecrets } from '../../../lib/load-config.js'
 import { errMessage } from '../../../lib/util.js'
 import { createCheckReport } from '../../libs/check-report.js'
@@ -75,7 +77,9 @@ export async function check(argv) {
     if (secrets.sshAuthorizedKeys) report.ok('admin SSH key present')
     else report.warn('no ssh.authorized_keys in provision/ and no ~/.ssh id_*.pub — seed will fail')
 
-    const tier0Missing = [!secrets.guest?.TANK_PASSPHRASE && 'TANK_PASSPHRASE'].filter(Boolean)
+    const tier0Missing = [
+      isEmptyCredential(secrets.guest?.TANK_PASSPHRASE) && 'TANK_PASSPHRASE',
+    ].filter(Boolean)
     if (tier0Missing.length === 0) report.ok('first-boot Tier-0 (TANK_PASSPHRASE) present')
     else {
       report.warn(

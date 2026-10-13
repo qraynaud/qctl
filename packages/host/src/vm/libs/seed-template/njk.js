@@ -184,9 +184,12 @@ function pruneOmits(node) {
   if (node && typeof node === 'object') {
     const rec = /** @type {{ [key: string]: SeedNode }} */ (node)
     if (Array.isArray(rec.write_files)) {
-      rec.write_files = rec.write_files.filter(
-        (w) => w && typeof w === 'object' && !Array.isArray(w) && w.content !== OMIT,
-      )
+      rec.write_files = rec.write_files.filter((w) => {
+        if (!w || typeof w !== 'object' || Array.isArray(w) || w instanceof Uint8Array) {
+          return false
+        }
+        return /** @type {{ content?: SeedNode }} */ (w).content !== OMIT
+      })
     }
     for (const [k, v] of Object.entries(rec)) {
       const next = pruneOmits(v)
