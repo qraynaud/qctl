@@ -2,23 +2,27 @@ import { mkdtemp, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { packagesMapWithRequired } from '@qctl/shared'
+
 import { createContext } from './context.js'
 import { StageError, UnknownStageError } from './errors.js'
 import { runStage } from './run-stage.js'
 import { ALL_STAGES } from './stages.js'
 import { describe, expect, test } from 'bun:test'
 
+/** @import { PlatformModule } from '@qctl/shared' */
 /** @import { StageContext } from './context.js' */
 
 /** Minimal platform stub so networking stages can plan without loading the mjs. */
+/** @type {PlatformModule} */
 const stubPlatform = {
   id: 'test',
-  packages: {},
+  packages: packagesMapWithRequired(),
   installPackages: async () => {},
   networking: {
     planEnsureUp: () => ['ping; nmcli/dhclient'],
     ensureUp: async () => {},
-    planApplyDnat: () => ['DNAT script: /usr/local/lib/rocky/dnat-apply.sh'],
+    planApplyDnat: () => ['DNAT from /usr/local/lib/rocky/ports.json (firewalld → 127.0.0.1)'],
     applyDnat: async () => {},
   },
 }
@@ -74,17 +78,23 @@ describe('runStage', () => {
     }
   })
 
-  test('host-baseline dry-run plan covers baseline + /vw', async () => {
+  test('host-baseline dry-run plan covers timezone baseline', async () => {
     const { ctx, logs } = testCtx({ dryRun: true })
     await runStage('host-baseline', ctx)
     expect(logs.some((l) => /timedatectl|timezone/i.test(l))).toBe(true)
-    expect(logs.some((l) => /\/vw|vw/i.test(l))).toBe(true)
   })
 
-  test('start-services dry-run mentions baked DNAT helper', async () => {
+  test('data-mounts dry-run mentions disks.json + mkfs policy', async () => {
+    const { ctx, logs } = testCtx({ dryRun: true })
+    await runStage('data-mounts', ctx)
+    expect(logs.some((l) => /disks\.json/i.test(l))).toBe(true)
+    expect(logs.some((l) => /mkfs|mount only/i.test(l))).toBe(true)
+  })
+
+  test('start-services dry-run mentions ports.json DNAT', async () => {
     const { ctx, logs } = testCtx({ dryRun: true })
     await runStage('start-services', ctx)
-    expect(logs.some((l) => l.includes('/usr/local/lib/rocky/dnat-apply.sh'))).toBe(true)
+    expect(logs.some((l) => l.includes('/usr/local/lib/rocky/ports.json'))).toBe(true)
     expect(logs.join('\n')).not.toContain('{%')
   })
 

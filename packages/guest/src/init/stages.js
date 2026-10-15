@@ -6,6 +6,7 @@
 export const DEFAULT_STAGES = [
   'network-up',
   'host-baseline',
+  'data-mounts',
   'tier0-seal',
   'ssh-host-keys',
   'admin-user',
@@ -23,7 +24,7 @@ export const DEFAULT_STAGES = [
  * Same Tier-0 seal path as appliance (`qctl stage tier0-seal` / in-process stage).
  * @type {ReadonlyArray<PlatformStage>}
  */
-export const INIT_TANK_STAGES = ['tier0-seal', 'vw-mount', 'tank-create', 'poweroff']
+export const INIT_TANK_STAGES = ['tier0-seal', 'data-mounts', 'tank-create', 'poweroff']
 
 /** @type {ReadonlyArray<'default' | 'init-tank'>} */
 export const PROFILES = ['default', 'init-tank']

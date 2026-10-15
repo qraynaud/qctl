@@ -2,7 +2,8 @@
 
 Rocky Linux platform adapter staged onto the guest as `qctl-platform-rocky.mjs`:
 
-- capability → distro recipe map + `installPackages(string[])`
+- capability → distro recipe map + `installPackages(string[])` (`definePackagesMap` / `definePlatform` from `@qctl/shared/platform/define`, no Zod)
+- `FILESYSTEMS` / `DEFAULT_FS` / `OS_DISK` — data FS allow-list + default OS disk
 - `networking` — NetworkManager egress + firewalld DNAT (guest init stages call these)
 - `cloud-image.json` / `CLOUD_IMAGE` — pinned Rocky GenericCloud qcow2; host dynamically imports `CLOUD_IMAGE` from `qctl-platform-rocky.mjs` (not embedded in `qctl-host`, not a separate `dist/cloud-image.json`)
 
@@ -18,7 +19,8 @@ await platform.installPackages(['curl', 'jq', 'zfs'])
 await platform.networking.ensureUp(ctx)
 ```
 
-Pipx / http installs stay in provision `packages:` (seed `install-packages.sh`).
+Pipx / http installs come from provision `packages:` (seed `packages.json`); guest
+`qctl init` applies them (`installPipxPackages` / `installHttpPackages` with Bun fetch).
 
 ## Develop
 

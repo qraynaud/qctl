@@ -1,12 +1,11 @@
 /**
  * Host baseline: timezone, linger, apps subids/podman socket, ZFS module,
- * offline firewall, then /vw mount.
+ * offline firewall. Data volumes: {@link ./data-mounts.js}.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 
 import { StageError } from '../errors.js'
-import vwMount from './vw-mount.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -188,7 +187,7 @@ async function ensureAppsPodmanApiSocket(ctx) {
 
 export default {
   name: 'host-baseline',
-  describe: 'Timezone, linger, apps subids/podman socket, ZFS module, offline firewall, /vw mount',
+  describe: 'Timezone, linger, apps subids/podman socket, ZFS module, offline firewall',
   /**
    * @param {StageContext} ctx
    */
@@ -200,7 +199,6 @@ export default {
       'login.defs SUB_*_COUNT=0 + umask 022',
       `linger ${user} + subids + podman.socket`,
       'modprobe zfs; firewall-offline-cmd ssh/cockpit/http/https',
-      ...vwMount.plan(ctx),
     ]
   },
   /**
@@ -251,7 +249,5 @@ umask 022
     } catch (err) {
       throw new StageError('host-baseline', err instanceof Error ? err.message : String(err))
     }
-
-    await vwMount.run(ctx)
   },
 }

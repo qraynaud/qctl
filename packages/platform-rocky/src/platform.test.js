@@ -4,7 +4,7 @@ import {
   packagesForCapabilities,
 } from '@qctl/shared'
 
-import { CLOUD_IMAGE, platform } from './platform.js'
+import { CLOUD_IMAGE, DEFAULT_FS, FILESYSTEMS, OS_DISK, platform } from './platform.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('@qctl/platform-rocky module', () => {
@@ -12,6 +12,17 @@ describe('@qctl/platform-rocky module', () => {
     expect(CLOUD_IMAGE.file).toMatch(/^Rocky-9-GenericCloud-Base-.*\.qcow2$/)
     expect(CLOUD_IMAGE.url).toContain(CLOUD_IMAGE.file)
     expect(CLOUD_IMAGE.sha256).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  test('exports filesystems, defaultFs, and osDisk defaults', () => {
+    expect(FILESYSTEMS).toEqual(['xfs', 'ext4'])
+    expect(DEFAULT_FS).toBe('xfs')
+    expect(OS_DISK).toEqual({ id: 'os', size: '20G' })
+    expect(platform.filesystems).toEqual(['xfs', 'ext4'])
+    expect(platform.defaultFs).toBe('xfs')
+    expect(platform.osDisk).toEqual({ id: 'os', size: '20G' })
+    expect(platform.packages.xfs?.distro).toEqual(['xfsprogs'])
+    expect(platform.packages.ext4?.distro).toEqual(['e2fsprogs'])
   })
 
   test('exports packages map + installPackages + networking', () => {

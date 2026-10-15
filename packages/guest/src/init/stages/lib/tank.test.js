@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createContext } from '../../context.js'
-import { ensureTankPassphraseFromBootstrap, installTankPassphrase, tankCredFile } from './tank.js'
+import {
+  ensureTankPassphraseFromBootstrap,
+  installTankPassphrase,
+  tankAssertZfsMounted,
+  tankCredFile,
+} from './tank.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('ensureTankPassphraseFromBootstrap', () => {
@@ -14,8 +19,9 @@ describe('ensureTankPassphraseFromBootstrap', () => {
     const ctx = createContext({
       env: {
         QCTL_ENV: 'dev',
-        TANK_PASSPHRASE: 'lab-pass',
+        tank_passphrase_tank: 'lab-pass',
         ROCKY_TANK_CRED_FILE: cred,
+        ROCKY_ZFS_POOL: 'tank',
       },
       log: () => {},
       isRoot: () => true,
@@ -60,5 +66,69 @@ describe('ensureTankPassphraseFromBootstrap', () => {
     })
     await installTankPassphrase(ctx, 'secret')
     expect(readFileSync(cred, 'utf8')).toBe('secret')
+  })
+
+  test('reseeds per-pool tank_passphrase_<poolId> into credstore', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'tank-pass-'))
+    const ctx = createContext({
+      env: {
+        ROCKY_CREDSTORE_DIR: base,
+        tank_passphrase_cold: 'cold-secret',
+      },
+      log: () => {},
+      isRoot: () => true,
+      exec: async () => ({ code: 0, stdout: '', stderr: '' }),
+    })
+    const cred = await ensureTankPassphraseFromBootstrap(ctx, 'tank-import', 'cold')
+    expect(cred).toBe(join(base, 'tank_passphrase_cold'))
+    expect(readFileSync(cred, 'utf8')).toBe('cold-secret')
+  })
+})
+
+describe('tankAssertZfsMounted', () => {
+  test('accepts findmnt zfs + mounted=yes', async () => {
+    const ctx = createContext({
+      env: {},
+      log: () => {},
+      exec: async (argv) => {
+        if (argv[0] === 'findmnt') {
+          return { code: 0, stdout: 'zfs tank /tank\n', stderr: '' }
+        }
+        if (argv[0] === 'zfs' && argv.includes('mounted')) {
+          return { code: 0, stdout: 'yes\n', stderr: '' }
+        }
+        return { code: 1, stdout: '', stderr: 'unexpected' }
+      },
+    })
+    await tankAssertZfsMounted(ctx, 'tank', '/tank')
+  })
+
+  test('rejects when path is not a mountpoint', async () => {
+    const ctx = createContext({
+      env: {},
+      log: () => {},
+      exec: async (argv) => {
+        if (argv[0] === 'findmnt') return { code: 1, stdout: '', stderr: '' }
+        return { code: 0, stdout: 'yes\n', stderr: '' }
+      },
+    })
+    await expect(tankAssertZfsMounted(ctx, 'tank', '/tank')).rejects.toThrow(/not a mountpoint/)
+  })
+
+  test('rejects when zfs mounted=no', async () => {
+    const ctx = createContext({
+      env: {},
+      log: () => {},
+      exec: async (argv) => {
+        if (argv[0] === 'findmnt') {
+          return { code: 0, stdout: 'zfs tank /tank\n', stderr: '' }
+        }
+        if (argv[0] === 'zfs' && argv.includes('mounted')) {
+          return { code: 0, stdout: 'no\n', stderr: '' }
+        }
+        return { code: 1, stdout: '', stderr: 'unexpected' }
+      },
+    })
+    await expect(tankAssertZfsMounted(ctx, 'tank', '/tank')).rejects.toThrow(/mounted/)
   })
 })

@@ -56,8 +56,8 @@ const {
   formatVwAccountId,
   parseInitVwArgKeys,
   parseInitVwArgs,
-  parseVwArgs,
   resolveVwAccountId,
+  vwArgsSchema,
   valueCacheKey,
 } = require('./vw/index.js')
 
@@ -319,13 +319,15 @@ plugin.registerResolverFunction({
       attachment: raw.attachment !== undefined ? await resolveString(raw.attachment) : undefined,
       encoding: raw.encoding !== undefined ? await resolveString(raw.encoding) : undefined,
     }
-    /** @type {VwCall} */
-    let call
-    try {
-      call = parseVwArgs(resolved)
-    } catch (e) {
-      throw new SchemaError(e instanceof Error ? e.message : String(e))
+    const parsed = vwArgsSchema.safeParse(resolved)
+    if (!parsed.success) {
+      throw new SchemaError(
+        parsed.error.issues.map((i) => i.message).join('; ') || 'vw(): invalid arguments',
+      )
     }
+    /** @type {VwCall} */
+    const call = parsed.data
+
     try {
       const client = requireClient(call.accountId)
       if (client.cacheTtl !== undefined && pluginCache) {

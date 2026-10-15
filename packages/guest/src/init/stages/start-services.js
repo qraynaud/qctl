@@ -1,5 +1,6 @@
 /**
- * Unmask + start sshd/firewalld/cockpit/podman/QGA; apply baked DNAT via platform.networking.
+ * Unmask + start sshd/firewalld/cockpit/podman/QGA; apply DNAT from ports.json
+ * via platform.networking.
  */
 import { StageError } from '../errors.js'
 
