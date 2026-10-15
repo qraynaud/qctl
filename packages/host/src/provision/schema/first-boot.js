@@ -1,26 +1,20 @@
 import { z } from 'zod'
 
+import { tankPassphraseCredName } from '@qctl/shared'
+
 import { formatSubuid } from './users.js'
-import { optionalTrimmedText, trimmedText } from './zod-utils.js'
+import { trimmedText } from './zod-utils.js'
 
-/** @import { SecretsFile } from './types.js' */
+export { tankPassphraseCredName }
+
+/** @import { ProvisionFile } from './types.js' */
 /** @import { SubuidRange } from './users.js' */
-
-/**
- * Tank passphrase (required for init-tank / tank-import when creating or reseeding the key file).
- */
-export const tankSchema = z
-  .object({
-    passphrase: optionalTrimmedText.optional(),
-  })
-  .passthrough()
-  .optional()
 
 /**
  * Registry login lines: `registry|username|token` (same shape as former @tag(container-registry)).
  * Entries may be plain strings or `Buffer` from resolved `!env`.
  */
-export const registriesSchema = z.array(trimmedText).optional()
+export const registriesSchema = z.array(trimmedText).prefault([])
 
 /**
  * Tier-0 credential value: utf8 text or opaque bytes from `!env`.
@@ -30,15 +24,17 @@ export const registriesSchema = z.array(trimmedText).optional()
 
 /**
  * Fixed Tier-0 / env credential names stages read after seed (host-resolved).
- * @typedef {object} FirstBootCredentials
- * @property {string} [TANK_PASSPHRASE]
- * @property {CredentialValue} [DEPLOY_KEY]
- * @property {string} [ADMIN_USERNAME]
- * @property {string} [ADMIN_PASSWORD]
- * @property {string} [ADMIN_UID]
- * @property {string} [ADMIN_GID]
- * @property {CredentialValue} [SSH_HOST_KEYS]
- * @property {string} [ROCKY_REGISTRIES] JSON array of registry|user|token
+ * Per encrypted tank: {@link tankPassphraseCredName} → `tank_passphrase_<poolId>`.
+ * @typedef {{
+ *   DEPLOY_KEY?: CredentialValue,
+ *   ADMIN_USERNAME?: string,
+ *   ADMIN_PASSWORD?: string,
+ *   ADMIN_UID?: string,
+ *   ADMIN_GID?: string,
+ *   SSH_HOST_KEYS?: CredentialValue,
+ *   ROCKY_REGISTRIES?: string,
+ *   [cred: string]: CredentialValue | undefined,
+ * }} FirstBootCredentials
  */
 
 /**
@@ -56,15 +52,18 @@ function asCredential(value) {
  * Map parsed provision → fixed guest credential names for Tier-0 pending.
  * Apps identity is not Tier-0 — seed bakes it for baseline / Quadlet separately.
  *
- * @param {SecretsFile} data
+ * @param {ProvisionFile} data
  * @returns {FirstBootCredentials}
  */
 export function firstBootCredentialsFromProvision(data) {
   /** @type {FirstBootCredentials} */
   const out = {}
 
-  const pass = data.tank?.passphrase
-  if (pass) out.TANK_PASSPHRASE = pass
+  for (const tank of Object.values(data.disks?.tanks || {})) {
+    const pass = asCredential(tank.passphrase)
+    if (pass == null) continue
+    out[tankPassphraseCredName(tank.id)] = pass
+  }
 
   const deploy = asCredential(data.repo?.deploy_key)
   if (deploy != null) out.DEPLOY_KEY = deploy
@@ -88,7 +87,7 @@ export function firstBootCredentialsFromProvision(data) {
 
 /**
  * Normalized apps identity from parsed provision (`users.apps`).
- * @param {SecretsFile} data
+ * @param {ProvisionFile} data
  * @returns {{
  *   username: string,
  *   uid: number,

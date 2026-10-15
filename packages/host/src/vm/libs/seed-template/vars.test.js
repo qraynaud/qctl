@@ -4,7 +4,9 @@ import { join } from 'node:path'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { initInstance } from '../../../init.js'
+import { clearEnvProvisionCache } from '../../../lib/load-config.js'
 import { resetRepoRootCache } from '../../../lib/paths.js'
+import { diskMounts } from '../../../provision/schema/disks.js'
 import { buildVars } from './vars.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -16,6 +18,8 @@ const origHome = process.env.HOME
 const temps = []
 
 beforeEach(() => {
+  clearEnvProvisionCache()
+  diskMounts.clear()
   const base = makeTempDir()
   temps.push(base)
   process.env.QCTL_CACHE_HOME = join(base, 'cache')
@@ -25,6 +29,8 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(origCwd)
   resetRepoRootCache()
+  clearEnvProvisionCache()
+  diskMounts.clear()
   if (origCache === undefined) delete process.env.QCTL_CACHE_HOME
   else process.env.QCTL_CACHE_HOME = origCache
   if (origData === undefined) delete process.env.QCTL_DATA_HOME
@@ -61,6 +67,6 @@ describe('buildVars', () => {
     expect(ctx.is_init_tank).toBe(false)
     expect(ctx.local_hostname).toBe('rocky')
     expect(ctx.admin_ssh_authorized_keys?.length).toBeGreaterThan(0)
-    expect(ctx.secrets).toBeTruthy()
+    expect(ctx.provision).toBeTruthy()
   })
 })

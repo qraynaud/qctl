@@ -1,9 +1,10 @@
 import { $, chalk } from 'zx'
 
 import { portsFromArgv } from '../../../lib/options.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { HOST_DEPS, die, errMessage, requireBins } from '../../../lib/util.js'
 import { downloadImage } from '../../commands/download.js'
+import { assertInitTankForceOrFresh, logInitTankPools } from '../../libs/assert-init-tank-force.js'
+import { summarizeAttachModes, withAttachModes } from '../../libs/attach-mode.js'
 import { matchInitTankFatal, startSerialTcpFollow } from '../../libs/console.js'
 import { ensureDisks } from '../../libs/disks.js'
 import {
@@ -11,12 +12,14 @@ import {
   reportGuestFatalLeaveRunning,
   waitForSuccessOrGuestFatal,
 } from '../../libs/guest-fatal.js'
+import { resolveInitTankPools } from '../../libs/init-tank-pools.js'
 import {
   domainExists,
   ensureDefaultNetwork,
   removeDomain,
   virsh,
 } from '../../libs/libvirt/index.js'
+import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { ensureSeed } from '../../libs/seed/iso.js'
 import { runSeed } from '../../libs/seed/run.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
@@ -75,9 +78,6 @@ export async function initTank(argv) {
     connect,
     memory,
     vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
     network,
     osinfo,
     timeout,
@@ -90,24 +90,47 @@ export async function initTank(argv) {
   const net = network === 'auto' ? 'user' : network
   const timeoutSec = timeout
   const ports = portsFromArgv(argv)
+  const force = Boolean(argv.force)
 
+  const resolved = await resolveProvisionDisks({
+    env: env || 'dev',
+    target: argv.target || 'local',
+  })
+  const selection = resolveInitTankPools(resolved, argv.poolIds)
+  if (!selection) {
+    console.log(chalk.yellow('vm: init-tank: no disks.tanks in provision — nothing to create'))
+    return
+  }
+  logInitTankPools(selection.poolIds)
   console.log(
     chalk.dim(
-      '  wipe OS + tank vdevs; keep /vw; guest: create→export→poweroff; host: destroy --keep-data',
+      `  wipe OS + selected tank members${force ? ' (-f)' : ''}; keep data; guest: create→export→poweroff`,
     ),
   )
+  console.log(chalk.dim(`  disks: ${summarizeAttachModes(withAttachModes(resolved.members))}`))
 
   if (dryRun) {
     console.log(chalk.green('vm: dry-run init-tank steps:'))
-    console.log('  1. seed --profile init-tank')
-    console.log('  2. remove existing domain; wipe OS + data/special (keep /vw)')
+    console.log(`  1. seed --profile init-tank (pools=${selection.poolIds.join(',')})`)
+    console.log(
+      `  2. remove domain; wipe OS`
+        + (force
+          ? ` + tank members ${selection.memberIds.join(',')}`
+          : ' (tank members must be absent unless -f)'),
+    )
     console.log('  3. virt-install minimal seed (no sshd)')
     console.log(
       `  4. wait for guest poweroff (≤${timeoutSec}s)${noConsole ? '' : '; stream serial console'}`,
     )
-    console.log('  5. destroy --keep-data')
+    console.log('  5. destroy --keep-persistent')
     return
   }
+
+  assertInitTankForceOrFresh({
+    name,
+    members: selection.members,
+    force,
+  })
 
   await requireBins(['virt-install', 'virsh', 'qemu-img', 'swtpm'])
 
@@ -119,6 +142,8 @@ export async function initTank(argv) {
     allowMissingFiles: false,
     env,
     target: argv.target || 'local',
+    initTankPools: selection.poolIds,
+    initTankForce: force,
   })
 
   if (await domainExists(connect, name)) {
@@ -140,11 +165,9 @@ export async function initTank(argv) {
   const disks = await ensureDisks({
     name,
     baseImage,
-    vwSize,
-    dataSize,
-    specialSize,
+    resolved,
     wipeOs: true,
-    wipeTank: true,
+    wipeTankIds: force ? selection.memberIds : [],
     dryRun: false,
   })
 
@@ -165,7 +188,14 @@ export async function initTank(argv) {
       }
       if (domainStarted || (await domainExists(connect, name))) {
         // Full wipe of this attempt (OS + /vw + tank); re-run init-tank from scratch.
-        await destroyVm({ connect, name, keepData: false, dryRun: false })
+        await destroyVm({
+          connect,
+          name,
+          keepPersistent: false,
+          dryRun: false,
+          env,
+          target: argv.target || 'local',
+        })
       }
     } catch (err) {
       console.error(chalk.red(`vm: cleanup after interrupt failed: ${errMessage(err)}`))
@@ -199,7 +229,6 @@ export async function initTank(argv) {
       disks,
       seed,
       ports,
-      argv,
       network: net,
       osinfo,
       serialTcpPort,
@@ -224,10 +253,17 @@ export async function initTank(argv) {
       consoleFollow = null
     }
 
-    await destroyVm({ connect, name, keepData: true, dryRun: false })
+    await destroyVm({
+      connect,
+      name,
+      keepPersistent: true,
+      dryRun: false,
+      env,
+      target: argv.target || 'local',
+    })
 
     console.log(chalk.green('vm: init-tank done'))
-    console.log(chalk.dim(`  kept /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT}; OS removed`))
+    console.log(chalk.dim(`  kept ${disks.attached.length} persistent disk(s); OS removed`))
     console.log(chalk.dim('  next: qctl vm up --wipe-os'))
     console.log(chalk.dim('  (appliance first-boot 30 will import tank)'))
   } catch (err) {

@@ -108,9 +108,6 @@ describe('host CLI', () => {
     expect(stdout).toContain('--include-tooling')
     expect(stdout).toContain('--remote-dir')
     expect(stdout).toContain('--delete')
-    // passt lab ports belong on vm up / ssh-info, not sync
-    expect(stdout).not.toContain('--cockpit-port')
-    expect(stdout).not.toContain('--caddy-http-port')
   })
 
   test('init --help', async () => {
@@ -143,23 +140,20 @@ describe('host CLI', () => {
     expect(stdout).toContain('--wipe-os')
   })
 
-  test('vm init-tank --help has boot flags but not passt service ports', async () => {
+  test('vm init-tank --help has boot flags and pool ids', async () => {
     const { stdout, code } = await runHost(['vm', 'init-tank', '--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('--memory')
     expect(stdout).toContain('--timeout')
-    expect(stdout).not.toContain('--ssh-port')
-    expect(stdout).not.toContain('--cockpit-port')
-    expect(stdout).not.toContain('--caddy-http-port')
+    expect(stdout).toMatch(/poolId|disks\.tanks/i)
+    expect(stdout).not.toContain('--all')
   })
 
-  test('vm up --help lists passt ports inside an instance', async () => {
-    const root = makeTempDir()
-    temps.push(root)
-    const { root: dir } = initInstance(join(root, 'demo'))
-    const { stdout, code } = await runHost(['vm', 'up', '--help'], { cwd: dir })
+  test('vm destroy --help uses keep-persistent (not keep-data)', async () => {
+    const { stdout, code } = await runHost(['vm', 'destroy', '--help'])
     expect(code).toBe(0)
-    expect(stdout).toContain('--ssh-port')
+    expect(stdout).toContain('--keep-persistent')
+    expect(stdout).not.toContain('--keep-data')
   })
 
   test('vm seed outside an instance exits 1 with guidance', async () => {
@@ -181,7 +175,7 @@ describe('host CLI', () => {
       join(seedKit, 'cloud-init', 'user-data.yaml'),
       [
         "hostname: !template '{{ local_hostname }}'",
-        "tank: !template '{{ secrets.guest.TANK_PASSPHRASE }}'",
+        "tank: !template '{{ provision.guest.tank_passphrase_tank }}'",
         "ssh_keys: !template '{{ admin_ssh_authorized_keys }}'",
         '',
       ].join('\n'),
@@ -196,7 +190,16 @@ describe('host CLI', () => {
     const guestDist = join(base, 'guest-dist')
     mkdirSync(guestDist, { recursive: true })
     writeFileSync(join(guestDist, 'qctl-guest'), '#!/bin/sh\n')
-    writeFileSync(join(guestDist, 'qctl-platform-rocky.mjs'), 'export default {}\n')
+    writeFileSync(
+      join(guestDist, 'qctl-platform-rocky.mjs'),
+      [
+        "export const FILESYSTEMS = Object.freeze(['xfs', 'ext4'])",
+        "export const DEFAULT_FS = 'xfs'",
+        "export const OS_DISK = Object.freeze({ id: 'os', size: '20G' })",
+        'export const platform = { filesystems: FILESYSTEMS, defaultFs: DEFAULT_FS, osDisk: OS_DISK }',
+        '',
+      ].join('\n'),
+    )
     writeFileSync(join(guestDist, 'varlock-local-encrypt'), '#!/bin/sh\n')
     const { stdout, stderr, code } = await runHost(['vm', 'seed', '--out', keep], {
       cwd: root,

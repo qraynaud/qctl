@@ -1,7 +1,12 @@
 import {
+  DISKS_JSON_PATH,
+  PORTS_JSON_PATH,
+  disksJsonPayload,
   injectGuestCredentialFiles,
   injectPackagesManifest,
+  injectPorts,
   injectProvisionFiles,
+  injectResolvedDisks,
 } from './inject.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -30,20 +35,20 @@ describe('injectGuestCredentialFiles', () => {
   test('embeds Tier-0 pending paths and replaces prior entries', () => {
     const userData = {
       write_files: [
-        { path: '/var/lib/rocky/tier0-pending/TANK_PASSPHRASE', content: 'old\n' },
+        { path: '/var/lib/rocky/tier0-pending/tank_passphrase_tank', content: 'old\n' },
         { path: '/etc/other', content: 'keep\n' },
       ],
     }
     const out = injectGuestCredentialFiles(userData, {
-      TANK_PASSPHRASE: 'new',
+      tank_passphrase_tank: 'new',
       OTHER: 'x',
     })
     const paths = writeFilesOf(out).map((w) => w.path)
     expect(paths).toContain('/etc/other')
-    expect(paths).toContain('/var/lib/rocky/tier0-pending/TANK_PASSPHRASE')
+    expect(paths).toContain('/var/lib/rocky/tier0-pending/tank_passphrase_tank')
     expect(paths).toContain('/var/lib/rocky/tier0-pending/OTHER')
     const tank = writeFilesOf(out).find(
-      (w) => w.path === '/var/lib/rocky/tier0-pending/TANK_PASSPHRASE',
+      (w) => w.path === '/var/lib/rocky/tier0-pending/tank_passphrase_tank',
     )
     expect(tank?.content).toBe('new\n')
     expect(tank?.encoding).toBeUndefined()
@@ -81,6 +86,58 @@ describe('injectGuestCredentialFiles', () => {
     )
     expect(entry?.encoding).toBeUndefined()
     expect(entry?.content).toBe(pem.endsWith('\n') ? pem : `${pem}\n`)
+  })
+})
+
+describe('injectResolvedDisks', () => {
+  test('writes disks.json without passphrases', () => {
+    const resolved = {
+      os: { id: 'os', size: '20G' },
+      data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs', size: '2G' } },
+      tanks: {
+        tank: {
+          id: 'tank',
+          mount: '/tank',
+          passphrase: 'secret',
+          options: {
+            pool: { ashift: 12, autotrim: 'off', autoexpand: 'on', failmode: 'continue' },
+            dataset: { compression: 'lz4', atime: 'off', xattr: 'sa', special_small_blocks: 0 },
+            acl: { acltype: 'posix', aclmode: 'passthrough', aclinherit: 'passthrough' },
+          },
+          vdevs: {},
+        },
+      },
+      members: [{ id: 'os', kind: /** @type {const} */ ('os'), size: '20G' }],
+      encryptedTankIds: ['tank'],
+    }
+    const payload = disksJsonPayload(resolved)
+    expect(payload.tanks.tank).not.toHaveProperty('passphrase')
+    expect(payload.encryptedTankIds).toEqual(['tank'])
+
+    const out = injectResolvedDisks({ write_files: [] }, resolved)
+    const entry = writeFilesOf(out).find((w) => w.path === DISKS_JSON_PATH)
+    expect(JSON.parse(String(entry?.content))).toEqual(payload)
+  })
+})
+
+describe('injectPorts', () => {
+  test('writes ports.json with schema defaults and replaces prior entry', () => {
+    const userData = {
+      write_files: [
+        { path: PORTS_JSON_PATH, content: 'old\n' },
+        { path: '/etc/other', content: 'keep\n' },
+      ],
+    }
+    const out = injectPorts(userData, {
+      https: { port: 443, dnat: 8443 },
+    })
+    const entry = writeFilesOf(out).find((w) => w.path === PORTS_JSON_PATH)
+    expect(JSON.parse(String(entry?.content))).toEqual({
+      ssh: { port: 22, forward: 2222 },
+      cockpit: { port: 9090, forward: 9090 },
+      https: { port: 443, dnat: 8443 },
+    })
+    expect(writeFilesOf(out).some((w) => w.path === '/etc/other')).toBe(true)
   })
 })
 

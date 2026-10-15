@@ -4,11 +4,10 @@
  *
  * Disks stay attached (with serials) — we rename/promote the holder into the
  * appliance instead of detach→create (unused/delete frees LVs).
- * Holder layout: scsi0 free for OS; scsi1+= rocky-vw / data* / special*.
+ * Holder layout: scsi0 free for OS; scsi1+= persistent members (serial = disk id).
  */
 import { chalk } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
 import { applyNetsToForm } from './config.js'
 import { rockyTpmstate } from './tpm.js'
@@ -47,7 +46,7 @@ export async function assertNameFreeForCreate(client, name, { allowHolder = fals
   if (hvmid != null) {
     die(
       `holder ${hname} already exists (vmid=${hvmid}) — refuse create `
-        + `(would leave two VMs). Promote needs serial=rocky-vw on the holder; `
+        + `(would leave two VMs). Promote needs persistent disk serials on the holder; `
         + `fix disks or: qctl vm destroy --target proxmox`,
     )
   }
@@ -58,16 +57,11 @@ export async function assertNameFreeForCreate(client, name, { allowHolder = fals
  * @returns {DiskState}
  */
 export function emptyDiskState(vmid) {
-  return {
-    vw: null,
-    data: Array(DATA_COUNT).fill(null),
-    special: Array(SPECIAL_COUNT).fill(null),
-    vmid,
-  }
+  return { volids: {}, vmid }
 }
 
 /**
- * Parse rocky-* serial → volid map from a qemu config object.
+ * Parse serial → volid map from a qemu config object.
  * @param {QemuConfig | null | undefined} cfg
  * @param {number} [vmid]
  * @returns {DiskState}
@@ -80,40 +74,28 @@ export function diskStateFromConfig(cfg, vmid) {
     const serial = diskSerialFromValue(val)
     const volid = volidFromDiskValue(val)
     if (!serial || !volid) continue
-    if (serial === 'rocky-vw') state.vw = volid
-    else {
-      let m = /^rocky-data(\d+)$/.exec(serial)
-      if (m) {
-        const i = Number(m[1])
-        if (i >= 0 && i < DATA_COUNT) state.data[i] = volid
-        continue
-      }
-      m = /^rocky-special(\d+)$/.exec(serial)
-      if (m) {
-        const i = Number(m[1])
-        if (i >= 0 && i < SPECIAL_COUNT) state.special[i] = volid
-      }
-    }
+    state.volids[serial] = volid
   }
   return state
 }
 
 /**
  * @param {DiskState | null | undefined} state
+ * @param {string[]} expectedIds non-OS disk ids that must be present
  * @param {string} name
  * @returns {void}
  */
-export function assertPersistentDisks(state, name) {
-  if (!state?.vw) {
-    die(
-      `missing /vw for ${name} — run init-tank, or check holder VM ${holderVmName(name)} on Proxmox`,
-    )
+export function assertPersistentDisks(state, expectedIds, name) {
+  if (!expectedIds.length) {
+    die(`no persistent disks expected for ${name}`)
   }
-  for (let i = 0; i < DATA_COUNT; i++) {
-    if (!state.data?.[i]) die(`missing data${i} for ${name} — re-run init-tank`)
-  }
-  for (let i = 0; i < SPECIAL_COUNT; i++) {
-    if (!state.special?.[i]) die(`missing special${i} for ${name} — re-run init-tank`)
+  for (const id of expectedIds) {
+    if (!state?.volids?.[id]) {
+      die(
+        `missing disk serial=${id} for ${name} — run init-tank, or check holder VM `
+          + `${holderVmName(name)} on Proxmox`,
+      )
+    }
   }
 }
 
@@ -153,7 +135,7 @@ async function stopVm(client, vmid, label) {
 
 /**
  * Turn appliance VM into stopped holder: drop OS/CDROM/net noise, rename to <name>-disks.
- * rocky-* disks stay attached (scsi1+).
+ * Disks with a serial stay attached (scsi1+).
  * @param {ProxmoxClient} client
  * @param {{ vmid: number, name: string }} opts
  * @returns {Promise<DiskState>}
@@ -178,10 +160,10 @@ export async function demoteToHolder(client, { vmid, name }) {
     }
     if (!/^(scsi|virtio|sata)\d+$/.test(key)) continue
     const serial = diskSerialFromValue(val)
-    if (serial?.startsWith('rocky-')) continue
+    // Keep any disk that carries a serial (persistent inventory).
+    if (serial) continue
     drop.push(key)
   }
-  // Drop NICs — holder is inventory only
   for (const key of Object.keys(cfg)) {
     if (/^net\d+$/.test(key)) drop.push(key)
   }
@@ -201,22 +183,19 @@ export async function demoteToHolder(client, { vmid, name }) {
   })
 
   const state = diskStateFromConfig(await client.qemuConfig(vmid), vmid)
-  console.log(
-    chalk.green(
-      `vm: holder ${hname} ready (vmid=${vmid}; vw=${Boolean(state.vw)} data=${state.data.filter(Boolean).length} special=${state.special.filter(Boolean).length})`,
-    ),
-  )
+  const n = Object.keys(state.volids).length
+  console.log(chalk.green(`vm: holder ${hname} ready (vmid=${vmid}; ${n} persistent disk(s))`))
   return state
 }
 
 /**
  * Promote holder <name>-disks → appliance <name>: rename, add OS import + NoCloud ISO, start.
  * @param {ProxmoxClient} client
- * @param {Pick<CreateRockyVmOpts, 'name' | 'memory' | 'vcpus' | 'importVolid' | 'isoVolid'>} opts
+ * @param {Pick<CreateRockyVmOpts, 'name' | 'memory' | 'vcpus' | 'importVolid' | 'isoVolid' | 'osSize' | 'expectedIds'>} opts
  * @returns {Promise<{ vmid: number, state: DiskState }>}
  */
 export async function promoteHolderToAppliance(client, opts) {
-  const { name, memory, vcpus, importVolid, isoVolid } = opts
+  const { name, memory, vcpus, importVolid, isoVolid, osSize = '20G', expectedIds = [] } = opts
   const node = client.config.node
   const storage = client.config.storage
   const hname = holderVmName(name)
@@ -224,17 +203,16 @@ export async function promoteHolderToAppliance(client, opts) {
   if (vmid == null) die(`holder ${hname} not found — run init-tank first`)
 
   const state = diskStateFromConfig(await client.qemuConfig(vmid), vmid)
-  assertPersistentDisks(state, name)
+  assertPersistentDisks(state, expectedIds, name)
 
   const cfg = await client.qemuConfig(vmid)
   if (cfg.scsi0 && !/media=cdrom/.test(String(cfg.scsi0))) {
     const serial = diskSerialFromValue(cfg.scsi0)
-    if (serial?.startsWith('rocky-')) {
+    if (serial && expectedIds.includes(serial)) {
       die(
-        `holder ${hname} has rocky disk on scsi0 (${serial}) — expected scsi0 free for OS; re-run init-tank`,
+        `holder ${hname} has persistent disk on scsi0 (${serial}) — expected scsi0 free for OS; re-run init-tank`,
       )
     }
-    // Non-rocky on scsi0 — remove so we can import OS there
     await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
       delete: 'scsi0',
       force: '1',
@@ -255,7 +233,7 @@ export async function promoteHolderToAppliance(client, opts) {
     serial0: 'socket',
     vga: 'serial0',
     boot: 'order=scsi0',
-    scsi0: `${storage}:0,import-from=${importVolid},size=20G`,
+    scsi0: `${storage}:0,import-from=${importVolid},size=${osSize}`,
     ide2: `${isoVolid},media=cdrom`,
   }
   if (!cfg.tpmstate0) form.tpmstate0 = rockyTpmstate(storage)
@@ -273,7 +251,7 @@ export async function promoteHolderToAppliance(client, opts) {
 }
 
 /**
- * Destroy holder `<name>-disks` and all of its volumes (full wipe, no keep-data).
+ * Destroy holder `<name>-disks` and all of its volumes (full wipe, no keep-persistent).
  * @param {ProxmoxClient} client
  * @param {string} name
  * @returns {Promise<void>}
@@ -290,9 +268,7 @@ export async function destroyHolder(client, name) {
   await stopVm(client, hvmid, hname)
   const cfg = await client.qemuConfig(hvmid)
   const state = diskStateFromConfig(cfg, hvmid)
-  const volids = /** @type {string[]} */ (
-    [state.vw, ...state.data, ...state.special].filter(Boolean)
-  )
+  const volids = Object.values(state.volids)
 
   const keys = Object.keys(cfg).filter(
     (k) => /^(scsi|virtio|sata|ide)\d+$/.test(k) || /^unused\d+$/.test(k),

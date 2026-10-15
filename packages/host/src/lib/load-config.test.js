@@ -4,7 +4,13 @@ import { join } from 'node:path'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { initInstance } from '../init.js'
-import { loadEnvSecrets, loadEnvSecretsOrThrow } from './load-config.js'
+import { diskMounts } from '../provision/schema/disks.js'
+import {
+  clearEnvProvisionCache,
+  loadEnvProvision,
+  loadEnvProvisionOrThrow,
+  loadEnvProvisionSafe,
+} from './load-config.js'
 import { resetRepoRootCache } from './paths.js'
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 
@@ -22,6 +28,8 @@ const SECRET_ENV = {
 
 beforeEach(() => {
   resetRepoRootCache()
+  clearEnvProvisionCache()
+  diskMounts.clear()
   Object.assign(process.env, SECRET_ENV)
 })
 
@@ -29,6 +37,8 @@ afterEach(() => {
   process.chdir(origCwd)
   process.env = { ...origEnv }
   resetRepoRootCache()
+  clearEnvProvisionCache()
+  diskMounts.clear()
   while (temps.length) {
     const dir = temps.pop()
     if (dir) removeTempDir(dir)
@@ -42,37 +52,38 @@ function makeInstance() {
   return realpathSync(initInstance(join(base, 'inst')).root)
 }
 
-describe('loadEnvSecrets (provision adapter)', () => {
+describe('loadEnvProvision (provision adapter)', () => {
   test('local target: resolves !env and keeps the seed/driver shape', async () => {
     const root = makeInstance()
     process.chdir(root)
-    const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
 
     expect(sec.env).toBe('dev')
     expect(sec.target).toBe('local')
     expect(sec.paths.map((p) => p.split('/').pop())).toEqual(['dev.yaml', 'dev.local.yaml'])
     expect(sec.provisionDir).toBe(join(root, 'provision'))
     expect(sec.guest).toMatchObject({
-      TANK_PASSPHRASE: 'lab-tank-passphrase',
+      tank_passphrase_tank: 'lab-tank-passphrase',
       ADMIN_USERNAME: 'admin',
       ADMIN_UID: '1000',
       ADMIN_GID: '1000',
     })
     expect(sec.guest.DEPLOY_KEY).toEqual(Buffer.from('lab-deploy-key-placeholder', 'utf8'))
     expect(sec.guest.ADMIN_PASSWORD).toBeUndefined()
-    expect(sec.ports.map((p) => p.name)).toEqual(['ssh', 'http', 'https'])
-    expect(sec.ports[0]).toMatchObject({ name: 'ssh', port: 22, forward: 2222 })
-    expect(sec.uplinks).toEqual([{ name: 'eth0', dhcp4: true }])
-    expect(sec.vlans[0]).toMatchObject({ name: 'vlan2', id: 2, link: 'eth0', ipv4: '10.42.2.2' })
+    expect(Object.keys(sec.ports).sort()).toEqual(['cockpit', 'http', 'https', 'ssh'])
+    expect(sec.ports.ssh).toMatchObject({ port: 22, forward: 2222 })
+    expect(sec.ports.cockpit).toMatchObject({ port: 9090, forward: 9090 })
+    expect(sec.uplinks).toEqual({ eth0: { dhcp4: true } })
+    expect(sec.vlans.vlan2).toMatchObject({ id: 2, link: 'eth0', ipv4: '10.42.2.2' })
     expect(sec.local).toMatchObject({ cpu: 2, memory: 4096 })
     expect(sec.proxmox).toBeNull()
     expect(sec.networking).toBeTruthy()
   })
 
-  test('qctl: key is stripped from data; platform preserved', async () => {
+  test('qctl.platform defaults to rocky', async () => {
     process.chdir(makeInstance())
-    const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
-    expect(sec.data.qctl).toBeUndefined()
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    expect(sec.data.qctl.platform).toBe('rocky')
     expect(sec.platform).toBe('rocky')
   })
 
@@ -84,14 +95,16 @@ describe('loadEnvSecrets (provision adapter)', () => {
       join(root, 'provision', 'dev.yaml'),
       `${base}\nssh:\n  authorized_keys:\n    - ssh-ed25519 AAAALIST list@test\n`,
     )
-    const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
     expect(sec.sshAuthorizedKeys).toBe('ssh-ed25519 AAAALIST list@test\n')
 
     writeFileSync(
       join(root, 'provision', 'dev.yaml'),
       `${base}\nssh:\n  authorized_keys: |\n    ssh-ed25519 AAAASTR string@test\n`,
     )
-    const sec2 = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
+    clearEnvProvisionCache()
+    diskMounts.clear()
+    const sec2 = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
     expect(sec2.sshAuthorizedKeys).toBe('ssh-ed25519 AAAASTR string@test\n')
   })
 
@@ -109,7 +122,7 @@ describe('loadEnvSecrets (provision adapter)', () => {
     process.env.HOME = fakeHome
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
+      const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
       expect(sec.sshAuthorizedKeys).toBe('ssh-ed25519 AAAAFALLBACK fallback@test\n')
       expect(warn.mock.calls.some((c) => String(c[0]).includes(pub))).toBe(true)
     } finally {
@@ -120,7 +133,7 @@ describe('loadEnvSecrets (provision adapter)', () => {
 
   test('proxmox target merges overlay and drops local block', async () => {
     process.chdir(makeInstance())
-    const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'proxmox' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'proxmox' })
     expect(sec.local).toBeNull()
     expect(sec.proxmox).toMatchObject({
       api_url: 'https://pve.example:8006',
@@ -128,13 +141,13 @@ describe('loadEnvSecrets (provision adapter)', () => {
       node: 'pve',
     })
     expect(sec.nets.length).toBeGreaterThan(0)
-    expect(sec.vlans[0]?.ipv4).toBe('10.0.2.2')
+    expect(sec.vlans.vlan2?.ipv4).toBe('10.0.2.2')
   })
 
   test('unresolved !env throws a helpful error', async () => {
     process.chdir(makeInstance())
     delete process.env.PROXMOX_API_TOKEN
-    await expect(loadEnvSecretsOrThrow({ env: 'dev', target: 'proxmox' })).rejects.toThrow(
+    await expect(loadEnvProvisionOrThrow({ env: 'dev', target: 'proxmox' })).rejects.toThrow(
       /PROXMOX_API_TOKEN/,
     )
   })
@@ -144,13 +157,13 @@ describe('loadEnvSecrets (provision adapter)', () => {
     delete process.env.VW_CLIENT_ID
     delete process.env.VW_CLIENT_SECRET
     delete process.env.VW_MASTER_PASSWORD
-    const sec = await loadEnvSecretsOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
     expect(sec.guest.VW_CLIENT_ID).toBeUndefined()
   })
 
   test('missing env file throws', async () => {
     process.chdir(makeInstance())
-    await expect(loadEnvSecretsOrThrow({ env: 'prod', target: 'local' })).rejects.toThrow(
+    await expect(loadEnvProvisionOrThrow({ env: 'prod', target: 'local' })).rejects.toThrow(
       /provision file not found/,
     )
   })
@@ -159,12 +172,12 @@ describe('loadEnvSecrets (provision adapter)', () => {
     const dir = realpathSync(makeTempDir())
     temps.push(dir)
     process.chdir(dir)
-    await expect(loadEnvSecretsOrThrow({ env: 'dev' })).rejects.toThrow(
+    await expect(loadEnvProvisionOrThrow({ env: 'dev' })).rejects.toThrow(
       /not inside a qctl instance/,
     )
   })
 
-  test('loadEnvSecrets exits 1 instead of throwing', async () => {
+  test('loadEnvProvision exits 1 instead of throwing', async () => {
     const dir = realpathSync(makeTempDir())
     temps.push(dir)
     process.chdir(dir)
@@ -173,10 +186,31 @@ describe('loadEnvSecrets (provision adapter)', () => {
     })
     const err = spyOn(console, 'error').mockImplementation(() => {})
     try {
-      await expect(loadEnvSecrets({ env: 'dev' })).rejects.toThrow('exit 1')
+      await expect(loadEnvProvision({ env: 'dev' })).rejects.toThrow('exit 1')
     } finally {
       exit.mockRestore()
       err.mockRestore()
     }
+  })
+
+  test('loadEnvProvisionSafe caches same env+target and refuses a different key', async () => {
+    process.chdir(makeInstance())
+    const a = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    const b = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    expect(a.ok && b.ok).toBe(true)
+    if (a.ok && b.ok) expect(a.provision).toBe(b.provision)
+
+    await expect(loadEnvProvisionSafe({ env: 'dev', target: 'proxmox' })).rejects.toThrow(
+      /already loaded/,
+    )
+  })
+
+  test('loadEnvProvisionSafe returns error result without throwing', async () => {
+    const dir = realpathSync(makeTempDir())
+    temps.push(dir)
+    process.chdir(dir)
+    const r = await loadEnvProvisionSafe({ env: 'dev' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/not inside a qctl instance/)
   })
 })

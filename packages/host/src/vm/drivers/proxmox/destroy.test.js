@@ -24,7 +24,7 @@ describe('proxmox destroy', () => {
       /** @type {VmArgv} */ ({
         name: 'rocky-dev',
         dryRun: true,
-        keepData: false,
+        keepPersistent: false,
       }),
     )
     expect(String(log.mock.calls[0]?.[0])).toMatch(/would destroy Proxmox/)
@@ -38,16 +38,14 @@ describe('proxmox destroy', () => {
     )
     spyOn(shared, 'clientFrom').mockResolvedValue(client)
     const destroyRocky = spyOn(vm, 'destroyRockyVm').mockResolvedValue({
-      vw: null,
-      data: [],
-      special: [],
+      volids: {},
       vmid: 101,
     })
     await destroy(
       /** @type {VmArgv} */ ({
         name: 'rocky-dev',
         dryRun: false,
-        keepData: true,
+        keepPersistent: true,
         env: 'dev',
       }),
     )

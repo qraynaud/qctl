@@ -18,7 +18,10 @@ afterEach(() => {
 describe('local sshInfo', () => {
   test('requires virsh and prints ssh hints', async () => {
     spyOn(util, 'requireBins').mockResolvedValue(undefined)
-    spyOn(options, 'portsFromArgv').mockReturnValue([])
+    spyOn(options, 'portsFromArgv').mockReturnValue({
+      ssh: { port: 22, forward: 2222 },
+      cockpit: { port: 9090, forward: 9090 },
+    })
     const print = spyOn(sshHints, 'printLocalSshInfo').mockResolvedValue(undefined)
     const argv = /** @type {VmArgv} */ ({
       connect: 'qemu:///system',

@@ -4,7 +4,7 @@
 import { chalk } from 'zx'
 
 import { portsFromArgv } from '../lib/options.js'
-import { portByName, resolvePorts } from '../lib/ports.js'
+import { portByName } from '../lib/ports.js'
 import { resolveVmName } from '../lib/target.js'
 import { virsh } from '../vm/libs/libvirt/index.js'
 
@@ -95,9 +95,8 @@ export async function resolveSyncEndpoint(argv) {
     }
   }
 
-  const ports = resolvePorts(portsFromArgv(argv), argv)
-  const ssh = portByName(ports, 'ssh')
-  const forward = ssh?.forward
+  const ports = portsFromArgv(argv)
+  const forward = portByName(ports, 'ssh').forward
   if (forward == null) {
     throw new Error(
       'no ssh.forward in provision networking.ports (passt).\n'

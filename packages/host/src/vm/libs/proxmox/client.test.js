@@ -10,13 +10,9 @@ const cfg = {
   imageStorage: 'local',
   nets: [],
   bridge: 'vmbr0',
-  vlan: null,
-  trunks: null,
-  mac: null,
-  vmid: null,
   provisionDir: '/tmp',
   env: 'dev',
-  secretsPath: '/tmp/.env',
+  provisionPath: '/tmp/.env',
 }
 
 /** @import { ProxmoxConfig } from './types.js' */

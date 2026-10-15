@@ -8,7 +8,8 @@ import { loadDriver } from '../drivers/index.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'target-check'
-export const describe = 'Verify host tools / secrets / hypervisor config for the selected --target'
+export const describe =
+  'Verify host tools / provision / hypervisor config for the selected --target'
 
 /**
  * @param {Argv} yargs

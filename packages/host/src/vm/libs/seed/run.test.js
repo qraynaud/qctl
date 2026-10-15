@@ -67,7 +67,16 @@ describe('seed ISO (@gcu/iso9660)', () => {
     const dist = join(base, 'dist')
     mkdirSync(dist, { recursive: true })
     writeFileSync(join(dist, 'qctl-guest'), '#!/bin/sh\necho guest\n')
-    writeFileSync(join(dist, 'qctl-platform-rocky.mjs'), 'export default {}\n')
+    writeFileSync(
+      join(dist, 'qctl-platform-rocky.mjs'),
+      [
+        "export const FILESYSTEMS = Object.freeze(['xfs', 'ext4'])",
+        "export const DEFAULT_FS = 'xfs'",
+        "export const OS_DISK = Object.freeze({ id: 'os', size: '20G' })",
+        'export const platform = { filesystems: FILESYSTEMS, defaultFs: DEFAULT_FS, osDisk: OS_DISK }',
+        '',
+      ].join('\n'),
+    )
     process.env.QCTL_GUEST_DIST = dist
 
     const home = join(base, 'home')

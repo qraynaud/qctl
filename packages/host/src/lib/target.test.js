@@ -1,5 +1,5 @@
-import { ENVS, TARGETS, assertProxmoxDiskPlan, defaultVmName, resolveVmName } from './target.js'
-import { describe, expect, spyOn, test } from 'bun:test'
+import { ENVS, TARGETS, defaultVmName, resolveVmName } from './target.js'
+import { describe, expect, test } from 'bun:test'
 
 /** @import { VmArgv } from '../vm/types.js' */
 
@@ -28,21 +28,5 @@ describe('target helpers', () => {
         /** @type {VmArgv} */ (/** @type {never} */ ({ target: 'proxmox', env: 'dev' })),
       ),
     ).toBe('rocky-dev')
-  })
-
-  test('assertProxmoxDiskPlan blocks proxmox prod', () => {
-    expect(() => assertProxmoxDiskPlan({ target: 'local', env: 'prod' })).not.toThrow()
-    expect(() => assertProxmoxDiskPlan({ target: 'proxmox', env: 'dev' })).not.toThrow()
-    const exit = spyOn(process, 'exit').mockImplementation(
-      /** @returns {never} */ () => {
-        throw new Error('exit')
-      },
-    )
-    spyOn(console, 'error').mockImplementation(() => {})
-    expect(() => assertProxmoxDiskPlan({ target: 'proxmox', env: 'prod' })).toThrow(/exit/)
-    expect(exit).toHaveBeenCalledWith(1)
-    exit.mockRestore()
-    // @ts-expect-error restore
-    console.error.mockRestore?.()
   })
 })

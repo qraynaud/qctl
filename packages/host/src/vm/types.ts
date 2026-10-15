@@ -22,19 +22,18 @@ export type VmArgv = {
   network: VmNetwork | string
   osinfo: string
   cidata?: string
-  vwSize: string
-  dataSize: string
-  specialSize: string
-  sshPort?: number
-  cockpitPort?: number
-  caddyHttpPort?: number
-  caddyHttpsPort?: number
   dryRun: boolean
   wipeOs?: boolean
-  keepData?: boolean
+  /** destroy: keep data + tank members (drop OS only). */
+  keepPersistent?: boolean
+  /** destroy: skip prompts; only valid with keepPersistent. */
+  yes?: boolean
   timeout: number
   forceDownload?: boolean
+  /** init-tank: recreate pool on existing tank members. */
   force?: boolean
+  /** init-tank: pool ids from disks.tanks (bare = all). */
+  poolIds?: string[]
   allowMissingFiles?: boolean
   allowMissingTier0?: boolean
   profile?: SeedProfile | string
@@ -44,12 +43,7 @@ export type VmArgv = {
   signal?: AbortSignal
 }
 
-export type PortEntry = {
-  name: string
-  port: number
-  forward: number | null
-  dnat: number | null
-}
+export type { PortEntry, PortsMap } from '../provision/schema/types.js'
 
 export type VmDriver = {
   id: 'local' | 'proxmox'

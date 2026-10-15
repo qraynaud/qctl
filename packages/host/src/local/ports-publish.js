@@ -1,23 +1,23 @@
 import { passtForwards } from '../lib/ports.js'
 
-/** @import { PortEntry } from '../vm/types.js' */
+/** @import { PortsMap } from '../vm/types.js' */
 
 const SKIP_NAMES = new Set(['ssh', 'cockpit'])
 
 /**
  * Outer `podman run -p` specs from provision networking.ports (minus ssh/cockpit).
  * Host port = `forward`; container port = `dnat ?? forward`.
- * @param {PortEntry[]} ports
+ * @param {PortsMap} ports
  * @returns {{ host: number, container: number, name: string }[]}
  */
 export function localPublishPorts(ports) {
   /** @type {{ host: number, container: number, name: string }[]} */
   const out = []
-  for (const p of passtForwards(ports)) {
-    if (SKIP_NAMES.has(p.name)) continue
+  for (const [name, p] of passtForwards(ports)) {
+    if (SKIP_NAMES.has(name)) continue
     if (p.forward == null) continue
     out.push({
-      name: p.name,
+      name,
       host: p.forward,
       container: p.dnat ?? p.forward,
     })
@@ -27,7 +27,7 @@ export function localPublishPorts(ports) {
 
 /**
  * Flat argv fragments: `-p`, `127.0.0.1:host:container`, …
- * @param {PortEntry[]} ports
+ * @param {PortsMap} ports
  * @returns {string[]}
  */
 export function localPublishPodmanArgs(ports) {

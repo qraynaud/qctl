@@ -145,7 +145,3 @@ export const getSeed = () => path.join(getCacheRepo(), 'seed')
 
 /** Per-repo VM disks (durable; not cache-GC'd). */
 export const getVms = () => path.join(getDataRepo(), 'vms')
-
-/** Prod-shaped tank: RAIDZ2 data + special mirror (tiny qcow2s for nested virt). */
-export const DATA_COUNT = 5
-export const SPECIAL_COUNT = 2

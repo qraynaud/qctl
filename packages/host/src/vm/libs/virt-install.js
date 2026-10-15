@@ -1,7 +1,6 @@
-import { DATA_COUNT, SPECIAL_COUNT } from '../../lib/paths.js'
 import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
 
-/** @import { PortEntry, VmArgv } from '../types.js' */
+/** @import { PortsMap } from '../types.js' */
 /** @import { VmDiskPaths } from './disks.js' */
 
 /**
@@ -12,8 +11,7 @@ import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
  *   vcpus: number|string,
  *   disks: VmDiskPaths,
  *   seed: { device: string, path: string, format?: string },
- *   ports: PortEntry[],
- *   argv?: VmArgv | Record<string, unknown>,
+ *   ports: PortsMap,
  *   network: string,
  *   osinfo: string,
  *   serialTcpPort?: number,
@@ -28,8 +26,6 @@ export function buildVirtInstallArgs({
   disks,
   seed,
   ports,
-  /** CLI overrides for ports[].forward */
-  argv = {},
   network,
   osinfo,
   /** @type {number | undefined} TCP port we listen on; qemu connects (no PTY). */
@@ -55,16 +51,12 @@ export function buildVirtInstallArgs({
     '--wait',
     '0',
     '--disk',
-    `path=${disks.os},format=qcow2,bus=virtio`,
-    '--disk',
-    `path=${disks.vw},format=qcow2,bus=virtio,serial=rocky-vw`,
+    `path=${disks.os.path},format=qcow2,bus=virtio`,
   ]
 
-  for (let i = 0; i < DATA_COUNT; i++) {
-    args.push('--disk', `path=${disks.data[i]},format=qcow2,bus=virtio,serial=rocky-data${i}`)
-  }
-  for (let i = 0; i < SPECIAL_COUNT; i++) {
-    args.push('--disk', `path=${disks.special[i]},format=qcow2,bus=virtio,serial=rocky-special${i}`)
+  for (const d of disks.attached) {
+    const format = d.path.endsWith('.qcow2') ? 'qcow2' : 'raw'
+    args.push('--disk', `path=${d.path},format=${format},bus=virtio,serial=${d.id}`)
   }
 
   if (seed.device === 'cdrom') {
@@ -76,7 +68,7 @@ export function buildVirtInstallArgs({
   if (network === 'default') {
     args.push('--network', 'network=default,model=virtio')
   } else {
-    args.push('--network', virtInstallPasstNetworkArg(ports, argv))
+    args.push('--network', virtInstallPasstNetworkArg(ports))
   }
 
   if (serialTcpPort) {

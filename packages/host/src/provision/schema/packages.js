@@ -18,22 +18,25 @@ const pkgName = z.string().trim().min(1)
 
 /** @typedef {SharedNormalizedPackages} NormalizedPackages */
 
-export const packagesSchema = z
-  .object({
-    distro: z.array(pkgName).optional(),
-    pipx: z.array(packagesPipxItemSchema).optional(),
-    http: z.array(packagesHttpItemSchema).optional(),
-  })
-  .passthrough()
-
 /**
- * Normalize packages block for seed / cloud-init.
- * @param {z.infer<typeof packagesSchema> | null | undefined} raw
- * @returns {NormalizedPackages}
+ * Field defaults + `.prefault({})` + transform to canonical NormalizedPackages
+ * (pipx strings → `{ package, inject }`, http nullables).
  */
-export function normalizePackages(raw) {
-  return normalizePackagesShared(raw)
-}
+export const packagesSchema = z
+  .strictObject({
+    distro: z.array(pkgName).default(() => []),
+    pipx: z.array(packagesPipxItemSchema).default(() => []),
+    http: z.array(packagesHttpItemSchema).default(() => []),
+  })
+  .prefault({})
+  .transform((p) => normalizePackagesShared(p))
+
+/** YAML `null` → omit, then `packagesSchema` prefault. */
+export const packagesFieldSchema = z
+  .unknown()
+  .optional()
+  .transform((v) => (v == null ? undefined : v))
+  .pipe(packagesSchema)
 
 /**
  * Ensure VCS tooling is present in `packages` (idempotent).

@@ -6,6 +6,7 @@ import { virshReply } from '../../libs/libvirt/test-virsh.js'
 import { check } from './check.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
+/** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
 /** @import { VmArgv } from '../../types.js' */
 
 afterEach(() => {
@@ -14,7 +15,7 @@ afterEach(() => {
   // @ts-expect-error restore
   libvirt.virsh.mockRestore?.()
   // @ts-expect-error restore
-  loadConfig.loadEnvSecrets.mockRestore?.()
+  loadConfig.loadEnvProvisionSafe.mockRestore?.()
   // @ts-expect-error restore
   paths.getImages.mockRestore?.()
   // @ts-expect-error restore
@@ -29,7 +30,7 @@ afterEach(() => {
 })
 
 describe('local check', () => {
-  test('reports OK when tools, libvirt, and secrets are present', async () => {
+  test('reports OK when tools, libvirt, and provision is present', async () => {
     /** @type {string[]} */
     const whichBins = []
     spyOn(util, 'which').mockImplementation(async (bin) => {
@@ -44,13 +45,21 @@ describe('local check', () => {
       if (cmd === 'net-list') return virshReply(0, ' Name      State\n default   active\n')
       return virshReply(0)
     })
-    spyOn(loadConfig, 'loadEnvSecrets').mockResolvedValue(
-      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvSecrets>>} */ ({
-        paths: ['/tmp/.env.dev'],
-        sshAuthorizedKeys: 'ssh-ed25519 AAAA',
-        guest: { TANK_PASSPHRASE: 'x' },
-      }),
-    )
+    spyOn(loadConfig, 'loadEnvProvisionSafe').mockResolvedValue({
+      ok: true,
+      provision: /** @type {LoadedProvision} */ (
+        /** @type {unknown} */ ({
+          paths: ['/tmp/.env.dev'],
+          sshAuthorizedKeys: 'ssh-ed25519 AAAA',
+          data: {
+            disks: {
+              tanks: { tank: { id: 'tank', passphrase: 'x' } },
+            },
+          },
+          guest: { tank_passphrase_tank: 'x' },
+        })
+      ),
+    })
     spyOn(console, 'log').mockImplementation(() => {})
     spyOn(console, 'error').mockImplementation(() => {})
 
@@ -77,13 +86,21 @@ describe('local check', () => {
       if (cmd === 'net-list') return virshReply(0, ' Name      State\n default   active\n')
       return virshReply(0)
     })
-    spyOn(loadConfig, 'loadEnvSecrets').mockResolvedValue(
-      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvSecrets>>} */ ({
-        paths: ['/tmp/.env.dev'],
-        sshAuthorizedKeys: 'ssh-ed25519 AAAA',
-        guest: { TANK_PASSPHRASE: 'x' },
-      }),
-    )
+    spyOn(loadConfig, 'loadEnvProvisionSafe').mockResolvedValue({
+      ok: true,
+      provision: /** @type {LoadedProvision} */ (
+        /** @type {unknown} */ ({
+          paths: ['/tmp/.env.dev'],
+          sshAuthorizedKeys: 'ssh-ed25519 AAAA',
+          data: {
+            disks: {
+              tanks: { tank: { id: 'tank', passphrase: 'x' } },
+            },
+          },
+          guest: { tank_passphrase_tank: 'x' },
+        })
+      ),
+    })
     /** @type {string[]} */
     const logs = []
     spyOn(console, 'log').mockImplementation((...args) => {

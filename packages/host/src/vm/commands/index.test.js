@@ -9,7 +9,7 @@ describe('vmCommands registry', () => {
       'up',
       'down',
       'destroy',
-      'init-tank',
+      'init-tank [poolIds..]',
       'status',
       'ssh-info',
       'target-check',

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import YAML from 'yaml'
 import { chalk, fs, path } from 'zx'
 
-import { loadEnvSecrets } from '../../../lib/load-config.js'
+import { loadEnvProvision } from '../../../lib/load-config.js'
 import { getCloud } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
 import { gcQctlCache, touchPath } from '../../../tooling/cache-gc.js'
@@ -17,7 +17,9 @@ import { renderNetworkConfigV2 } from '../guest-net.js'
 import {
   injectGuestCredentialFiles,
   injectPackagesManifest,
+  injectPorts,
   injectProvisionFiles,
+  injectResolvedDisks,
 } from '../seed-template/inject.js'
 import { renderTemplate } from '../seed-template/njk.js'
 import { buildVars } from '../seed-template/vars.js'
@@ -41,7 +43,10 @@ import { embedGuestTooling } from './tooling.js'
  *     | 'allowMissingFiles'
  *     | 'instanceId'
  *   >
- * >} argv
+ * > & {
+ *   initTankPools?: string[],
+ *   initTankForce?: boolean,
+ * }} argv
  * @returns {Promise<{
  *   isoPath: string,
  *   imgPath: string,
@@ -78,7 +83,7 @@ export async function runSeed(argv) {
     chalk.dim(`profile=${profileName} env=${env} target=${target} config=provision/`),
   )
 
-  const secRaw = await loadEnvSecrets({ env, target })
+  const secRaw = await loadEnvProvision({ env, target })
   const sec = applySeedProfileDefaults(secRaw, profileName)
   await ensurePlatformSeedKit()
 
@@ -93,18 +98,26 @@ export async function runSeed(argv) {
     allowMissingTier0,
     env,
     target,
-    secrets: sec,
+    provision: sec,
     profile: profileName,
+    initTankPools: argv.initTankPools,
+    initTankForce: argv.initTankForce,
   })
-  const userData = injectPackagesManifest(
-    injectProvisionFiles(
-      injectGuestCredentialFiles(
-        renderTemplate(userDataPath, vars, allowMissingFiles),
-        /** @type {Record<string, string | Buffer> | undefined} */ (vars.secrets?.guest),
+  const userData = injectPorts(
+    injectResolvedDisks(
+      injectPackagesManifest(
+        injectProvisionFiles(
+          injectGuestCredentialFiles(
+            renderTemplate(userDataPath, vars, allowMissingFiles),
+            vars.provision.guest,
+          ),
+          vars.provision.files || sec.files,
+        ),
+        vars.provision.packages || sec.packages,
       ),
-      /** @type {typeof sec.files | undefined} */ (vars.secrets?.files) || sec.files,
+      vars.resolved_disks,
     ),
-    /** @type {typeof sec.packages | undefined} */ (vars.secrets?.packages) || sec.packages,
+    vars.provision.networking?.ports,
   )
   const meta = renderTemplate(path.join(cloud, 'meta-data.yaml'), vars, allowMissingFiles)
   const network = renderNetworkConfigV2(sec.uplinks, sec.vlans)

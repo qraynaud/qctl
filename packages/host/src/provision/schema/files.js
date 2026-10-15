@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
-const pathStr = z.string().trim().min(1)
+const pathStr = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((p) => p.startsWith('/'), 'path must be absolute')
+
 const modeStr = z
   .union([z.string(), z.number()])
   .transform((v) => {
@@ -13,61 +18,29 @@ const modeStr = z
 
 /**
  * Guest file drop (seed → cloud-init write_files).
- * `owner` / `permissions` match cloud-init field names.
+ * Output always has owner + permissions (mode alias accepted on input).
  */
 export const filesItemSchema = z
-  .object({
+  .strictObject({
     path: pathStr,
     owner: z.string().trim().min(1).optional(),
     permissions: modeStr.optional(),
     /** Alias for permissions (either is accepted). */
     mode: modeStr.optional(),
-    content: z.string(),
+    content: z.string().default(''),
   })
-  .passthrough()
-  .superRefine((data, ctx) => {
-    if (!data.path.startsWith('/')) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'path must be absolute',
-        path: ['path'],
-      })
-    }
-  })
+  .transform((item) => ({
+    path: item.path,
+    owner: item.owner || 'root:root',
+    permissions: item.permissions ?? item.mode ?? '0644',
+    content: item.content,
+  }))
 
-export const filesSchema = z.array(filesItemSchema)
+export const filesSchema = z.array(filesItemSchema).prefault([])
 
 /**
  * @typedef {{ path: string, owner: string, permissions: string, content: string }} GuestFile
  */
-
-/**
- * Normalize parsed `files:` for seed → write_files (defaults for owner/mode).
- * @param {z.infer<typeof filesSchema> | null | undefined} raw
- * @returns {GuestFile[]}
- */
-export function normalizeFiles(raw) {
-  if (raw == null) return []
-  /** @type {GuestFile[]} */
-  const out = []
-  for (const item of raw) {
-    const p = item.path.trim()
-    if (!p) continue
-    const owner = item.owner != null ? item.owner.trim() : 'root:root'
-    const permRaw = item.permissions ?? item.mode ?? '0644'
-    let permissions = String(permRaw).trim()
-    if (/^\d+$/.test(permissions) && !permissions.startsWith('0') && permissions.length <= 3) {
-      permissions = `0${permissions}`
-    }
-    out.push({
-      path: p,
-      owner: owner || 'root:root',
-      permissions: permissions || '0644',
-      content: item.content ?? '',
-    })
-  }
-  return out
-}
 
 /** Stock system hgrc when `repo.vcs: hg` (evolve + topic). */
 export const HG_HGRC_PATH = '/etc/mercurial/hgrc'

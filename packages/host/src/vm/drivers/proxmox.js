@@ -2,7 +2,7 @@
 
 /**
  * Proxmox VE driver — PVE JSON API.
- * Dev: virtual disks (create TODO). Prod: physical disk mapping (TODO).
+ * Disks follow provision topology (attach-mode: size → virtual, else physical).
  */
 import { check } from './proxmox/check.js'
 import { destroy } from './proxmox/destroy.js'

@@ -1,7 +1,7 @@
 import { chalk } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
+import { assertProxmoxAttachModes, withAttachModes } from '../attach-mode.js'
 import { applyNetsToForm } from './config.js'
 import {
   assertNameFreeForCreate,
@@ -14,10 +14,18 @@ import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
 
 /** @import { ProxmoxClient } from './client.js' */
-/** @import { CreateRockyVmOpts, DestroyRockyVmOpts, QemuConfig } from './types.js' */
+/**
+ * @import {
+ *   AttachDiskSpec,
+ *   CreateRockyVmOpts,
+ *   DestroyRockyVmOpts,
+ *   DiskState,
+ *   QemuConfig,
+ * } from './types.js'
+ */
 
 /**
- * Create a rocky-shaped VM (OS import + /vw + tank disks + NoCloud CDROM) and start it.
+ * Create a rocky-shaped VM (OS import + persistent disks + NoCloud CDROM) and start it.
  *
  * @param {ProxmoxClient} client
  * @param {CreateRockyVmOpts} opts
@@ -28,22 +36,17 @@ export async function createAndStartRockyVm(client, opts) {
     name,
     memory,
     vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
     importVolid,
     isoVolid,
-    vwVolid = null,
-    dataVolids = null,
-    specialVolids = null,
+    osSize = '20G',
+    disks,
     vmid: fixedVmid = null,
   } = opts
   const { node, storage, vmid: cfgVmid } = client.config
-  // Belt-and-suspenders: callers should check too; Proxmox allows duplicate names.
   await assertNameFreeForCreate(client, name)
   const vmid = Number(fixedVmid || cfgVmid || (await client.nextId()))
   if (!Number.isInteger(vmid) || vmid < 100) die(`bad vmid ${vmid}`)
-  const taken = await client.findVmidByName(name) // re-check after nextId race window
+  const taken = await client.findVmidByName(name)
   if (taken != null) {
     die(`Proxmox VM ${name} appeared during create (vmid=${taken}) — refuse duplicate`)
   }
@@ -52,9 +55,18 @@ export async function createAndStartRockyVm(client, opts) {
     die(`vmid ${vmid} already in use (${idClash.name || '?'}) — retry or set proxmox_vmid`)
   }
 
-  const vwGiB = sizeToGiB(vwSize)
-  const dataGiB = sizeToGiB(dataSize)
-  const specialGiB = sizeToGiB(specialSize)
+  const classified = withAttachModes(
+    disks.map((d) => ({
+      id: d.id,
+      kind: d.kind,
+      ...(d.size ? { size: d.size } : {}),
+    })),
+  )
+  /** @type {Record<string, string | undefined>} */
+  const reuse = Object.fromEntries(
+    disks.filter((d) => d.volid).map((d) => [d.id, d.volid || undefined]),
+  )
+  assertProxmoxAttachModes(classified, reuse)
 
   /** @type {QemuConfig} */
   const form = {
@@ -71,32 +83,28 @@ export async function createAndStartRockyVm(client, opts) {
     vga: 'serial0',
     boot: 'order=scsi0',
     tpmstate0: rockyTpmstate(storage),
-    scsi0: `${storage}:0,import-from=${importVolid},size=20G`,
+    scsi0: `${storage}:0,import-from=${importVolid},size=${osSize}`,
     ide2: `${isoVolid},media=cdrom`,
   }
   applyNetsToForm(form, client.config.nets)
 
-  if (vwVolid) form.scsi1 = `${vwVolid},serial=rocky-vw`
-  else form.scsi1 = `${storage}:${vwGiB},serial=rocky-vw`
-
-  let scsi = 2
-  for (let i = 0; i < DATA_COUNT; i++) {
-    const reuse = dataVolids?.[i]
-    form[`scsi${scsi++}`] = reuse
-      ? `${reuse},serial=rocky-data${i}`
-      : `${storage}:${dataGiB},serial=rocky-data${i}`
-  }
-  for (let i = 0; i < SPECIAL_COUNT; i++) {
-    const reuse = specialVolids?.[i]
-    form[`scsi${scsi++}`] = reuse
-      ? `${reuse},serial=rocky-special${i}`
-      : `${storage}:${specialGiB},serial=rocky-special${i}`
+  let scsi = 1
+  for (const d of disks) {
+    const slot = `scsi${scsi++}`
+    if (d.volid) {
+      form[slot] = `${d.volid},serial=${d.id}`
+      continue
+    }
+    if (d.mode === 'physical' || !d.size) {
+      die(`disks: ${d.id} is physical but no volid to reuse — attach on holder first`)
+    }
+    form[slot] = `${storage}:${sizeToGiB(d.size)},serial=${d.id}`
   }
 
   console.log(
     chalk.cyan(
       `vm: creating Proxmox VM ${name} vmid=${vmid} `
-        + `(OS + /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT} + NoCloud ISO)`,
+        + `(OS + ${disks.length} persistent disk(s) + NoCloud ISO)`,
     ),
   )
   const createUpid = await client.post(`/nodes/${encodeURIComponent(node)}/qemu`, form)
@@ -113,6 +121,18 @@ export async function createAndStartRockyVm(client, opts) {
 }
 
 /**
+ * @param {AttachDiskSpec[]} disks
+ * @param {DiskState | null | undefined} state
+ * @returns {AttachDiskSpec[]}
+ */
+export function disksWithReuseVolids(disks, state) {
+  return disks.map((d) => ({
+    ...d,
+    volid: d.volid ?? state?.volids?.[d.id] ?? null,
+  }))
+}
+
+/**
  * Stop + delete VM (or demote to holder).
  * keep=persistent|vw → demote to `<name>-disks` (disks stay attached; rename).
  * keep=none → wipe VM volumes + destroy holder.
@@ -120,7 +140,7 @@ export async function createAndStartRockyVm(client, opts) {
  * @param {ProxmoxClient} client
  * @param {DestroyRockyVmOpts} opts
  */
-export async function destroyRockyVm(client, { vmid, name, keep = 'none' }) {
+export async function destroyRockyVm(client, { vmid, name, keep = 'none', tankIds = [] }) {
   const node = client.config.node
   const st = await client.qemuStatus(vmid)
   if (st?.status === 'running' || st?.status === 'paused') {
@@ -139,10 +159,11 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none' }) {
 
     if (keep === 'vw') {
       const tankKeys = []
+      const wipe = new Set(tankIds)
       for (const [key, val] of Object.entries(cfg)) {
         if (!/^(scsi|virtio|sata)\d+$/.test(key)) continue
         const serial = diskSerialFromValue(val)
-        if (serial && /^rocky-(data|special)/.test(serial)) {
+        if (serial && wipe.has(serial)) {
           console.log(chalk.yellow(`vm: wipe tank disk ${volidFromDiskValue(val)} (${serial})`))
           tankKeys.push(key)
         }
@@ -159,8 +180,8 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none' }) {
     console.log(
       chalk.green(
         keep === 'persistent'
-          ? `vm: kept /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT} on holder ${name}-disks`
-          : `vm: kept /vw on holder ${name}-disks (tank removed)`,
+          ? `vm: kept persistent disks on holder ${name}-disks`
+          : `vm: kept data volumes on holder ${name}-disks (tank removed)`,
       ),
     )
     return parked

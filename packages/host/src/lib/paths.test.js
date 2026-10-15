@@ -5,8 +5,6 @@ import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { initInstance } from '../init.js'
 import {
-  DATA_COUNT,
-  SPECIAL_COUNT,
   getCacheHome,
   getCloud,
   getDataHome,
@@ -111,10 +109,5 @@ describe('vm paths', () => {
     temps.push(dir)
     process.chdir(dir)
     expect(tryGetRepoRoot()).toBeNull()
-  })
-
-  test('tank layout constants', () => {
-    expect(DATA_COUNT).toBe(5)
-    expect(SPECIAL_COUNT).toBe(2)
   })
 })

@@ -3,13 +3,14 @@ import * as pveConfig from '../../libs/proxmox/config.js'
 import { check } from './check.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
+/** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
 /** @import { VmArgv } from '../../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
   pveConfig.tryLoadProxmoxConfig.mockRestore?.()
   // @ts-expect-error restore
-  loadConfig.loadEnvSecrets.mockRestore?.()
+  loadConfig.loadEnvProvisionSafe.mockRestore?.()
   // @ts-expect-error restore
   console.log.mockRestore?.()
   // @ts-expect-error restore
@@ -24,13 +25,21 @@ describe('proxmox check', () => {
       errors: ['missing api'],
       usable: false,
     })
-    spyOn(loadConfig, 'loadEnvSecrets').mockResolvedValue(
-      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvSecrets>>} */ ({
-        paths: ['/tmp/.env.dev'],
-        sshAuthorizedKeys: 'ssh-ed25519 AAAA',
-        guest: { TANK_PASSPHRASE: 'x' },
-      }),
-    )
+    spyOn(loadConfig, 'loadEnvProvisionSafe').mockResolvedValue({
+      ok: true,
+      provision: /** @type {LoadedProvision} */ (
+        /** @type {unknown} */ ({
+          paths: ['/tmp/.env.dev'],
+          sshAuthorizedKeys: 'ssh-ed25519 AAAA',
+          data: {
+            disks: {
+              tanks: { tank: { id: 'tank', passphrase: 'x' } },
+            },
+          },
+          guest: { tank_passphrase_tank: 'x' },
+        })
+      ),
+    })
     spyOn(console, 'log').mockImplementation(() => {})
     spyOn(console, 'error').mockImplementation(() => {})
 

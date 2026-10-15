@@ -2,8 +2,9 @@ import { cpuSchema, localSchema, memorySchema, proxmoxSchema } from './targets.j
 import { describe, expect, test } from 'bun:test'
 
 describe('target schemas', () => {
-  test('cpuSchema and memorySchema coerce and bound', () => {
-    expect(cpuSchema.parse('4')).toBe(4)
+  test('cpuSchema and memorySchema require numbers and bound', () => {
+    expect(cpuSchema.parse(4)).toBe(4)
+    expect(() => cpuSchema.parse('4')).toThrow()
     expect(() => cpuSchema.parse(0)).toThrow()
     expect(memorySchema.parse(512)).toBe(512)
     expect(() => memorySchema.parse(128)).toThrow()
@@ -11,6 +12,7 @@ describe('target schemas', () => {
 
   test('localSchema accepts optional resources', () => {
     expect(localSchema.parse({ cpu: 2, memory: 4096 })).toEqual({ cpu: 2, memory: 4096 })
+    expect(() => localSchema.parse({ cpu: 2, unknown: true })).toThrow()
   })
 
   test('proxmoxSchema accepts api fields', () => {
@@ -22,5 +24,6 @@ describe('target schemas', () => {
     expect(p.api_url).toBe('https://pve.example')
     expect(p.node).toBe('pve1')
     expect(p.cpu).toBe(2)
+    expect(() => proxmoxSchema.parse({ node: 'pve1', extra: 1 })).toThrow()
   })
 })

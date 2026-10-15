@@ -20,7 +20,10 @@ describe('applianceExecEnv', () => {
       guestBin: '/x',
       platformModulePath: '/x',
       image: 'img',
-      ports: [],
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+      },
       publishArgs: [],
       uidMapArgs: [],
     })

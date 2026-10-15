@@ -1,17 +1,14 @@
 import { loadProvisionDocument } from '@qctl/shared'
 
-import { parsePorts } from '../provision/secrets-schema/index.js'
-import { DATA_COUNT, SPECIAL_COUNT, tryGetRepoRoot } from './paths.js'
-import { addPasstPortOptions } from './ports.js'
+import { portsSchema } from '../provision/schema/index.js'
+import { tryGetRepoRoot } from './paths.js'
 import { ENVS, TARGETS } from './target.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { YamlValue } from '@qctl/shared' */
-/** @import { PortEntry, VmArgv, VmTarget } from '../vm/types.js' */
+/** @import { PortsMap, VmArgv, VmTarget } from '../vm/types.js' */
 
 /** @typedef {{ memory?: string | number, cpu?: string | number }} BootResourceSection */
-
-export { addPasstPortOptions } from './ports.js'
 
 /**
  * Unresolved provision YAML (no !env / varlock). For yargs builders and CLI defaults only.
@@ -36,27 +33,21 @@ function loadProvisionUnresolved(argv = {}) {
 /**
  * Ports from provision for the given --env / --target (defaults to dev/local).
  * @param {Partial<VmArgv>} [argv]
- * @returns {PortEntry[]}
+ * @returns {PortsMap}
  */
 export function portsFromArgv(argv = {}) {
+  const empty = () => portsSchema.parse({})
   const doc = loadProvisionUnresolved(argv)
-  if (!doc) return []
+  if (!doc) return empty()
   const networking = doc.data?.networking
-  if (!networking || typeof networking !== 'object' || Array.isArray(networking)) return []
+  if (!networking || typeof networking !== 'object' || Array.isArray(networking)) return empty()
   const ports = /** @type {{ ports?: YamlValue }} */ (networking).ports
-  if (ports == null) return []
+  if (ports == null) return empty()
   try {
-    return parsePorts(ports, doc.basePath)
+    return portsSchema.parse(ports)
   } catch {
-    return []
+    return empty()
   }
-}
-
-function portsForBuilderDefaults() {
-  return portsFromArgv({
-    env: process.env.QCTL_ENV || 'dev',
-    target: process.env.QCTL_TARGET || 'local',
-  })
 }
 
 /**
@@ -140,7 +131,7 @@ export function resolveBootResources(argv) {
 
 /**
  * Disk / CPU / network flags for `vm up` and `vm init-tank`.
- * Passt `--*-port` overrides belong on `vm up` only (init-tank has no SSH/cockpit/caddy).
+ * Disk sizes and passt hostfwd come from provision (not CLI).
  *
  * @param {Argv} y
  * @returns {Argv}
@@ -155,17 +146,6 @@ export const sharedBoot = (y) =>
       type: 'number',
       describe: 'vCPU count (default: provision local/proxmox.cpu, else 2)',
     })
-    .option('vw-size', { type: 'string', default: '2G', describe: '/vw disk size' })
-    .option('data-size', {
-      type: 'string',
-      default: '2G',
-      describe: `Each of ${DATA_COUNT} RAIDZ2 data vdev disks`,
-    })
-    .option('special-size', {
-      type: 'string',
-      default: '1G',
-      describe: `Each of ${SPECIAL_COUNT} special-mirror disks`,
-    })
     .option('network', {
       choices: ['auto', 'default', 'user'],
       default: 'user',
@@ -177,10 +157,3 @@ export const sharedBoot = (y) =>
       type: 'string',
       describe: 'Keep unpacked cidata tree at this path (debug; same as `vm seed --out`)',
     })
-
-/**
- * Lab passt hostfwd CLI overrides (from provision networking.ports).
- * @param {Argv} y
- * @returns {Argv}
- */
-export const sharedPasstPorts = (y) => addPasstPortOptions(y, portsForBuilderDefaults())

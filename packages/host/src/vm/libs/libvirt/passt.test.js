@@ -3,13 +3,13 @@ import { routeVirsh, virshReply } from './test-virsh.js'
 import * as virshMod from './virsh.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { PortEntry } from '../../types.js' */
+/** @import { PortsMap } from '../../types.js' */
 
-/** @type {PortEntry[]} */
-const ports = [
-  { name: 'ssh', port: 22, forward: 2222, dnat: null },
-  { name: 'cockpit', port: 9090, forward: 9090, dnat: null },
-]
+/** @type {PortsMap} */
+const ports = {
+  ssh: { port: 22, forward: 2222 },
+  cockpit: { port: 9090, forward: 9090 },
+}
 
 afterEach(() => {
   // @ts-expect-error restore
@@ -59,7 +59,10 @@ describe('patchPasstPortForwardsXml', () => {
     const xml = `<domain><devices>${PASST_IFACE}
 </devices></domain>`
     expect(
-      patchPasstPortForwardsXml(xml, [{ name: 'ssh', port: 22, forward: null, dnat: null }]),
+      patchPasstPortForwardsXml(xml, {
+        ssh: { port: 22 },
+        cockpit: { port: 9090 },
+      }),
     ).toBeNull()
   })
 })

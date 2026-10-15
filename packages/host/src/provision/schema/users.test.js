@@ -1,4 +1,4 @@
-import { parseSecretsFile } from './parse.js'
+import { provisionSchema } from './parse.js'
 import { defaultAppsSubidRange, resolveUidGid, subuidSchema } from './users.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -7,12 +7,14 @@ describe('subuidSchema', () => {
     expect(subuidSchema.parse('900000:32768')).toEqual({ start: 900000, count: 32768 })
   })
 
-  test('omitted → null', () => {
-    expect(subuidSchema.parse(undefined)).toBeNull()
+  test('rejects blank / omitted / bad shape', () => {
+    expect(() => subuidSchema.parse('')).toThrow()
+    expect(() => subuidSchema.parse(undefined)).toThrow()
+    expect(() => subuidSchema.parse('nope')).toThrow(/start:count/)
   })
 
   test('rejects count above 32768', () => {
-    expect(() => subuidSchema.parse('100000:65536')).toThrow(/32768/)
+    expect(() => subuidSchema.parse('100000:65536')).toThrow(/32768|max/i)
   })
 })
 
@@ -30,7 +32,7 @@ describe('defaultAppsSubidRange', () => {
   })
 })
 
-describe('users in parseSecretsFile', () => {
+describe('users in provisionSchema', () => {
   const net = {
     networking: {
       ports: { ssh: { port: 22, forward: 2222 } },
@@ -39,7 +41,7 @@ describe('users in parseSecretsFile', () => {
   }
 
   test('omitting users entirely defaults admin + apps', () => {
-    const { data } = parseSecretsFile({ ...net }, 't')
+    const data = provisionSchema.parse({ ...net })
     expect(data.users.admin).toMatchObject({
       username: 'admin',
       uid: 1000,
@@ -55,10 +57,10 @@ describe('users in parseSecretsFile', () => {
   })
 
   test('apps uid only → gid follows; username override', () => {
-    const { data } = parseSecretsFile(
-      { ...net, users: { apps: { username: 'quadlet', uid: 1100 } } },
-      't',
-    )
+    const data = provisionSchema.parse({
+      ...net,
+      users: { apps: { username: 'quadlet', uid: 1100 } },
+    })
     expect(data.users.apps).toMatchObject({
       username: 'quadlet',
       uid: 1100,
@@ -68,27 +70,21 @@ describe('users in parseSecretsFile', () => {
   })
 
   test('apps gid only → uid stays 900', () => {
-    const { data } = parseSecretsFile({ ...net, users: { apps: { gid: 901 } } }, 't')
+    const data = provisionSchema.parse({ ...net, users: { apps: { gid: 901 } } })
     expect(data.users.apps).toMatchObject({ uid: 900, gid: 901 })
   })
 
   test('admin uid only → gid follows', () => {
-    const { data } = parseSecretsFile({ ...net, users: { admin: { uid: 1200 } } }, 't')
+    const data = provisionSchema.parse({ ...net, users: { admin: { uid: 1200 } } })
     expect(data.users.admin).toMatchObject({ username: 'admin', uid: 1200, gid: 1200 })
   })
 
   test('rejects colliding admin/apps usernames', () => {
     expect(() =>
-      parseSecretsFile(
-        { ...net, users: { admin: { username: 'svc' }, apps: { username: 'svc' } } },
-        't',
-      ),
-    ).toThrow(/both/)
-  })
-
-  test('rejects top-level admin', () => {
-    expect(() => parseSecretsFile({ ...net, users: {}, admin: { username: 'x' } }, 't')).toThrow(
-      /users\.admin/,
-    )
+      provisionSchema.parse({
+        ...net,
+        users: { admin: { username: 'svc' }, apps: { username: 'svc' } },
+      }),
+    ).toThrow(/must differ/)
   })
 })

@@ -12,6 +12,7 @@ export {
 export {
   createAndStartRockyVm,
   destroyRockyVm,
+  disksWithReuseVolids,
   waitUntilVmStopped,
 } from './vm-lifecycle.js'
 export { reconcileRockyAppliance } from './vm-reconcile.js'

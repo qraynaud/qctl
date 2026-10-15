@@ -17,10 +17,10 @@ describe('ssh-hints', () => {
       connect: 'qemu:///system',
       name: 'rocky',
       network: 'user',
-      ports: [
-        { name: 'ssh', port: 22, forward: 2222, dnat: null },
-        { name: 'cockpit', port: 9090, forward: 9090, dnat: null },
-      ],
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+      },
     })
     const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
     expect(joined).toMatch(/SSH/)

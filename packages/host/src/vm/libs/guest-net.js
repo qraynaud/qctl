@@ -5,18 +5,18 @@
 import YAML from 'yaml'
 
 /**
- * Podman / host VLAN env lines from secrets networking.vlans:
+ * Podman / host VLAN env lines from provision networking.vlans:
  *   vlan2 → VLAN2_PARENT=vlan2
  *   vlan2 + ipv4 → VLAN2_IPV4=10.0.2.2
- * @param {{ name: string, ipv4?: string | null }[]} vlans
+ * @param {Record<string, { ipv4?: string | null }>} vlans
  * @returns {string[]}
  */
 export function vlanParentEnvLines(vlans) {
   const lines = []
-  for (const v of vlans) {
-    const m = /^vlan(\d+)$/i.exec(v.name)
+  for (const [name, v] of Object.entries(vlans)) {
+    const m = /^vlan(\d+)$/i.exec(name)
     if (!m) continue
-    lines.push(`VLAN${m[1]}_PARENT=${v.name}`)
+    lines.push(`VLAN${m[1]}_PARENT=${name}`)
     if (v.ipv4) lines.push(`VLAN${m[1]}_IPV4=${v.ipv4}`)
   }
   return lines
@@ -34,17 +34,17 @@ export function vlanParentEnvLines(vlans) {
  * wedges hostfwd (SSH banner hangs / frozen TTY). Macvlan parents are created
  * as dummy ifaces from vlan-parents.env (see user-data bootcmd).
  *
- * @param {{ name: string, dhcp4: boolean }[]} uplinks
- * @param {{ name: string, id: number, link: string }[]} [_vlans] kept for API compat
+ * @param {Record<string, { dhcp4: boolean }>} uplinks
+ * @param {Record<string, { id: number, link?: string }>} [_vlans] kept for API compat
  */
-export function renderNetworkConfigV2(uplinks, _vlans = []) {
+export function renderNetworkConfigV2(uplinks, _vlans = {}) {
   /** @type {NetplanConfigV2} */
   const doc = {
     version: 2,
     ethernets: {},
   }
-  for (const u of uplinks) {
-    doc.ethernets[u.name] = {
+  for (const [name, u] of Object.entries(uplinks)) {
+    doc.ethernets[name] = {
       dhcp4: u.dhcp4,
       dhcp6: false,
       'accept-ra': false,

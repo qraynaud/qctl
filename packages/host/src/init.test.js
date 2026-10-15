@@ -15,8 +15,8 @@ import { initInstance } from './init.js'
 import {
   appsIdentityFromProvision,
   firstBootCredentialsFromProvision,
-  parseSecretsFile,
-} from './provision/secrets-schema/index.js'
+  provisionSchema,
+} from './provision/schema/index.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 /** @import { YamlMapping } from '@qctl/shared' */
@@ -66,8 +66,14 @@ describe('initInstance', () => {
     })
     expect(envRefs.length).toBeGreaterThan(0)
     const prov = readFileSync(join(result.root, 'provision', 'dev.yaml'), 'utf8')
-    expect(prov).toContain('tank:')
+    expect(prov).toMatch(/^disks:/m)
+    expect(prov).toContain('tanks:')
+    expect(prov).toContain('role: data')
     expect(prov).toContain('!env TANK_PASSPHRASE')
+    expect(prov).not.toMatch(/^tank:/m)
+    const readme = readFileSync(join(result.root, 'provision', 'README.md'), 'utf8')
+    expect(readme).toContain('disks.tanks')
+    expect(readme).not.toMatch(/`tank`/)
 
     // Resolved local provision must validate (users omitted → schema defaults).
     const loaded = await loadProvision({
@@ -76,17 +82,15 @@ describe('initInstance', () => {
       target: 'local',
       processEnv: { ...process.env, QCTL_ENV: 'dev' },
     })
-    const raw = /** @type {YamlMapping} */ ({ ...loaded.data })
-    delete raw.qctl
-    const parsed = parseSecretsFile(raw, loaded.basePath)
-    expect(parsed.data.users.admin).toMatchObject({ username: 'admin', uid: 1000, gid: 1000 })
-    expect(appsIdentityFromProvision(parsed.data)).toMatchObject({
+    const data = provisionSchema.parse(loaded.data)
+    expect(data.users.admin).toMatchObject({ username: 'admin', uid: 1000, gid: 1000 })
+    expect(appsIdentityFromProvision(data)).toMatchObject({
       username: 'apps',
       uid: 900,
       subuidSpec: '900000:32768',
     })
-    const tier0 = firstBootCredentialsFromProvision(parsed.data)
-    expect(tier0.TANK_PASSPHRASE).toBeTruthy()
+    const tier0 = firstBootCredentialsFromProvision(data)
+    expect(tier0.tank_passphrase_tank).toBeTruthy()
     expect(tier0.ADMIN_USERNAME).toBe('admin')
     expect(tier0.ADMIN_PASSWORD).toBeUndefined()
   })

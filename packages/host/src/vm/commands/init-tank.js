@@ -6,9 +6,9 @@ import { loadDriver } from '../drivers/index.js'
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
 
-export const command = 'init-tank'
+export const command = 'init-tank [poolIds..]'
 export const describe =
-  'One-shot VM: minimal seed creates+exports tank then poweroffs; host destroy --keep-data'
+  'One-shot VM: create+export selected tank pool(s) then poweroff; host destroy --keep-persistent'
 
 /**
  * @param {Argv} yargs
@@ -16,6 +16,16 @@ export const describe =
  */
 export function builder(yargs) {
   return sharedDryRun(sharedBoot(yargs))
+    .positional('poolIds', {
+      type: 'string',
+      describe: 'Pool id(s) from disks.tanks (default: all tanks)',
+    })
+    .option('force', {
+      alias: 'f',
+      type: 'boolean',
+      default: false,
+      describe: 'Recreate pool on selected tank members if they already exist',
+    })
     .option('timeout', {
       type: 'number',
       default: 2700,
@@ -40,13 +50,17 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   const driver = await loadDriver(argv)
+  const pools = argv.poolIds?.length ? argv.poolIds.join(',') : 'all tanks'
   console.log(
     chalk.cyan('vm init-tank'),
-    chalk.dim(`target=${argv.target} env=${argv.env} name=${argv.name}`),
+    chalk.dim(
+      `target=${argv.target} env=${argv.env} name=${argv.name} pools=${pools}`
+        + (argv.force ? ' force' : ''),
+    ),
   )
   console.log(
     chalk.dim(
-      '  wipe OS + tank vdevs; keep /vw; guest: create→export→poweroff; host: destroy --keep-data',
+      '  wipe OS + selected tank members (-f if present); keep data; guest zpool create→export→poweroff',
     ),
   )
   await driver.initTank(argv)

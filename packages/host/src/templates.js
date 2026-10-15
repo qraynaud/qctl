@@ -49,6 +49,7 @@ TZ=
 /** Host/provision env schema (resolved at seed; !env from YAML). */
 export const PROVISION_ENV_SCHEMA = `# Host / provision secret graph (not imported by app/unit graphs).
 # Wire into provision/*.yaml with !env. Seed injects first-boot slots as Tier-0.
+# disks.tanks.<id>.passphrase: !env TANK_PASSPHRASE → guest tank_passphrase_<id>.
 # ---
 
 TANK_PASSPHRASE=
@@ -76,6 +77,7 @@ export const PROVISION_ENV_DEV = `# Lab host bindings for provision !env (QCTL_E
 # users: omitted in provision/dev.yaml → admin/apps defaults (key-only admin; passwd for Cockpit).
 # Uncomment users.admin.password: !env ADMIN_PASSWORD in the YAML to use ADMIN_PASSWORD= below.
 # ---
+# Wired by disks.tanks.tank.passphrase: !env TANK_PASSPHRASE (→ tank_passphrase_tank).
 TANK_PASSPHRASE=lab-tank-passphrase
 SSH_HOST_KEYS=
 # ADMIN_PASSWORD=lab
@@ -150,7 +152,8 @@ export function treeEnvSchema(kind, name) {
 }
 
 export const PROVISION_DEV_YAML = `# Committable topology. Secrets: !env → provision/.env.<QCTL_ENV>.
-# Seed injects tank/admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
+# Seed injects disks.tanks.*.passphrase → tank_passphrase_<poolId>, plus
+# admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
 # Overlay: provision/dev.local.yaml or provision/dev.proxmox.yaml
 
 qctl:
@@ -158,8 +161,38 @@ qctl:
   # Short name or github:owner/repo[@x.y.z] — e.g. github:qraynaud/platform-ubuntu
   platform: rocky
 
-tank:
-  passphrase: !env TANK_PASSPHRASE
+# OS + persistent data volumes + ZFS tanks. Member map keys become disk serials.
+# size → virtual disk; omit size → bind a physical disk (Proxmox / by-id).
+# Create pools only via \`qctl vm init-tank\` (never on appliance first boot).
+disks:
+  os:
+    size: 20G
+  data:
+    vw:
+      mount: /vw
+      size: 2G
+      # fs: xfs   # optional; default = platform DEFAULT_FS
+  tanks:
+    tank:
+      mount: /tank
+      passphrase: !env TANK_PASSPHRASE
+      # options: {}  # pool/dataset/acl defaults applied at resolve
+      vdevs:
+        data:
+          role: data
+          type: raidz2
+          members:
+            data1: { size: 2G }
+            data2: { size: 2G }
+            data3: { size: 2G }
+            data4: { size: 2G }
+            data5: { size: 2G }
+        special:
+          role: special
+          type: mirror
+          members:
+            special1: { size: 1G }
+            special2: { size: 1G }
 
 # users:  # optional — defaults: admin (uid 1000), apps (uid 900, subids <id>×1000:32768)
 #   admin:
@@ -193,6 +226,9 @@ networking:
     ssh:
       port: 22
       forward: 2222
+    cockpit:
+      port: 9090
+      forward: 9090
     http:
       port: 80
       forward: 8088
@@ -266,10 +302,13 @@ export const PROVISION_README = `# provision/
 Topology YAML (\`dev.yaml\`, overlays) plus the host env graph
 (\`.env.schema\` + \`.env.<env>\`, optional \`.env.local\`).
 
-First-boot secrets are declared in YAML (\`tank\`, \`users.admin\`, \`repo.deploy_key\`, …)
-with \`!env\` pointing at this graph. \`users\` is optional (defaults: admin/1000 key-only,
-apps/900 + subids). \`qctl vm seed\` resolves on the host and injects Tier-0 credentials
-into the guest (no guest-side bootstrap graph).
+Disk topology lives under \`disks:\` (\`os\` / \`data\` / \`tanks\`). Encrypted tank
+passphrases are \`disks.tanks.<id>.passphrase: !env …\` — seed writes Tier-0
+\`tank_passphrase_<id>\` (not a top-level \`tank:\` block). Other first-boot slots
+(\`users.admin\`, \`repo.deploy_key\`, …) use the same \`!env\` graph. \`users\` is
+optional (defaults: admin/1000 key-only, apps/900 + subids). \`qctl vm seed\`
+resolves on the host and injects Tier-0 into the guest (no guest-side bootstrap
+graph). Create ZFS pools with \`qctl vm init-tank\`; appliance boots import only.
 
 Host caches are **not** here — they live under XDG:
 

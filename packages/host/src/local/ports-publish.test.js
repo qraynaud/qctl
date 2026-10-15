@@ -1,16 +1,17 @@
+import { portsSchema } from '../provision/schema/index.js'
 import { localPublishPodmanArgs, localPublishPorts } from './ports-publish.js'
 import { describe, expect, test } from 'bun:test'
 
-/** @import { PortEntry } from '../vm/types.js' */
+/** @import { PortsMap } from '../vm/types.js' */
 
-/** @type {PortEntry[]} */
-const SAMPLE = [
-  { name: 'ssh', port: 22, forward: 2222, dnat: null },
-  { name: 'cockpit', port: 9090, forward: 9090, dnat: null },
-  { name: 'http', port: 80, forward: 8088, dnat: 8088 },
-  { name: 'https', port: 443, forward: 8443, dnat: 8443 },
-  { name: 'extra', port: 9000, forward: 9001, dnat: null },
-]
+/** @type {PortsMap} */
+const SAMPLE = {
+  ssh: { port: 22, forward: 2222 },
+  cockpit: { port: 9090, forward: 9090 },
+  http: { port: 80, forward: 8088, dnat: 8088 },
+  https: { port: 443, forward: 8443, dnat: 8443 },
+  extra: { port: 9000, forward: 9001 },
+}
 
 describe('localPublishPorts', () => {
   test('skips ssh and cockpit; uses dnat ?? forward for container port', () => {
@@ -33,6 +34,6 @@ describe('localPublishPorts', () => {
   })
 
   test('ignores entries without forward', () => {
-    expect(localPublishPorts([{ name: 'http', port: 80, forward: null, dnat: 8088 }])).toEqual([])
+    expect(localPublishPorts(portsSchema.parse({ http: { port: 80, dnat: 8088 } }))).toEqual([])
   })
 })
