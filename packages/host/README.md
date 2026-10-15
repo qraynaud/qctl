@@ -138,8 +138,8 @@ VM lifecycle against the instance `provision/` tree. Most subcommands share:
 | `--dry-run` | `false` | Print actions without changing the host/guest |
 
 Boot-oriented commands (`up`, `init-tank`) also accept `--memory` / `--vcpus`.
-`vm up` (and `status` / `ssh-info`) expose passt `--*-port` overrides from provision
-networking; `init-tank` does not (no guest SSH/cockpit).
+Port forwards come from `provision.networking.ports` (no CLI port overrides).
+`init-tank` does not publish guest SSH/cockpit.
 
 #### Local (`--target local`) host deps
 
@@ -162,11 +162,11 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | `qctl vm download` | Download/cache the pinned Rocky 9 cloud image |
 | `qctl vm up` | Start existing VM, or create if missing; stream console until ready |
 | `qctl vm down` | ACPI shutdown; wait until shut off (VM stays defined) |
-| `qctl vm destroy` | Undefine / delete VM; delete disks unless `--keep-data` |
-| `qctl vm init-tank` | One-shot tank prep VM (minimal seed → create/export → poweroff) |
+| `qctl vm destroy` | Undefine / delete VM; delete disks unless `--keep-persistent` |
+| `qctl vm init-tank [poolId…]` | One-shot tank prep (minimal seed → create/export → poweroff); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ssh-info` | Print SSH connection hints |
-| `qctl vm target-check` | Verify host tools (incl. `swtpm` on local) / secrets / hypervisor |
+| `qctl vm target-check` | Verify host tools (incl. `swtpm` on local) / provision / hypervisor |
 
 #### `qctl vm seed`
 
@@ -198,11 +198,12 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--keep-data` | `false` | Remove OS only; keep `/vw` + data + special disks |
+| `--keep-persistent` | `false` | Remove OS only; keep `disks.data` + tank members |
+| `-y` / `--yes` | `false` | Skip prompts (only valid with `--keep-persistent`) |
 
 ## Provision
 
-Topology and secrets wiring live in the instance:
+Topology and provision wiring live in the instance:
 
 - `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlay)
 - `!env` fields resolve from `provision/.env.<env>` (+ optional `.env.local`) via the bundled varlock graph API
