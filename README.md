@@ -100,7 +100,7 @@ Compile linux binaries:
 bun run compile
 ./dist/qctl-host --help
 ./dist/qctl-guest --help
-./dist/qctl-guest list
+./dist/qctl-guest _internal_list
 test -f ./dist/qctl-platform-rocky.mjs
 ```
 

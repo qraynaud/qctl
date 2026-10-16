@@ -43,7 +43,7 @@ jobs:
         run: |
           ./dist/qctl-host --help
           ./dist/qctl-guest --help
-          ./dist/qctl-guest list
+          ./dist/qctl-guest _internal_list
           # Seed kit is embedded in qctl-host — path/export must work without dist/rocky-seed/
           test ! -d ./dist/rocky-seed
           test -f ./dist/qctl-platform-rocky.mjs
