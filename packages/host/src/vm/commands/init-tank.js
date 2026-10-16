@@ -8,7 +8,7 @@ import { loadDriver } from '../drivers/index.js'
 
 export const command = 'init-tank [poolIds..]'
 export const describe =
-  'One-shot VM: create+export selected tank pool(s) then poweroff; host destroy --keep-persistent'
+  'One-shot VM: create+export selected tank pool(s) then poweroff; disposable boot disk only'
 
 /**
  * @param {Argv} yargs
@@ -60,7 +60,7 @@ export async function handler(argv) {
   )
   console.log(
     chalk.dim(
-      '  wipe OS + selected tank members (-f if present); keep data; guest zpool create→export→poweroff',
+      '  disposable boot disk (keep disks.os); -f wipes tank members; guest zpool create→export→poweroff',
     ),
   )
   await driver.initTank(argv)

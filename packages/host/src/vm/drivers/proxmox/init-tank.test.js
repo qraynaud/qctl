@@ -83,6 +83,7 @@ describe('proxmox initTank', () => {
     expect(joined).toMatch(/dry-run Proxmox init-tank/)
     expect(joined).toMatch(/seed --profile init-tank/)
     expect(joined).toMatch(/pools=tank/)
+    expect(joined).toMatch(/disposable boot/)
   })
 
   test('passes target=proxmox to runSeed', async () => {

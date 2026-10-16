@@ -9,6 +9,7 @@
 import { chalk } from 'zx'
 
 import { die } from '../../../lib/util.js'
+import { INIT_TANK_BOOT_ID } from '../init-tank-boot.js'
 import { applyNetsToForm } from './config.js'
 import { rockyTpmstate } from './tpm.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
@@ -160,6 +161,11 @@ export async function demoteToHolder(client, { vmid, name }) {
     }
     if (!/^(scsi|virtio|sata)\d+$/.test(key)) continue
     const serial = diskSerialFromValue(val)
+    // Disposable init-tank boot (if marked) always drops with demote.
+    if (serial === INIT_TANK_BOOT_ID) {
+      drop.push(key)
+      continue
+    }
     // Keep any disk that carries a serial (persistent inventory).
     if (serial) continue
     drop.push(key)

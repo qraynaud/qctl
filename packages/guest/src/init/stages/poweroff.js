@@ -1,5 +1,5 @@
 /**
- * init-tank: power the VM off so the host can destroy --keep-persistent.
+ * init-tank: power the VM off so the host can drop the disposable boot disk.
  */
 import { StageError } from '../errors.js'
 
@@ -7,7 +7,7 @@ import { StageError } from '../errors.js'
 
 export default {
   name: 'poweroff',
-  describe: 'init-tank: power the VM off so the host can destroy --keep-persistent',
+  describe: 'init-tank: power the VM off so the host can drop the disposable boot disk',
   /**
    * @param {StageContext} _ctx
    */
@@ -18,7 +18,7 @@ export default {
    * @param {StageContext} ctx
    */
   async run(ctx) {
-    ctx.log('rocky-init-tank: OK — powering off (host will destroy --keep-persistent)')
+    ctx.log('rocky-init-tank: OK — powering off (host drops disposable boot disk)')
     await ctx.exec(['sync'])
     await Bun.sleep(1000)
     const r = await ctx.exec(['systemctl', 'poweroff', '--no-block'])

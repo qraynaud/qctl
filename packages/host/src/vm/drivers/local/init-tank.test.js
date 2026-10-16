@@ -87,6 +87,8 @@ describe('local initTank', () => {
     expect(joined).toMatch(/dry-run init-tank/)
     expect(joined).toMatch(/seed --profile init-tank/)
     expect(joined).toMatch(/pools=tank/)
+    expect(joined).toMatch(/disposable boot/)
+    expect(joined).not.toMatch(/wipe OS/)
   })
 
   test('no tanks warns and exits 0', async () => {
