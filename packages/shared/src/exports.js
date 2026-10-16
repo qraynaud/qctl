@@ -73,8 +73,10 @@ export {
   requiredPlatformCapabilitySchema,
 } from './platform/index.js'
 export {
+  COMMON_PROVISION,
   ENV_REF,
   PROVISION_DIR,
+  PROVISION_TARGETS,
   collectEnvRefs,
   envRef,
   isEmptyCredential,

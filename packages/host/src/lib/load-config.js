@@ -1,6 +1,6 @@
 /**
- * VM config: `provision/<env>.yaml` (+ `<env>.<target>.yaml`) via
- * `@qctl/shared` `loadProvision` (`!env` from process.env /
+ * VM config: provision YAML layers via `@qctl/shared` `loadProvision`
+ * (common → target → env → env.target; `!env` from process.env /
  * `provision/.env.<env>` via loadHostEnv), then zod-validated by the provision
  * schema. Tier-0 credentials come from provision YAML
  * (`tank` / `admin` / `repo.deploy_key` / …) via `!env`. Optional extra
@@ -153,11 +153,19 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
   try {
     const loaded = await loadProvision({ root, env: e, target: t, processEnv })
     raw = /** @type {YamlMapping} */ (loaded.data)
-    paths = loaded.overlayPath ? [loaded.basePath, loaded.overlayPath] : [loaded.basePath]
+    paths = [
+      ...(loaded.commonPath ? [loaded.commonPath] : []),
+      ...(loaded.targetPath ? [loaded.targetPath] : []),
+      ...(loaded.envPath ? [loaded.envPath] : []),
+      ...(loaded.overlayPath ? [loaded.overlayPath] : []),
+    ]
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (msg.startsWith('provision file not found')) {
-      throw new Error(`${msg}\n  Create provision/${e}.yaml (see \`qctl init\`).`)
+    if (msg.startsWith('no provision YAML found')) {
+      throw new Error(
+        `${msg}\n  Create at least one of provision/{common,${t},${e},${e}.${t}}.yaml `
+          + '(see `qctl init`).',
+      )
     }
     throw err
   }

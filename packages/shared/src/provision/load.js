@@ -1,5 +1,10 @@
 /**
- * Load `provision/<env>.yaml` (+ optional target overlay) and resolve `!env`.
+ * Load provision YAML layers and resolve `!env`.
+ *
+ * Merge order (later wins; maps deep-merge, arrays replaced):
+ *   common.yaml → <target>.yaml → <env>.yaml → <env>.<target>.yaml
+ *
+ * At least one of those four files must exist.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,6 +16,15 @@ import { collectEnvRefs, parseProvisionYaml, resolveEnvRefs, stripOppositeTarget
 /** @import { YamlMapping, YamlValue } from '../yaml.js' */
 /** @import { ProvisionMapping } from './yaml.js' */
 
+/** Shared foundation basename; reserved as `--env`. */
+export const COMMON_PROVISION = 'common'
+
+/**
+ * Target-layer basenames (`provision/<target>.yaml`); also reserved as `--env`.
+ * @type {ReadonlySet<string>}
+ */
+export const PROVISION_TARGETS = Object.freeze(new Set(['local', 'proxmox']))
+
 /**
  * @typedef {object} LoadProvisionOptions
  * @property {string} root - instance repo root
@@ -21,10 +35,44 @@ import { collectEnvRefs, parseProvisionYaml, resolveEnvRefs, stripOppositeTarget
  */
 
 /**
+ * Parse a provision YAML file that must be a mapping.
+ * @param {string} filePath
+ * @returns {ProvisionMapping}
+ */
+function readProvisionMapping(filePath) {
+  const parsed = parseProvisionYaml(readFileSync(filePath, 'utf8'), filePath)
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${filePath}: expected a YAML mapping`)
+  }
+  return /** @type {ProvisionMapping} */ (parsed)
+}
+
+/**
+ * Deep-merge `layer` onto `data` when `filePath` exists.
+ * @param {ProvisionMapping} data
+ * @param {string} filePath
+ * @returns {{ data: ProvisionMapping, path: string | null }}
+ */
+function mergeIfPresent(data, filePath) {
+  if (!existsSync(filePath)) return { data, path: null }
+  return {
+    data: /** @type {ProvisionMapping} */ (
+      deepMerge(
+        /** @type {YamlValue} */ (data),
+        /** @type {YamlValue} */ (readProvisionMapping(filePath)),
+      )
+    ),
+    path: filePath,
+  }
+}
+
+/**
  * @param {LoadProvisionOptions} opts
  * @returns {{
  *   data: ProvisionMapping,
- *   basePath: string,
+ *   commonPath: string | null,
+ *   targetPath: string | null,
+ *   envPath: string | null,
  *   overlayPath: string | null,
  *   envRefs: string[],
  * }}
@@ -32,39 +80,55 @@ import { collectEnvRefs, parseProvisionYaml, resolveEnvRefs, stripOppositeTarget
 export function loadProvisionDocument(opts) {
   const { root, env, target = 'local' } = opts
 
-  const basePath = join(root, 'provision', `${env}.yaml`)
-  if (!existsSync(basePath)) {
-    throw new Error(`provision file not found: ${basePath}`)
+  if (env === COMMON_PROVISION || PROVISION_TARGETS.has(env)) {
+    throw new Error(
+      `env "${env}" is reserved for provision/${env}.yaml `
+        + '(layer basename); use a different --env / QCTL_ENV',
+    )
   }
 
-  const base = parseProvisionYaml(readFileSync(basePath, 'utf8'), basePath)
-  if (base === null || typeof base !== 'object' || Array.isArray(base)) {
-    throw new Error(`${basePath}: expected a YAML mapping`)
-  }
+  const provisionDir = join(root, 'provision')
+  const commonCandidate = join(provisionDir, `${COMMON_PROVISION}.yaml`)
+  const targetCandidate = join(provisionDir, `${target}.yaml`)
+  const envCandidate = join(provisionDir, `${env}.yaml`)
+  const overlayCandidate = join(provisionDir, `${env}.${target}.yaml`)
 
   /** @type {ProvisionMapping} */
-  let data = { .../** @type {ProvisionMapping} */ (base) }
+  let data = {}
+  const common = mergeIfPresent(data, commonCandidate)
+  data = common.data
+  const targetLayer = mergeIfPresent(data, targetCandidate)
+  data = targetLayer.data
+  const envLayer = mergeIfPresent(data, envCandidate)
+  data = envLayer.data
+  const overlay = mergeIfPresent(data, overlayCandidate)
+  data = overlay.data
 
-  const overlayPath = join(root, 'provision', `${env}.${target}.yaml`)
-  /** @type {string | null} */
-  let usedOverlay = null
-  if (existsSync(overlayPath)) {
-    const overlay = parseProvisionYaml(readFileSync(overlayPath, 'utf8'), overlayPath)
-    data = /** @type {ProvisionMapping} */ (
-      deepMerge(/** @type {YamlValue} */ (data), /** @type {YamlValue} */ (overlay))
+  if (!common.path && !targetLayer.path && !envLayer.path && !overlay.path) {
+    throw new Error(
+      `no provision YAML found for env=${env} target=${target} `
+        + `(tried provision/{${COMMON_PROVISION},${target},${env},${env}.${target}}.yaml)`,
     )
-    usedOverlay = overlayPath
   }
 
   stripOppositeTarget(data, target)
   const envRefs = collectEnvRefs(data)
-  return { data, basePath, overlayPath: usedOverlay, envRefs }
+  return {
+    data,
+    commonPath: common.path,
+    targetPath: targetLayer.path,
+    envPath: envLayer.path,
+    overlayPath: overlay.path,
+    envRefs,
+  }
 }
 
 /**
  * @typedef {object} LoadedProvision
  * @property {YamlMapping | ProvisionMapping} data
- * @property {string} basePath
+ * @property {string | null} commonPath
+ * @property {string | null} targetPath
+ * @property {string | null} envPath
  * @property {string | null} overlayPath
  * @property {string[]} envRefs
  */

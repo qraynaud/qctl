@@ -159,10 +159,10 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(sec.guest.VW_CLIENT_ID).toBeUndefined()
   })
 
-  test('missing env file throws', async () => {
+  test('missing all provision layers throws', async () => {
     process.chdir(makeInstance())
     await expect(loadEnvProvisionOrThrow({ env: 'prod', target: 'local' })).rejects.toThrow(
-      /provision file not found/,
+      /no provision YAML found/,
     )
   })
 
