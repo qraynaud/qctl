@@ -6,6 +6,7 @@ import * as sync from './secret/sync.js'
 
 export const command = 'secret'
 export const describe = 'Check / sync @sensitive schema values to Podman secrets'
+export const internal = false
 
 /**
  * @param {Argv} yargs

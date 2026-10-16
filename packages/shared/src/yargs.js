@@ -12,9 +12,11 @@
 /**
  * @typedef {object} YargsCommandModule
  * @property {string | readonly string[]} command
- * @property {string} [describe]
+ * @property {string | false} [describe]
  * @property {string | readonly string[]} [aliases]
  * @property {boolean} [deprecated]
+ * When true, omitted from default help (`describe: false`) unless `withInternals`.
+ * @property {boolean} [internal]
  * @property {(yargs: Argv) => Argv} [builder]
  * `handler` takes `never` so command modules may declare any command-specific argv type.
  * @property {(argv: never) => void | Promise<void>} [handler]
@@ -58,13 +60,16 @@ export function exitZeroOnMissingCommand(yargs) {
  * @template {Argv} T
  * @param {T} yargs
  * @param {readonly YargsCommandModule[]} modules
+ * @param {{ withInternals?: boolean }} [opts]
  * @returns {T}
  */
-export function registerCommands(yargs, modules) {
+export function registerCommands(yargs, modules, { withInternals = false } = {}) {
   let y = yargs
   for (const mod of modules) {
-    // yargs accepts the command-module object form.
-    y = /** @type {T} */ (y.command(/** @type {CommandModule} */ (mod)))
+    /** @type {YargsCommandModule} */
+    const registered = mod.internal && !withInternals ? { ...mod, describe: false } : mod
+    // yargs accepts the command-module object form; `describe: false` hides from help.
+    y = /** @type {T} */ (y.command(/** @type {CommandModule} */ (registered)))
   }
   return y
 }

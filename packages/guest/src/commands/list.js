@@ -4,6 +4,8 @@ import { ALL_STAGES, PROFILES, stagesForProfile } from '../init/stages.js'
 
 export const command = 'list'
 export const describe = 'List init stages in order (one per line)'
+/** Hidden from default `qctl -h` (shown with `--help-with-internals`). */
+export const internal = true
 
 /**
  * @param {Argv} yargs

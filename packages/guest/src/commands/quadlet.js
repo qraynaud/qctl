@@ -11,6 +11,7 @@ import * as up from './quadlet/up.js'
 
 export const command = 'quadlet'
 export const describe = 'Generate and manage Quadlet units from instance schemas'
+export const internal = false
 
 const quadletCommands = [up, down, enable, start, stop, restart, ps]
 

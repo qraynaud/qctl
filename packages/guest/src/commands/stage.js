@@ -7,6 +7,8 @@ import { ALL_STAGES, PROFILES } from '../init/stages.js'
 
 export const command = 'stage <name>'
 export const describe = 'Run a single init stage'
+/** Hidden from default `qctl -h` (shown with `--help-with-internals`). */
+export const internal = true
 
 /**
  * @param {Argv} yargs

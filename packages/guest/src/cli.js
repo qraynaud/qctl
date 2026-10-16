@@ -9,13 +9,37 @@ import { ensureGuestNativeHelper } from './native-helper.js'
 
 await ensureGuestNativeHelper()
 
-await exitZeroOnMissingCommand(
-  registerCommands(yargs(hideBin(process.argv)), commands)
-    .scriptName('qctl')
-    .version(`${QCTL_VERSION} (guest)`)
-    .usage('$0 <command> [options]')
-    .demandCommand(1)
-    .strictCommands()
-    .help()
-    .alias('h', 'help'),
-).parse()
+const HELP_WITH_INTERNALS = '--help-with-internals'
+const rawArgv = hideBin(process.argv)
+const withInternals = rawArgv.includes(HELP_WITH_INTERNALS)
+/** Strip the flag so yargs never sees an unknown option. */
+const filtered = rawArgv.filter((a) => a !== HELP_WITH_INTERNALS)
+const hasCommand = filtered.some((a) => !a.startsWith('-'))
+const explicitHelp = filtered.includes('--help') || filtered.includes('-h')
+// Bare `--help-with-internals` (no subcommand) → show full help.
+const parseArgv =
+  withInternals && !hasCommand
+    ? [...filtered.filter((a) => a !== '--help' && a !== '-h'), '--help']
+    : filtered
+
+/** Document internals only when help was asked for explicitly (not bare `qctl`). */
+const showInternalsHint = withInternals || explicitHelp
+
+let cli = registerCommands(yargs(parseArgv), commands, { withInternals })
+  .scriptName('qctl')
+  .version(`${QCTL_VERSION} (guest)`)
+  .usage('$0 <command> [options]')
+  .demandCommand(1)
+  .strictCommands()
+  .help()
+  .alias('h', 'help')
+
+if (showInternalsHint) {
+  cli = cli.epilogue(
+    withInternals
+      ? 'Internal commands are listed above (first-boot / debug / plugin tooling).'
+      : `Internal first-boot / debug commands: qctl ${HELP_WITH_INTERNALS}`,
+  )
+}
+
+await exitZeroOnMissingCommand(cli).parse()

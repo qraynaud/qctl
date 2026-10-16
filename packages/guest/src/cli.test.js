@@ -28,10 +28,35 @@ async function runGuest(args, opts = {}) {
 }
 
 describe('guest CLI', () => {
-  test('--help lists init, quadlet, secret', async () => {
+  test('--help lists public commands and points at --help-with-internals', async () => {
     const { stdout, code } = await runGuest(['--help'])
     expect(code).toBe(0)
+    expect(stdout).toContain('quadlet')
+    expect(stdout).toContain('secret')
+    expect(stdout).toContain('--help-with-internals')
+    // Internal tooling stays registered but off the default Commands list.
+    expect(stdout).not.toMatch(/^\s*init\b/m)
+    expect(stdout).not.toMatch(/^\s*list\b/m)
+    expect(stdout).not.toMatch(/^\s*stage\b/m)
+    expect(stdout).not.toMatch(/^\s*plugins\b/m)
+  })
+
+  test('bare qctl shows public help without documenting --help-with-internals', async () => {
+    const { stdout, code } = await runGuest([])
+    expect(code).toBe(0)
+    expect(stdout).toContain('quadlet')
+    expect(stdout).toContain('secret')
+    expect(stdout).not.toContain('--help-with-internals')
+    expect(stdout).not.toMatch(/\bqctl init\b/)
+  })
+
+  test('--help-with-internals lists first-boot / debug commands', async () => {
+    const { stdout, code } = await runGuest(['--help-with-internals'])
+    expect(code).toBe(0)
     expect(stdout).toContain('init')
+    expect(stdout).toContain('list')
+    expect(stdout).toContain('stage')
+    expect(stdout).toContain('plugins')
     expect(stdout).toContain('quadlet')
     expect(stdout).toContain('secret')
   })
