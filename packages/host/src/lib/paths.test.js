@@ -26,6 +26,7 @@ const origCwd = process.cwd()
 const origSeedEnv = process.env.QCTL_ROCKY_SEED
 const origCache = process.env.QCTL_CACHE_HOME
 const origData = process.env.QCTL_DATA_HOME
+const origInstanceRoot = process.env.QCTL_INSTANCE_ROOT
 /** @type {string[]} */
 const temps = []
 
@@ -33,6 +34,7 @@ beforeEach(() => {
   resetRepoRootCache()
   resetSeedKitRoot()
   delete process.env.QCTL_ROCKY_SEED
+  delete process.env.QCTL_INSTANCE_ROOT
   const base = makeTempDir()
   temps.push(base)
   process.env.QCTL_CACHE_HOME = join(base, 'cache')
@@ -45,6 +47,8 @@ afterEach(() => {
   resetSeedKitRoot()
   if (origSeedEnv === undefined) delete process.env.QCTL_ROCKY_SEED
   else process.env.QCTL_ROCKY_SEED = origSeedEnv
+  if (origInstanceRoot === undefined) delete process.env.QCTL_INSTANCE_ROOT
+  else process.env.QCTL_INSTANCE_ROOT = origInstanceRoot
   if (origCache === undefined) delete process.env.QCTL_CACHE_HOME
   else process.env.QCTL_CACHE_HOME = origCache
   if (origData === undefined) delete process.env.QCTL_DATA_HOME
@@ -108,6 +112,19 @@ describe('vm paths', () => {
     const dir = realpathSync(makeTempDir())
     temps.push(dir)
     process.chdir(dir)
+    expect(tryGetRepoRoot()).toBeNull()
+  })
+
+  test('tryGetRepoRoot honors QCTL_INSTANCE_ROOT over cwd', () => {
+    const root = makeInstance()
+    const other = realpathSync(makeTempDir())
+    temps.push(other)
+    process.chdir(other)
+    process.env.QCTL_INSTANCE_ROOT = root
+    resetRepoRootCache()
+    expect(tryGetRepoRoot()).toBe(root)
+    delete process.env.QCTL_INSTANCE_ROOT
+    resetRepoRootCache()
     expect(tryGetRepoRoot()).toBeNull()
   })
 })

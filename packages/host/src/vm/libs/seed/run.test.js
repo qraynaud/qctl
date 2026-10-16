@@ -6,7 +6,9 @@ import { ISOReader } from '@gcu/iso9660'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { initInstance } from '../../../init.js'
+import { clearEnvProvisionCache } from '../../../lib/load-config.js'
 import { getSeed, resetRepoRootCache } from '../../../lib/paths.js'
+import { diskMounts } from '../../../provision/schema/disks.js'
 import { resolveSeedPaths } from './iso.js'
 import { runSeed } from './run.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -17,10 +19,14 @@ const origCache = process.env.QCTL_CACHE_HOME
 const origData = process.env.QCTL_DATA_HOME
 const origSeed = process.env.QCTL_ROCKY_SEED
 const origHome = process.env.HOME
+const origInstanceRoot = process.env.QCTL_INSTANCE_ROOT
 /** @type {string[]} */
 const temps = []
 
 beforeEach(() => {
+  clearEnvProvisionCache()
+  resetRepoRootCache()
+  diskMounts.clear()
   const base = makeTempDir()
   temps.push(base)
   process.env.QCTL_CACHE_HOME = join(base, 'cache')
@@ -30,6 +36,8 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(origCwd)
   resetRepoRootCache()
+  clearEnvProvisionCache()
+  diskMounts.clear()
   if (origDist === undefined) delete process.env.QCTL_GUEST_DIST
   else process.env.QCTL_GUEST_DIST = origDist
   if (origCache === undefined) delete process.env.QCTL_CACHE_HOME
@@ -40,6 +48,8 @@ afterEach(() => {
   else process.env.QCTL_ROCKY_SEED = origSeed
   if (origHome === undefined) delete process.env.HOME
   else process.env.HOME = origHome
+  if (origInstanceRoot === undefined) delete process.env.QCTL_INSTANCE_ROOT
+  else process.env.QCTL_INSTANCE_ROOT = origInstanceRoot
   while (temps.length) {
     const dir = temps.pop()
     if (dir) removeTempDir(dir)
@@ -51,6 +61,11 @@ describe('seed ISO (@gcu/iso9660)', () => {
     const base = /** @type {string} */ (temps[0])
     const root = realpathSync(initInstance(join(base, 'inst')).root)
     process.chdir(root)
+    // Prefer explicit root over cwd — parallel bun test workers share process
+    // state if isolate is off; die() process.exit would abort the whole suite.
+    process.env.QCTL_INSTANCE_ROOT = root
+    resetRepoRootCache()
+    clearEnvProvisionCache()
 
     const seedKit = join(base, 'seed-kit')
     mkdirSync(join(seedKit, 'cloud-init'), { recursive: true })

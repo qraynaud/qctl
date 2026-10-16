@@ -29,8 +29,13 @@ const sizeSchema = z.string().trim().min(1)
 const mapKey = z.string().trim().min(1)
 
 /**
- * Mount paths seen during provision disks parse (process-lifetime; one load per command).
- * Tests: {@link diskMounts}.clear() between parses.
+ * Mount paths claimed while parsing `disks:` (uniqueness across data + tanks).
+ *
+ * Intentionally process-lifetime — do **not** clear in production parse/schema code.
+ * CLI loads provision once per process; clearing mid-parse would defeat uniqueness.
+ * Tests that parse more than one disks document in the same process must
+ * `diskMounts.clear()` in beforeEach/afterEach (or between parses).
+ *
  * @type {Set<string>}
  */
 export const diskMounts = new Set()

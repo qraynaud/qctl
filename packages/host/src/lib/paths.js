@@ -19,7 +19,7 @@ import { homedir } from 'node:os'
 
 import { path } from 'zx'
 
-import { findInstanceRoot } from '@qctl/shared'
+import { findInstanceRoot, isInstanceRoot } from '@qctl/shared'
 
 import { die } from './util.js'
 
@@ -31,9 +31,19 @@ let seedKitRoot = null
 
 /**
  * Instance root for the current working directory, or null.
+ * Prefer `QCTL_INSTANCE_ROOT` when set (tests / wrappers that cannot rely on cwd).
  * @returns {string | null}
  */
 export function tryGetRepoRoot() {
+  const fromEnv = process.env.QCTL_INSTANCE_ROOT?.trim()
+  if (fromEnv) {
+    try {
+      const root = realpathSync(fromEnv)
+      if (isInstanceRoot(root)) return root
+    } catch {
+      // fall through to cwd walk
+    }
+  }
   const cwd = process.cwd()
   if (rootCache && rootCache.cwd === cwd) return rootCache.root
   rootCache = { cwd, root: findInstanceRoot(cwd) }

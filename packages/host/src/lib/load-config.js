@@ -7,7 +7,8 @@
  * `@tag(guest)` keys are still sealed. Admin SSH pubkeys: `ssh.authorized_keys`.
  *
  * Prefer {@link loadEnvProvisionSafe} for soft paths; {@link loadEnvProvision}
- * dies on failure. One env+target per process lifetime (cached); call
+ * dies on failure. One successful env+target (+ instance root) per process
+ * lifetime (cached); failures are not cached. Call
  * {@link clearEnvProvisionCache} in tests.
  */
 import { existsSync, readFileSync } from 'node:fs'
@@ -210,8 +211,10 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
 
 /**
  * Soft load: never throws for provision/schema errors.
- * Caches the first env+target; repeating the same key returns cache; a different
- * key throws (commands do not mix envs).
+ * Caches the first successful env+target (+ instance root); repeating the same
+ * key returns cache; a different key throws (commands do not mix envs).
+ * Failures are not cached — they are often cwd / missing-instance transients
+ * (poisoning later loads in the same process, e.g. bun test workers).
  *
  * @param {{ env?: string, target?: string }} [opts]
  * @returns {Promise<LoadEnvProvisionResult>}
@@ -219,11 +222,14 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
 export async function loadEnvProvisionSafe({ env = 'dev', target = 'local' } = {}) {
   const e = env || 'dev'
   const t = normalizeTarget(target || 'local')
-  const key = cacheKey(e, t)
+  const root = tryGetRepoRoot()
+  const key = `${root ?? ''}\0${cacheKey(e, t)}`
 
   if (provisionCache) {
     if (provisionCache.key === key) return provisionCache.result
-    const [cachedEnv, cachedTarget] = provisionCache.key.split('\0')
+    const parts = provisionCache.key.split('\0')
+    const cachedEnv = parts[1] ?? '?'
+    const cachedTarget = parts[2] ?? '?'
     throw new Error(
       `loadEnvProvisionSafe: already loaded env=${cachedEnv} target=${cachedTarget}; `
         + `refusing env=${e} target=${t} (clearEnvProvisionCache in tests if needed)`,
@@ -236,12 +242,10 @@ export async function loadEnvProvisionSafe({ env = 'dev', target = 'local' } = {
     provisionCache = { key, result }
     return result
   } catch (err) {
-    const result = /** @type {const} */ ({
+    return {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-    })
-    provisionCache = { key, result }
-    return result
+    }
   }
 }
 

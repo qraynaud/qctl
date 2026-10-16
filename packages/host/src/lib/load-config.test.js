@@ -213,4 +213,16 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toMatch(/not inside a qctl instance/)
   })
+
+  test('loadEnvProvisionSafe does not cache failures', async () => {
+    const dir = realpathSync(makeTempDir())
+    temps.push(dir)
+    process.chdir(dir)
+    const miss = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    expect(miss.ok).toBe(false)
+    process.chdir(makeInstance())
+    resetRepoRootCache()
+    const hit = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    expect(hit.ok).toBe(true)
+  })
 })
