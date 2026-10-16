@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import { findInstanceRoot, loadProvision } from '@qctl/shared'
 
 import { portsFromArgv } from '../lib/options.js'
+import { resolveProfileArgv } from '../lib/profile-argv.js'
 import { which } from '../lib/util.js'
 import { appsIdentityFromProvision, parseProvisionOrThrow } from '../provision/schema/index.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
@@ -33,7 +34,7 @@ import { die } from './util.js'
  */
 
 /**
- * @param {{ env?: string }} argv
+ * @param {{ env?: string, profile?: string, target?: string, production?: boolean }} argv
  * @param {{ disposable?: boolean }} [opts] `disposable` → unique `-test-<id>` name, no host `-p`
  * @returns {Promise<LocalContext>}
  */
@@ -49,6 +50,7 @@ export async function createLocalContext(argv, opts = {}) {
         + '  Run `qctl init <dir>` to scaffold one, or cd into an existing instance.',
     )
   }
+  resolveProfileArgv(argv, { root, requireLocal: true })
   const env = String(argv.env || 'dev')
   const disposable = opts.disposable === true
   const name = disposable ? localTestContainerName(root) : localContainerName(root)

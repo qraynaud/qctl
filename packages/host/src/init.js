@@ -7,6 +7,7 @@ import {
   GITIGNORE,
   MISE_TOML,
   PACKAGE_JSON,
+  PROVISION_COMMON_YAML,
   PROVISION_DEV_LOCAL_YAML,
   PROVISION_DEV_PROXMOX_YAML,
   PROVISION_DEV_YAML,
@@ -68,6 +69,7 @@ export function initInstance(dir, opts = {}) {
   put('.env.dev', ROOT_ENV_DEV)
   put('.env.prod', ROOT_ENV_PROD)
   put('.gitignore', GITIGNORE)
+  put('provision/common.yaml', PROVISION_COMMON_YAML)
   put('provision/dev.yaml', PROVISION_DEV_YAML)
   put('provision/dev.local.yaml', PROVISION_DEV_LOCAL_YAML)
   put('provision/dev.proxmox.yaml', PROVISION_DEV_PROXMOX_YAML)

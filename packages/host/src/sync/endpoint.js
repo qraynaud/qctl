@@ -1,5 +1,5 @@
 /**
- * Resolve SSH endpoint for `qctl sync` from --env / --target (+ overrides).
+ * Resolve SSH endpoint for `qctl sync` from the profile's env/target (+ overrides).
  */
 import { chalk } from 'zx'
 
@@ -70,8 +70,7 @@ export async function resolveSyncEndpoint(argv) {
 
   if (target === 'proxmox') {
     throw new Error(
-      '--target proxmox needs --host <guest-ip> (and optional --port).\n'
-        + '  Tip: qctl vm ssh-info --target proxmox',
+      'proxmox sync needs --host <guest-ip> (and optional --port).\n' + '  Tip: qctl vm ssh-info',
     )
   }
 

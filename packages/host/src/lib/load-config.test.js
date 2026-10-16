@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
@@ -58,7 +58,11 @@ describe('loadEnvProvision (provision adapter)', () => {
 
     expect(sec.env).toBe('dev')
     expect(sec.target).toBe('local')
-    expect(sec.paths.map((p) => p.split('/').pop())).toEqual(['dev.yaml', 'dev.local.yaml'])
+    expect(sec.paths.map((p) => p.split('/').pop())).toEqual([
+      'common.yaml',
+      'dev.yaml',
+      'dev.local.yaml',
+    ])
     expect(sec.provisionDir).toBe(join(root, 'provision'))
     expect(sec.guest).toMatchObject({
       tank_passphrase_tank: 'lab-tank-passphrase',
@@ -159,9 +163,25 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(sec.guest.VW_CLIENT_ID).toBeUndefined()
   })
 
-  test('missing all provision layers throws', async () => {
+  test('env with only common.yaml fails full provision schema', async () => {
+    // Scaffold has common + dev overlays; prod has no env layer → common alone lacks networking.
     process.chdir(makeInstance())
     await expect(loadEnvProvisionOrThrow({ env: 'prod', target: 'local' })).rejects.toThrow(
+      /networking/,
+    )
+  })
+
+  test('missing all provision layers throws', async () => {
+    const root = makeInstance()
+    process.chdir(root)
+    const provision = join(root, 'provision')
+    for (const name of ['common.yaml', 'dev.yaml', 'dev.local.yaml', 'dev.proxmox.yaml']) {
+      unlinkSync(join(provision, name))
+    }
+    // Keep a non-layer YAML so the tree still counts as an instance root.
+    writeFileSync(join(provision, 'marker.yaml'), 'qctl:\n  platform: rocky\n')
+    resetRepoRootCache()
+    await expect(loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })).rejects.toThrow(
       /no provision YAML found/,
     )
   })

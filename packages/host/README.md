@@ -34,21 +34,21 @@ qctl installs `node_modules`), root `.env.schema` / `.env.dev` / `.env.prod`,
 `provision/.env.schema` + `.env.dev` / `.env.prod` (Tier-0 / provision `!env`
 bindings), `provision/` YAML stubs, and empty `applications/` / `common/` /
 `networks/` trees. An existing `mise.toml` is left alone unless `--force`.
-Generate and commit `package-lock.json` with a local `QCTL_ENV=dev` ensure/load
-before CI or non-`dev` (frozen installs require the lockfile).
+Generate and commit `package-lock.json` with a local non-production ensure/load
+before CI or production (frozen installs require the lockfile).
 
 ### `qctl sync`
 
 Push the current instance working tree to the appliance over SSH (`ssh2` SFTP +
-exec). Defaults match other host commands (`--env dev`, `--target local`).
+exec). Env/target come from the selected provision **profile** (see
+[docs/provision.md](../../docs/provision.md)).
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--target` | `local` | `local` = libvirt passt/DHCP; `proxmox` needs `--host` |
-| `--env` | `dev` | Selects provision layers for ports / name |
+| `-p` / `--profile` | (default profile) | Provision profile key (`qctl.profiles`) |
 | `--network` | `user` | `user`/`auto`: `127.0.0.1` + `ssh.forward`; `default`: DHCP lease |
 | `--user` | `rocky` | SSH admin user |
-| `--host` / `--port` | (derived) | Override endpoint (required for Proxmox) |
+| `--host` / `--port` | (derived) | Override endpoint (required for proxmox-target profiles) |
 | `--remote-dir` | `/tank/rocky` | Guest repo path |
 | `--identity` | `~/.ssh/id_*` / agent | Private key |
 | `--include-tooling` | `false` | Also install `qctl-guest` → `/usr/local/bin/qctl` and `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/` (plus `varlock-local-encrypt` when present) |
@@ -66,13 +66,14 @@ Replaces the old instance `scripts/sync-to-local.sh`.
 ```bash
 qctl sync
 qctl sync --include-tooling
-qctl sync --target proxmox --host 10.0.0.50
+qctl sync -p prod --host 10.0.0.50   # proxmox-target profile needs --host
 ```
 
 ### `qctl local …`
 
 Run Quadlets in a nested systemd+Podman appliance on the workstation (no VM).
 Requires host **Podman**. Resolves the instance root from the current directory.
+Profile must have `target: local`.
 
 The outer container uses explicit `--uidmap`/`--gidmap` that split the rootless
 host id budget: a dense low range for systemd/tooling (provision `users.apps.uid`/`gid`,
@@ -98,15 +99,15 @@ Guest tooling (`qctl-guest` + platform module) is resolved like
 | `qctl local ps [app…]` | Appliance status + `quadlet ps` |
 | `qctl local logs [app…]` | Journals / container logs (`-f` follows one app unit) |
 
-Shared: `--env` (default `dev`). Image override: `QCTL_LOCAL_IMAGE` (default
-`quay.io/podman/stable:latest`). Extra outer run args: `QCTL_LOCAL_PODMAN_RUN_ARGS`.
-When `CI` is set, the outer appliance omits `--uidmap`/`--gidmap` so nested rootful
-CI can create dummy VLAN parents (`ip link add … type dummy`); local rootless keeps
-the maps.
+Shared: `-p` / `--profile` (default profile from `common.yaml`). Image override:
+`QCTL_LOCAL_IMAGE` (default `quay.io/podman/stable:latest`). Extra outer run args:
+`QCTL_LOCAL_PODMAN_RUN_ARGS`. When `CI` is set, the outer appliance omits
+`--uidmap`/`--gidmap` so nested rootful CI can create dummy VLAN parents
+(`ip link add … type dummy`); local rootless keeps the maps.
 
 ```bash
 qctl local up
-qctl local up caddy
+qctl local up -p lab caddy
 qctl local up --all
 qctl local test caddy
 qctl local ps
@@ -127,21 +128,21 @@ Each accepts `--force` to overwrite existing schema/README files.
 
 ### `qctl vm …`
 
-VM lifecycle against the instance `provision/` tree. Most subcommands share:
+VM lifecycle against the instance `provision/` tree. Env/target come from the
+selected provision **profile**. Most subcommands share:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--target` | `local` | `local` = libvirt; `proxmox` = PVE API |
-| `--env` | `dev` | Selects provision layers and related defaults |
+| `-p` / `--profile` | (default profile) | Provision profile key (`qctl.profiles`) |
 | `--name` | (derived) | VM / domain name |
-| `--connect` | `qemu:///system` | libvirt URI (`local` only) |
+| `--connect` | `qemu:///system` | libvirt URI (local-target profiles) |
 | `--dry-run` | `false` | Print actions without changing the host/guest |
 
 Boot-oriented commands (`up`, `init-tank`) also accept `--memory` / `--vcpus`.
 Port forwards come from `provision.networking.ports` (no CLI port overrides).
 `init-tank` does not publish guest SSH/cockpit.
 
-#### Local (`--target local`) host deps
+#### Local-target profile host deps
 
 Libvirt VMs always get an **emulated TPM 2.0** (`virt-install --tpm` on create;
 reconcile adds it to existing domains). That needs **`swtpm`** on the host PATH
@@ -150,7 +151,7 @@ alongside `virsh`, `virt-install`, and `qemu-img`.
 ```bash
 # CachyOS / Arch example
 sudo pacman -S qemu-base virt-install libvirt dnsmasq swtpm
-qctl vm target-check --target local   # fails if swtpm (or other tools) missing
+qctl vm target-check -p default   # fails if swtpm (or other tools) missing
 ```
 
 `qctl vm up` / `init-tank` also refuse to start when `swtpm` is missing.
@@ -172,7 +173,8 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--profile` | `appliance` | `appliance` = full first-boot; `init-tank` = tank-create seed |
+| `-p` / `--profile` | (default profile) | Provision profile (env + target layers) |
+| `--seed-profile` | `appliance` | Seed ISO kind: `appliance` = full first-boot; `init-tank` = tank-create |
 | `--out` | (none) | Keep unpacked cidata tree (debug; default stages in tmp) |
 | `--instance-id` | reuse previous / `rocky-<env>` | cloud-init instance-id (change to force full re-run) |
 | `--allow-missing-tier0` | `false` | Allow omitting Tier-0 `@tag(guest)` VW_* keys when absent |
@@ -205,12 +207,13 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 Topology and provision wiring live in the instance:
 
-- provision layers: `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml` (at least one)
+- **Profiles** in `provision/common.yaml` (`qctl.environments` / `qctl.profiles`) — select with `-p` / `--profile`
+- Merge layers: `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml` (at least one)
 - `!env` fields resolve from `provision/.env.<env>` (+ optional `.env.local`) via the bundled varlock graph API
 - Tier-0 credentials: `# @tag(guest)` keys on provision env (seeded into `/var/lib/rocky/tier0-pending/<KEY>`)
 - Platform selection: `qctl.platform` (`rocky` or `github:owner/repo[@x.y.z]`)
 
-See [docs/instance.md](../../docs/instance.md).
+See [docs/provision.md](../../docs/provision.md) and [docs/instance.md](../../docs/instance.md).
 
 ## Develop
 

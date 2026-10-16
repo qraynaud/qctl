@@ -30,7 +30,7 @@ Before load it ensures the nearest `package.json` has `node_modules` installed
 (Arborist — no npm CLI) on unresolved-plugin errors; varlock resolves `# @plugin`
 packages from there.
 Installs are frozen (`package-lock.json` required, not rewritten) when `CI=true`
-or `QCTL_ENV` is not `dev`.
+or the active env is marked `production: true` in `qctl.environments`.
 
 | Export | Meaning |
 |--------|---------|

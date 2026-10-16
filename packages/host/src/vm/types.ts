@@ -3,7 +3,8 @@
  */
 
 export type VmTarget = 'local' | 'proxmox'
-export type VmEnv = 'dev' | 'prod'
+/** Provision / QCTL_ENV name (open; declared in `qctl.environments`). */
+export type VmEnv = string
 export type VmNetwork = 'auto' | 'default' | 'user'
 export type SeedProfile = 'appliance' | 'init-tank'
 
@@ -12,7 +13,15 @@ export type VmArgv = {
   _: (string | number)[]
   $0: string
   target: VmTarget | string
-  env: VmEnv | string
+  env: VmEnv
+  /** From profile / `qctl.environments.*.production` when resolved. */
+  production?: boolean
+  /** Provision profile key (`qctl.profiles`); set by resolveProfileArgv. */
+  profile?: string
+  /** Idempotency marker for resolveProfileArgv. */
+  _qctlProfileResolved?: boolean
+  /** Seed ISO kind (`--seed-profile`); not the provision profile. */
+  seedProfile?: SeedProfile | string
   /** Resolved by `loadDriver` (resolveVmName). */
   name: string
   connect: string
@@ -36,7 +45,6 @@ export type VmArgv = {
   poolIds?: string[]
   allowMissingFiles?: boolean
   allowMissingTier0?: boolean
-  profile?: SeedProfile | string
   out?: string
   instanceId?: string
   noConsole?: boolean

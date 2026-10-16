@@ -1,6 +1,7 @@
 /** Scaffold file contents for `qctl init` / `qctl new`. */
 
-export const GITIGNORE = `# Local overrides (not committed). Active env is QCTL_ENV / --env → .env.dev / .env.prod.
+export const GITIGNORE = `# Local overrides (not committed). Active env is QCTL_ENV from the
+# selected provision profile (--profile / -p) → .env.dev / .env.prod / .env.<env>.
 # VM/seed/image caches live under ~/.cache/qctl and ~/.local/share/qctl (not in-repo).
 .env
 .env.local
@@ -29,12 +30,13 @@ export const ROOT_ENV_SCHEMA = `# Instance root schema. \`loadEnvGraphForDir\` u
 # Unmarked items are sensitive + required. Use @public / @optional per item.
 # ---
 
-# Active provision env (also selectable via --env / QCTL_ENV)
-# @type=enum(dev, prod)
+# Active env name — set from the selected provision profile (\`qctl … --profile\` / \`-p\`).
+# Open string (any key under qctl.environments); scaffold keeps .env.dev / .env.prod.
+# @type=string
 # @public
 QCTL_ENV=dev
 
-# --- Values from .env.dev / .env.prod ---
+# --- Values from .env.<QCTL_ENV> (e.g. .env.dev / .env.prod) ---
 # Declare every key those files set as internal: usable for Quadlet \${VAR} substitution and
 # schema refs, never injected into the process env.
 
@@ -83,7 +85,7 @@ SSH_HOST_KEYS=
 # ADMIN_PASSWORD=lab
 DEPLOY_KEY=lab-deploy-key-placeholder
 HEPTAPOD_REGISTRY=
-# Required when using --target proxmox (provision/dev.proxmox.yaml):
+# Required for proxmox-target profiles (provision/dev.proxmox.yaml):
 # PROXMOX_API_TOKEN=
 `
 
@@ -151,15 +153,30 @@ export function treeEnvSchema(kind, name) {
   ].join('\n')
 }
 
-export const PROVISION_DEV_YAML = `# Committable topology. Secrets: !env → provision/.env.<QCTL_ENV>.
-# Seed injects disks.tanks.*.passphrase → tank_passphrase_<poolId>, plus
-# admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
-# Overlay: provision/dev.local.yaml or provision/dev.proxmox.yaml
+/** Shared foundation layer + host meta (environments / profiles). Always merged first. */
+export const PROVISION_COMMON_YAML = `# Shared foundation (common → target → env → env.target).
+# qctl.environments / qctl.profiles / qctl.default-profile are read from this file only.
+# Built-ins when omitted: environments {dev, prod: {production: true}},
+# profiles {default: {env: dev, target: local}}.
 
 qctl:
   # Platform adapter (guest import). Version follows the running host (mise).
   # Short name or github:owner/repo[@x.y.z] — e.g. github:qraynaud/platform-ubuntu
   platform: rocky
+  # environments:
+  #   lab: {}
+  #   prod: { production: true }
+  # profiles:
+  #   lab:  { env: lab,  target: local }
+  #   prod: { env: prod, target: proxmox }
+  # default-profile: lab
+`
+
+export const PROVISION_DEV_YAML = `# Env layer (dev). Secrets: !env → provision/.env.<QCTL_ENV>.
+# Seed injects disks.tanks.*.passphrase → tank_passphrase_<poolId>, plus
+# admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
+# Overlay: provision/dev.local.yaml or provision/dev.proxmox.yaml
+# Platform + profiles: see provision/common.yaml
 
 # OS + persistent data volumes + ZFS tanks. Member map keys become disk serials.
 # size → virtual disk; omit size → bind a physical disk (Proxmox / by-id).
@@ -266,7 +283,7 @@ networking:
 # hg-evolve, and files gets stock /etc/mercurial/hgrc (unless that path is listed).
 `
 
-export const PROVISION_DEV_LOCAL_YAML = `# Overlay for --target local (libvirt). Deep-merged onto provision/dev.yaml.
+export const PROVISION_DEV_LOCAL_YAML = `# Overlay for local-target profiles (libvirt). Deep-merged onto provision/dev.yaml.
 
 local:
   cpu: 2
@@ -278,7 +295,7 @@ networking:
       ipv4: 10.42.2.2
 `
 
-export const PROVISION_DEV_PROXMOX_YAML = `# Overlay for --target proxmox. Deep-merged onto provision/dev.yaml.
+export const PROVISION_DEV_PROXMOX_YAML = `# Overlay for proxmox-target profiles. Deep-merged onto provision/dev.yaml.
 
 proxmox:
   api_url: https://pve.example:8006
@@ -299,13 +316,16 @@ networking:
 
 export const PROVISION_README = `# provision/
 
-Topology YAML (\`dev.yaml\`, overlays) plus the host env graph
-(\`.env.schema\` + \`.env.<env>\`, optional \`.env.local\`).
+Merge order: \`common.yaml\` → \`<target>.yaml\` → \`<env>.yaml\` → \`<env>.<target>.yaml\`
+(later wins). Host meta (\`qctl.environments\` / \`qctl.profiles\` / \`qctl.default-profile\`)
+is read from \`common.yaml\` only; omit them to use built-ins. Select a profile with
+\`qctl … --profile\` / \`-p\` (sets \`QCTL_ENV\` from the profile’s env).
 
-Disk topology lives under \`disks:\` (\`os\` / \`data\` / \`tanks\`). Encrypted tank
-passphrases are \`disks.tanks.<id>.passphrase: !env …\` — seed writes Tier-0
-\`tank_passphrase_<id>\` (not a top-level \`tank:\` block). Other first-boot slots
-(\`users.admin\`, \`repo.deploy_key\`, …) use the same \`!env\` graph. \`users\` is
+Topology YAML plus the host env graph (\`.env.schema\` + \`.env.<env>\`, optional
+\`.env.local\`). Disk topology lives under \`disks:\` (\`os\` / \`data\` / \`tanks\`).
+Encrypted tank passphrases are \`disks.tanks.<id>.passphrase: !env …\` — seed writes
+Tier-0 \`tank_passphrase_<id>\` (not a top-level \`tank:\` block). Other first-boot
+slots (\`users.admin\`, \`repo.deploy_key\`, …) use the same \`!env\` graph. \`users\` is
 optional (defaults: admin/1000 key-only, apps/900 + subids). \`qctl vm seed\`
 resolves on the host and injects Tier-0 into the guest (no guest-side bootstrap
 graph). Create ZFS pools with \`qctl vm init-tank\`; appliance boots import only.

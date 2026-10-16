@@ -1,8 +1,8 @@
+import { sharedProfile } from '../lib/options.js'
 import { applianceExists, applianceRunning, removeAppliance } from './appliance-lifecycle.js'
 import { anyQuadletUp, quadletDown } from './appliance-quadlet.js'
 import { listInstanceApps } from './apps.js'
 import { createLocalContext } from './context.js'
-import { sharedLocalEnv } from './options.js'
 import { argvApps, log } from './util.js'
 
 /** @import { Argv } from 'yargs' */
@@ -15,7 +15,7 @@ export const describe = 'Stop apps (or all); remove the appliance when nothing i
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .positional('apps', {
       type: 'string',
       array: true,

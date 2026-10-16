@@ -7,19 +7,66 @@ from `provision/.env.<QCTL_ENV>` (see [secrets.md](./secrets.md)).
 `qctl init` writes a minimal starter under `provision/`. This page documents **every**
 schema field, mainly via commented samples.
 
+## Profiles (env + target)
+
+Host commands select env and hypervisor target **only** by **profile**
+(`qctl … --profile` / `-p`).
+
+Declare them under `qctl:` in **`provision/common.yaml` only** (bootstrap SoT):
+
+```yaml
+qctl:
+  platform: rocky
+  environments:
+    lab: {}
+    staging: {}
+    prod: { production: true }
+  profiles:
+    lab:     { env: lab,     target: local }
+    staging: { env: staging, target: proxmox }
+    prod:    { env: prod,    target: proxmox }
+  default-profile: lab
+```
+
+| Field | Role |
+|-------|------|
+| `environments` | Open map of env names. Optional `production: true` (default `false`). |
+| `profiles` | Named `{ env, target }` pairs (`target`: `local` \| `proxmox`). |
+| `default-profile` | Profile key used when `--profile` is omitted. |
+
+**Built-ins when omitted:** environments `{ dev, prod: { production: true } }`,
+profiles `{ default: { env: dev, target: local } }` (so a fresh init works with
+`--profile` omitted).
+
+**Default profile key:** `default-profile` if set; else the sole profile key if
+the map has exactly one entry; else `--profile` is required.
+
+After resolve, qctl sets internal `env` / `target` / `production` and
+`QCTL_ENV=<profile.env>` for varlock / host-env loads (profile is SoT for the
+command — ambient `$QCTL_ENV` does not pick the profile).
+
+`qctl local …` requires a profile whose `target` is `local`.
+
+**Production flag** (`production: true` on an env) drives destroy confirm, disk
+warnings, Proxmox attach tip, default VM name, and frozen plugin installs.
+Frozen `node_modules` installs: `CI=true` **or** `production: true` on the
+active env (non-production custom envs such as `staging` stay mutable unless CI).
+
+Reserved env / profile basenames: `common`, `local`, `proxmox` (layer names).
+
 ## Files and load order
 
 | File | Role |
 |------|------|
-| `provision/common.yaml` | Shared foundation (all envs / targets) |
+| `provision/common.yaml` | Shared foundation + `qctl.environments` / `profiles` / `default-profile` |
 | `provision/<target>.yaml` | Target layer, e.g. `local.yaml` / `proxmox.yaml` |
-| `provision/<env>.yaml` | Env layer for `QCTL_ENV` / `--env`, e.g. `dev.yaml` |
+| `provision/<env>.yaml` | Env layer for the profile’s `env`, e.g. `dev.yaml` |
 | `provision/<env>.<target>.yaml` | Most-specific overlay, e.g. `dev.local.yaml` |
 | `provision/.env.schema` | Host graph schema for keys used by `!env` |
 | `provision/.env.<env>` | Host values (literals / `vw()`); committed lab values OK |
 | `provision/.env.local` | Machine-local host overrides (gitignored) |
 
-Load algorithm (`qctl vm …`, `qctl local …`, seed):
+Load algorithm (`qctl vm …`, `qctl local …`, seed) after profile resolve:
 
 1. **Deep-merge** present layers in this order (later wins; maps merge by key;
    **arrays are replaced** by the later file):
@@ -28,19 +75,17 @@ Load algorithm (`qctl vm …`, `qctl local …`, seed):
 3. Drop the opposite hypervisor block (`local` vs `proxmox`).
 4. Resolve every `!env` from process env + `provision/.env.*` graph to a
    `Buffer` (empty process values do not win; missing keys error).
-5. Validate against the provision schema (below). The `qctl:` block is host metadata
-   and is stripped before that validation.
+5. Validate against the provision schema (below).
 
 ```text
-provision/common.yaml           ← foundation (all envs / targets)
+provision/common.yaml           ← foundation + host meta (profiles)
 provision/local.yaml            ← target (before env)
 provision/dev.yaml              ← env (wins over target)
 provision/dev.local.yaml        ← env+target (always last)
 ```
 
-Reserved `--env` / `QCTL_ENV` names: `common`, `local`, `proxmox` (layer basenames).
-Prefer shared topology in `common.yaml`, target-wide knobs in `<target>.yaml`,
-env knobs in `<env>.yaml`, and env+target specifics in the overlay.
+Prefer shared topology and profiles in `common.yaml`, target-wide knobs in
+`<target>.yaml`, env knobs in `<env>.yaml`, and env+target specifics in the overlay.
 
 ## `!env` tag
 
@@ -72,13 +117,8 @@ Every supported top-level key and nested field. Omit anything optional — defau
 are noted in comments. Copy and trim for real instances.
 
 ```yaml
-# --- Host metadata (not part of the guest provision schema) ---
-qctl:
-  # Platform adapter for guest tooling. Short name or github:owner/repo[@x.y.z]
-  # Default when omitted at resolve time: rocky
-  platform: rocky
-  # platform: github:qraynaud/platform-ubuntu
-  # platform: github:qraynaud/platform-rocky@1.2.3
+# Prefer qctl.platform (+ environments / profiles) in provision/common.yaml.
+# Env layers may still set platform if you need an override.
 
 # --- Disk topology (optional; omit → platform OS default only, no data/tanks yet) ---
 # Member map keys become disk serials. size → virtual disk; omit size → physical bind.
@@ -226,12 +266,12 @@ files:
       key=value
 
 # --- Hypervisor sizing in the *base* file is unusual; prefer overlays (below). ---
-# local: / proxmox: may appear here; the inactive one is stripped for the active --target.
+# local: / proxmox: may appear here; the inactive one is stripped for the profile target.
 ```
 
 ## Overlay samples
 
-### `provision/dev.local.yaml` (`--target local`)
+### `provision/dev.local.yaml` (profile `target: local`)
 
 ```yaml
 # Deep-merged onto provision/dev.yaml for libvirt / qctl local.
@@ -248,7 +288,7 @@ networking:
       ipv4: 10.42.2.2
 ```
 
-### `provision/dev.proxmox.yaml` (`--target proxmox`)
+### `provision/dev.proxmox.yaml` (profile `target: proxmox`)
 
 ```yaml
 proxmox:
@@ -299,6 +339,7 @@ packages:
 (including `disks:` — resolve then uses the platform OS default only):
 
 ```yaml
+# common.yaml (or this file):
 qctl:
   platform: rocky
 
@@ -325,7 +366,7 @@ persistent volumes. Default `admin` / `apps`, default `eth0` uplink, and key-onl
 | `qctl vm init-tank [poolId…]` | Only path that `zpool create`s. Bare = all `disks.tanks`; `-f` recreates. |
 | `qctl vm up` | Appliance: import + unlock + mount from topology (never create). |
 | `qctl vm up --wipe-os` | Recreate OS disk only; keep `disks.data` + tank members. |
-| `qctl vm destroy --keep-persistent` | Drop OS; keep data volumes + tank members. Full wipe needs confirm in prod. |
+| `qctl vm destroy --keep-persistent` | Drop OS; keep data volumes + tank members. Full wipe needs confirm on production envs. |
 
 ## Related
 

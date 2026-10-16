@@ -28,7 +28,7 @@ export function builder(yargs) {
       })
       .option('host', {
         type: 'string',
-        describe: 'SSH host override (required for --target proxmox)',
+        describe: 'SSH host override (required for proxmox profiles)',
       })
       .option('port', {
         type: 'number',

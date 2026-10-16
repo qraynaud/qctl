@@ -60,8 +60,9 @@ Reference it in env-spec **without** an `@version` pin:
 ```
 
 Varlock prefers `node_modules` over its plugins-cache. Do not rely on cache-only
-installs. Commit `package-lock.json` after a local `QCTL_ENV=dev` ensure/load —
-CI and non-`dev` envs use a **frozen** lockfile install.
+installs. Commit `package-lock.json` after a local non-production ensure/load —
+CI and production envs (`qctl.environments.*.production: true`) use a **frozen**
+lockfile install.
 
 **Prerequisite:** `bw` on `PATH` for the process that resolves the graph.
 

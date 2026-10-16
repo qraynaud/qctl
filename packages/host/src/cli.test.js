@@ -100,14 +100,32 @@ describe('host CLI', () => {
     expect(code).toBe(1)
   })
 
-  test('sync --help lists env/target and include-tooling', async () => {
+  test('sync --help lists include-tooling (no --env/--target)', async () => {
     const { stdout, code } = await runHost(['sync', '--help'])
     expect(code).toBe(0)
-    expect(stdout).toContain('--env')
-    expect(stdout).toContain('--target')
+    expect(stdout).not.toContain('--env')
+    expect(stdout).not.toContain('--target')
+    expect(stdout).toContain('--profile')
     expect(stdout).toContain('--include-tooling')
     expect(stdout).toContain('--remote-dir')
     expect(stdout).toContain('--delete')
+  })
+
+  test('profile CLI help matrix: --profile/-p, no --env/--target', async () => {
+    for (const args of [
+      ['vm', 'up', '--help'],
+      ['vm', 'destroy', '--help'],
+      ['vm', 'seed', '--help'],
+      ['vm', 'init-tank', '--help'],
+      ['local', 'up', '--help'],
+      ['local', 'shell', '--help'],
+    ]) {
+      const { stdout, code } = await runHost(args)
+      expect(code).toBe(0)
+      expect(stdout).toContain('--profile')
+      expect(stdout).not.toContain('--env')
+      expect(stdout).not.toContain('--target')
+    }
   })
 
   test('init --help', async () => {
@@ -127,9 +145,10 @@ describe('host CLI', () => {
     const { stdout, code } = await runHost(['vm', 'seed', '--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('--profile')
+    expect(stdout).toContain('--seed-profile')
     expect(stdout).toContain('--allow-missing-tier0')
     expect(stdout).toContain('--instance-id')
-    expect(stdout).toContain('common → target → env → env.target')
+    expect(stdout).toMatch(/common\s*→\s*target\s*→\s*env\s*→\s*env\.target/)
   })
 
   test('vm up --help works outside an instance', async () => {
@@ -138,6 +157,8 @@ describe('host CLI', () => {
     const { stdout, code } = await runHost(['vm', 'up', '--help'], { cwd: dir })
     expect(code).toBe(0)
     expect(stdout).toContain('--wipe-os')
+    expect(stdout).toContain('--profile')
+    expect(stdout).toMatch(/\s-p,|--profile/)
   })
 
   test('vm init-tank --help has boot flags and pool ids', async () => {

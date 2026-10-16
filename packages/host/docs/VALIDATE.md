@@ -49,7 +49,7 @@ qctl vm seed
 
 ## Gate 1 — Boot (workstation)
 
-- [ ] `qctl vm target-check --target local` OK (incl. **`swtpm`** for emulated TPM 2.0)
+- [ ] `qctl vm target-check` (local-target profile) OK (incl. **`swtpm`** for emulated TPM 2.0)
 - [ ] VM gets connectivity (`--network user` → `ssh -p 2222 <admin>@127.0.0.1`, or lease on `default`)
 - [ ] SSH as `rocky` (default if Login incomplete) or VW Login `rocky` username with injected admin key (`root` denied; `apps` has no SSH)
 - [ ] Cockpit admin: VW Login user (password sudo); or key-only `admin` + NOPASSWD (no password until `passwd` over SSH); `https://<guest>:9090`
@@ -184,7 +184,7 @@ findmnt /tank && cat /tank/.rocky-canary
 
 ## Gate 7 — Repo + repeatability
 
-- [ ] `/tank/rocky` is an hg repo owned by the admin SSH user; guest `QCTL_ENV` matches seed `--env` (`/etc/environment.d/91-rocky-env.conf`)
+- [ ] `/tank/rocky` is an hg repo owned by the admin SSH user; guest `QCTL_ENV` matches the seed profile’s env (`/etc/environment.d/91-rocky-env.conf`)
 - [ ] Deploy key from VW Login `rocky` attachment `heptapod-deploy-key` is in admin `~/.ssh/heptapod_deploy_key` (not seed ISO / not only under `/root`)
 - [ ] Existing clone: `hg pull -u` may fail soft without failing first-boot
 - [ ] Second boot: `ConditionPathExists=!/var/lib/rocky/first-boot.done` → first-boot skipped
@@ -208,7 +208,7 @@ systemctl status rocky-first-boot.service   # inactive / condition not met
 - [ ] Re-run Gates 1–7 on Proxmox
 - [ ] Document deltas: network (`ipconfig0` vs seed `network-config`), disk serials/by-id, snippet paths
 
-See `[cloud-init/README.md](cloud-init/README.md)` Proxmox section. Use `qctl vm --target proxmox …`.
+See `[cloud-init/README.md](cloud-init/README.md)` Proxmox section. Use a proxmox-target provision profile (`qctl vm -p …`).
 
 ---
 

@@ -1,8 +1,8 @@
+import { sharedProfile } from '../lib/options.js'
 import { applianceRunning } from './appliance-lifecycle.js'
 import { dumpFailureLogs } from './appliance-quadlet.js'
 import { createLocalContext } from './context.js'
 import { execInAppliance } from './exec-in.js'
-import { sharedLocalEnv } from './options.js'
 import { stripPodmanNoise } from './podman.js'
 import { argvApps, die } from './util.js'
 
@@ -16,7 +16,7 @@ export const describe = 'Journal / podman logs from the appliance'
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .positional('apps', {
       type: 'string',
       array: true,

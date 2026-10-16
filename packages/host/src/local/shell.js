@@ -1,7 +1,7 @@
+import { sharedProfile } from '../lib/options.js'
 import { applianceRunning, ensureAppliance } from './appliance-lifecycle.js'
 import { createLocalContext } from './context.js'
 import { shellInAppliance } from './exec-in.js'
-import { sharedLocalEnv } from './options.js'
 import { die } from './util.js'
 
 /** @import { Argv } from 'yargs' */
@@ -14,7 +14,7 @@ export const describe = 'Interactive shell in the nested appliance'
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .option('no-ensure', {
       type: 'boolean',
       default: false,

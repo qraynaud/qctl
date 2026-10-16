@@ -141,7 +141,8 @@ async function prepareLocalUp(argv) {
 
   console.log(chalk.cyan('vm: building appliance seed…'))
   const seedResult = await runSeed({
-    profile: 'appliance',
+    seedProfile: 'appliance',
+    profile: argv.profile,
     out: cidata || undefined,
     allowMissingTier0: false,
     allowMissingFiles: false,

@@ -8,8 +8,10 @@ Two different paths — do not mix them:
 | **Provision YAML** | `provision/<env>.yaml` (`tank`, `users`, `repo`, …) | `!env` → seed Tier-0 pending | First-boot secrets on the guest |
 | **Podman secrets** | `@sensitive` on **unit** schemas | `qctl secret sync` | App container `Secret=` |
 
-Lab vs prod is whatever the active `QCTL_ENV` graphs declare (literals in
-`provision/.env.dev`, `vw()` + plugin in `provision/.env.prod`).
+Lab vs prod (or any custom env) is whatever the active `QCTL_ENV` graphs declare
+(literals in `provision/.env.dev`, `vw()` + plugin in `provision/.env.prod`, …).
+Host commands set `QCTL_ENV` from the selected provision **profile**’s `env`
+(`qctl … --profile` / `-p`).
 
 ### Varlock plugins (`# @plugin`)
 
@@ -21,8 +23,10 @@ Lab vs prod is whatever the active `QCTL_ENV` graphs declare (literals in
    `qctl _internal_plugins ensure`.
 
 Do **not** rely on varlock’s plugins-cache. Commit `package-lock.json` after a
-local `QCTL_ENV=dev` install. Installs are **frozen** (lockfile required, not
-rewritten) when `CI=true` or `QCTL_ENV` is not `dev`.
+local non-production (`production: false`) install. Installs are **frozen**
+(lockfile required, not rewritten) when `CI=true` **or** the active env is marked
+`production: true` in `qctl.environments` (see [provision.md](./provision.md)).
+Non-production custom envs (e.g. `staging`) stay mutable unless CI.
 
 CLI: [packages/guest/README.md](../packages/guest/README.md)
 ([INTERNAL.md](../packages/guest/INTERNAL.md) for `_internal_plugins`).  

@@ -32,6 +32,7 @@ describe('proxmox check', () => {
           paths: ['/tmp/.env.dev'],
           sshAuthorizedKeys: 'ssh-ed25519 AAAA',
           data: {
+            qctl: { environments: { dev: { production: false } } },
             disks: {
               tanks: { tank: { id: 'tank', passphrase: 'x' } },
             },

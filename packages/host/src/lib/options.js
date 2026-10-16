@@ -2,7 +2,10 @@ import { loadProvisionDocument } from '@qctl/shared'
 
 import { portsSchema } from '../provision/schema/index.js'
 import { tryGetRepoRoot } from './paths.js'
-import { ENVS, TARGETS } from './target.js'
+import { sharedProfile } from './profile-argv.js'
+import { TARGETS } from './target.js'
+
+export { sharedProfile } from './profile-argv.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { YamlValue } from '@qctl/shared' */
@@ -12,6 +15,7 @@ import { ENVS, TARGETS } from './target.js'
 
 /**
  * Unresolved provision YAML (no !env / varlock). For yargs builders and CLI defaults only.
+ * Internal `env` / `target` come from the selected profile (see resolveProfileArgv).
  * @param {{ env?: string, target?: string }} [argv]
  */
 function loadProvisionUnresolved(argv = {}) {
@@ -31,7 +35,7 @@ function loadProvisionUnresolved(argv = {}) {
 }
 
 /**
- * Ports from provision for the given --env / --target (defaults to dev/local).
+ * Ports from provision for the resolved profile env/target (defaults to built-in dev/local).
  * @param {Partial<VmArgv>} [argv]
  * @returns {PortsMap}
  */
@@ -51,37 +55,20 @@ export function portsFromArgv(argv = {}) {
 }
 
 /**
- * --target / --env (local libvirt vs Proxmox; dev vs prod).
- * @param {Argv} y
- * @returns {Argv}
- */
-export const sharedTarget = (y) =>
-  y
-    .option('target', {
-      choices: /** @type {string[]} */ ([...TARGETS]),
-      default: 'local',
-      describe: 'local = libvirt; proxmox = PVE API (token via !env in provision/)',
-    })
-    .option('env', {
-      choices: /** @type {string[]} */ ([...ENVS]),
-      default: 'dev',
-      describe: '.env.dev vs .env.prod; Proxmox default name rocky-dev (dev) or rocky (prod)',
-    })
-
-/**
+ * Shared VM identity flags (name / libvirt URI). Env + target come from the profile.
  * @param {Argv} y
  * @returns {Argv}
  */
 export const sharedLibvirt = (y) =>
-  sharedTarget(y)
+  sharedProfile(y)
     .option('name', {
       type: 'string',
-      describe: 'VM / domain name (default: rocky; Proxmox: rocky-dev or rocky for prod)',
+      describe: 'VM / domain name (default: rocky; Proxmox production: rocky, else rocky-<env>)',
     })
     .option('connect', {
       type: 'string',
       default: process.env.QCTL_LIBVIRT_URI || 'qemu:///system',
-      describe: 'libvirt URI (qemu:///system or qemu:///session); ignored for --target proxmox',
+      describe: 'libvirt URI (qemu:///system or qemu:///session); ignored for proxmox target',
     })
 
 /**

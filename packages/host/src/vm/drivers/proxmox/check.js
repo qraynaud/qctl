@@ -1,7 +1,7 @@
 /** Proxmox (PVE API) target-check. */
 import { path } from 'zx'
 
-import { isEmptyCredential } from '@qctl/shared'
+import { BUILTIN_ENVIRONMENTS, isEmptyCredential, isProductionEnv } from '@qctl/shared'
 
 import { loadEnvProvisionSafe } from '../../../lib/load-config.js'
 import { tankPassphraseCredName } from '../../../provision/schema/first-boot.js'
@@ -91,7 +91,12 @@ export async function check(argv) {
     }
   }
 
-  if (argv.env === 'prod') {
+  const production =
+    argv.production
+    ?? (loaded.ok
+      ? isProductionEnv(envName, loaded.provision.data.qctl?.environments ?? BUILTIN_ENVIRONMENTS)
+      : false)
+  if (production) {
     report.section('Environment')
     report.ok(
       'attach-mode: omit disks.*.size for physical (by-id / holder serial); set size for virtual',

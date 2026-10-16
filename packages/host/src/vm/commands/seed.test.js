@@ -25,7 +25,14 @@ describe('vm seed command', () => {
       keepDir: null,
     })
     const argv = /** @type {VmArgv} */ (
-      /** @type {never} */ ({ env: 'dev', target: 'local', profile: 'appliance' })
+      /** @type {never} */ ({
+        env: 'dev',
+        target: 'local',
+        profile: 'default',
+        seedProfile: 'appliance',
+        production: false,
+        _qctlProfileResolved: true,
+      })
     )
     await mod.handler(argv)
     expect(runSeed).toHaveBeenCalledWith(argv)

@@ -46,8 +46,9 @@ hypervisor sizing.
 Varlock `# @plugin` packages must be listed in the instance `package.json`
 `dependencies` (version SoT). In schemas use `# @plugin(@scope/name)` without a
 version pin. qctl installs them into `node_modules` (no npm CLI). Commit
-`package-lock.json` after a local `dev` install — CI and non-`dev` envs use a
-**frozen** lockfile install. Details: [docs/secrets.md](docs/secrets.md),
+`package-lock.json` after a local non-production install — CI and envs marked
+`production: true` use a **frozen** lockfile install. Details:
+[docs/secrets.md](docs/secrets.md), [docs/provision.md](docs/provision.md),
 [packages/guest/README.md](packages/guest/README.md).
 
 ## CLI reference
@@ -65,7 +66,7 @@ version pin. qctl installs them into `node_modules` (no npm CLI). Commit
 | [packages/guest/README.md](packages/guest/README.md) | Guest CLI reference (day-2) |
 | [packages/guest/INTERNAL.md](packages/guest/INTERNAL.md) | Guest first-boot / debug commands (`_internal_*`) |
 | [docs/instance.md](docs/instance.md) | Instance layout, schemas, provision, seed |
-| [docs/provision.md](docs/provision.md) | Provision YAML fields, overlays, commented samples |
+| [docs/provision.md](docs/provision.md) | Profiles, provision YAML fields, overlays, samples |
 | [docs/secrets.md](docs/secrets.md) | `@sensitive` → Podman; `@tag(guest)` credentials |
 | [packages/vaultwarden-plugin/README.md](packages/vaultwarden-plugin/README.md) | `vw()` / `@initVw` varlock plugin |
 

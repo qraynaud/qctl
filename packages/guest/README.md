@@ -62,7 +62,7 @@ Shared options:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--root` | `$QCTL_ROOT` or walk-up | Instance root |
-| `--env` | (detect) | Override `QCTL_ENV` for schema `@import` |
+| `--env` | (detect) | Override guest `QCTL_ENV` for schema `@import` (host seed sets it from the provision profile) |
 
 | Subcommand | Description |
 |------------|-------------|

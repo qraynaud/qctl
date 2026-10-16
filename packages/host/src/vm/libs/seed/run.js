@@ -35,6 +35,7 @@ import { embedGuestTooling } from './tooling.js'
  * @param {Partial<
  *   Pick<
  *     VmArgv,
+ *     | 'seedProfile'
  *     | 'profile'
  *     | 'env'
  *     | 'target'
@@ -58,7 +59,7 @@ import { embedGuestTooling } from './tooling.js'
  */
 export async function runSeed(argv) {
   /** @type {SeedProfile} */
-  const profileName = /** @type {SeedProfile} */ (argv.profile || 'appliance')
+  const profileName = /** @type {SeedProfile} */ (argv.seedProfile || 'appliance')
   if (!SEED_PROFILES[profileName]) die(`unknown seed profile '${profileName}'`)
 
   const env = argv.env || 'dev'

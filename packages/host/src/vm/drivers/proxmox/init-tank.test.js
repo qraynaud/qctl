@@ -81,7 +81,7 @@ describe('proxmox initTank', () => {
     )
     const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
     expect(joined).toMatch(/dry-run Proxmox init-tank/)
-    expect(joined).toMatch(/seed --profile init-tank/)
+    expect(joined).toMatch(/seed --seed-profile init-tank/)
     expect(joined).toMatch(/pools=tank/)
     expect(joined).toMatch(/disposable boot/)
   })
@@ -127,7 +127,7 @@ describe('proxmox initTank', () => {
       ),
     ).rejects.toThrow()
     expect(seed.mock.calls[0]?.[0]).toMatchObject({
-      profile: 'init-tank',
+      seedProfile: 'init-tank',
       target: 'proxmox',
       initTankPools: ['tank'],
     })

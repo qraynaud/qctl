@@ -5,6 +5,7 @@ import { chalk } from 'zx'
 
 import { loadEnvProvisionOrThrow } from '../lib/load-config.js'
 import { tryGetRepoRoot } from '../lib/paths.js'
+import { resolveProfileArgv } from '../lib/profile-argv.js'
 import { errMessage } from '../lib/util.js'
 import { parsePlatformRef } from '../tooling/platform-ref.js'
 import { logEndpoint, resolveSyncEndpoint } from './endpoint.js'
@@ -34,6 +35,7 @@ export async function runSync(argv) {
           + '  Run `qctl init <dir>` or cd into an existing instance.',
       )
     }
+    resolveProfileArgv(argv, { root })
     const ep = await resolveSyncEndpoint(argv)
     logEndpoint(ep)
     const doDelete = argv.delete !== false

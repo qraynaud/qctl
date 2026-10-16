@@ -55,10 +55,10 @@ Arborist — no npm CLI). Varlock resolves `# @plugin` packages from `node_modul
 
 Install mode:
 
-- **Mutable** when `QCTL_ENV=dev` and `CI` is not `true` — may create/update
-  `package-lock.json`.
-- **Frozen** when `CI=true` or `QCTL_ENV` is not `dev` — requires a committed
-  `package-lock.json` and does not rewrite it.
+- **Mutable** when `CI` is not `true` and the active env is not marked
+  `production: true` — may create/update `package-lock.json`.
+- **Frozen** when `CI=true` or the active env is `production: true` — requires a
+  committed `package-lock.json` and does not rewrite it.
 
 ```bash
 qctl _internal_plugins ensure

@@ -1,4 +1,5 @@
-import { sharedTarget } from '../../lib/options.js'
+import { sharedProfile } from '../../lib/options.js'
+import { resolveProfileArgv } from '../../lib/profile-argv.js'
 import { runSeed } from '../libs/seed/run.js'
 
 /** @import { Argv } from 'yargs' */
@@ -6,18 +7,18 @@ import { runSeed } from '../libs/seed/run.js'
 
 export const command = 'seed'
 export const describe =
-  'Build NoCloud seed ISO for --env / --target (common → target → env → env.target)'
+  'Build NoCloud seed ISO from provision layers (common → target → env → env.target)'
 
 /**
  * @param {Argv} yargs
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedTarget(yargs)
-    .option('profile', {
+  return sharedProfile(yargs)
+    .option('seed-profile', {
       choices: ['appliance', 'init-tank'],
       default: 'appliance',
-      describe: 'appliance = full first-boot; init-tank = minimal tank-create seed',
+      describe: 'Seed ISO kind: appliance = full first-boot; init-tank = minimal tank-create',
     })
     .option('out', {
       type: 'string',
@@ -47,5 +48,6 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
+  resolveProfileArgv(argv)
   await runSeed(argv)
 }

@@ -51,8 +51,31 @@ describe('shouldUseFrozenPackageInstall', () => {
     expect(shouldUseFrozenPackageInstall({ env: { CI: 'true' }, qctlEnv: 'dev' })).toBe(true)
   })
 
-  test('true when qctlEnv is not dev', () => {
+  test('true when qctlEnv is production (built-in prod)', () => {
     expect(shouldUseFrozenPackageInstall({ env: {}, qctlEnv: 'prod' })).toBe(true)
+  })
+
+  test('false for non-production custom env without CI', () => {
+    expect(
+      shouldUseFrozenPackageInstall({
+        env: {},
+        qctlEnv: 'staging',
+        environments: {
+          staging: { production: false },
+          prod: { production: true },
+        },
+      }),
+    ).toBe(false)
+  })
+
+  test('true when custom env is marked production', () => {
+    expect(
+      shouldUseFrozenPackageInstall({
+        env: {},
+        qctlEnv: 'eu-prod',
+        environments: { 'eu-prod': { production: true } },
+      }),
+    ).toBe(true)
   })
 
   test('false for local dev without CI', () => {
