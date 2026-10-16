@@ -124,7 +124,7 @@ export async function initTank(argv) {
 
   if (dryRun) {
     console.log(chalk.green('vm: dry-run init-tank steps:'))
-    console.log(`  1. seed --profile init-tank (pools=${selection.poolIds.join(',')})`)
+    console.log(`  1. seed --seed-profile init-tank (pools=${selection.poolIds.join(',')})`)
     console.log(
       `  2. remove domain; create disposable boot overlay (leave disks.os)`
         + (force
@@ -150,7 +150,8 @@ export async function initTank(argv) {
   // Seed first so provision !env / host vw() resolve while secrets backends may still be up.
   console.log(chalk.cyan('vm: building init-tank seed…'))
   const seedResult = await runSeed({
-    profile: 'init-tank',
+    seedProfile: 'init-tank',
+    profile: argv.profile,
     allowMissingTier0: false,
     allowMissingFiles: false,
     env,

@@ -129,8 +129,9 @@ stage runs `podman login` for root and `apps`.
 
 Heptapod deploy key is bootstrap `DEPLOY_KEY` (prod: `vw("rocky", attachment="heptapod-deploy-key")`).
 The `hg-clone` stage writes it under the **admin** `~/.ssh/deploy_key`, then
-`hg clone|pull` as that user into `/tank/rocky`. Seed `--env` bakes `QCTL_ENV` into
-`/etc/environment.d/91-rocky-env.conf` (first-boot / init-tank units load it). Provision
+`hg clone|pull` as that user into `/tank/rocky`. The selected provision profile’s
+`env` bakes `QCTL_ENV` into `/etc/environment.d/91-rocky-env.conf` (first-boot /
+init-tank units load it). Provision
 `repo.vcs` (`git`|`hg`, default `git`) is baked as `ROCKY_REPO_VCS`. Optional
 `repo.branch` → `ROCKY_REPO_BRANCH` / `ROCKY_HG_BRANCH`. On **appliance** seed
 (`vm up`), `repo.vcs: hg` also adds mercurial+hg-evolve to `packages.pipx` and stock

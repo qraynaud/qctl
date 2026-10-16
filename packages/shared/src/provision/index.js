@@ -17,6 +17,21 @@ export {
   provisionNeedsEnv,
 } from './load.js'
 export {
+  BUILTIN_ENVIRONMENTS,
+  BUILTIN_PROFILES,
+  enrichQctlHostMetaFields,
+  environmentSpecSchema,
+  isProductionEnv,
+  isReservedProvisionName,
+  loadQctlHostMeta,
+  profileSpecSchema,
+  provisionLayerNameSchema,
+  qctlHostMetaFieldsSchema,
+  qctlHostMetaSchema,
+  refineQctlHostMeta,
+  resolveProfile,
+} from './profile.js'
+export {
   ENV_REF,
   collectEnvRefs,
   envRef,

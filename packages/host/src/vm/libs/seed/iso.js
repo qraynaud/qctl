@@ -63,8 +63,8 @@ export async function ensureSeed({ isoPath, imgPath }) {
   }
   die(
     `no seed ISO at ${isoPath || '(no iso)'}`
-      + `\n  Run: qctl vm seed --env <env>`
-      + (isoPath && String(isoPath).includes('init-tank') ? ' --profile init-tank' : ''),
+      + `\n  Run: qctl vm seed`
+      + (isoPath && String(isoPath).includes('init-tank') ? ' --seed-profile init-tank' : ''),
   )
 }
 

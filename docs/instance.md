@@ -24,7 +24,7 @@ For command flags see [packages/host/README.md](../packages/host/README.md) and
 
 ```text
 package.json                         # plugin deps (qctl → node_modules); commit package-lock.json
-.env.schema                          # root graph (imports .env.dev / .env.prod by QCTL_ENV)
+.env.schema                          # root graph (autoload .env.<QCTL_ENV>)
 .env.dev / .env.prod                 # non-secret root values (# @internal in schema)
 applications/                          # package schemas @import repo root
   <app>/.env.schema                  # package / Quadlet ${VAR} template scope
@@ -37,9 +37,9 @@ networks/
   <net>/.env.schema + <net>.network
 provision/.env.schema                # host provision graph (!env / @tag(guest))
 provision/.env.<env>                 # host provision values (+ optional .env.local)
-provision/common.yaml                # shared foundation (all envs / targets)
+provision/common.yaml                # foundation + qctl.environments / profiles
 provision/<target>.yaml              # target layer (local / proxmox)
-provision/<env>.yaml                 # env layer + qctl.platform + !env
+provision/<env>.yaml                 # env layer + !env topology
 provision/<env>.<target>.yaml        # env+target overlay (always last)
 mise.toml                            # host: pin qctl-host (or _.path to sibling bin)
 # caches: ~/.cache/qctl/{images,tooling,repos/<hash>/seed}
@@ -60,17 +60,19 @@ adds a package `.env.schema` + README.
   root** (shared `.env.dev` / `.env.prod`). Optional: pin `@qctl/vaultwarden-plugin`
   + `@initVw(…)` on root `.env.prod`, and list the same package in root
   `package.json` `dependencies` (`qctl` installs `node_modules`; commit
-  `package-lock.json` for CI / non-`dev`) — see [secrets.md](./secrets.md) and
+  `package-lock.json` for CI / production) — see [secrets.md](./secrets.md) and
   [packages/vaultwarden-plugin/README.md](../packages/vaultwarden-plugin/README.md).
 - Package-root graphs are for Quadlet `${VAR}` render. Do **not** assign
   `@sensitive` keys there — put secrets in the unit folder (`Secret=`).
 - Value files use varlock syntax (literals, `${OTHER}` refs). Bash
   `${X:-default}` is wrong.
-- `QCTL_ENV` = `--env`, else `$QCTL_ENV`, else `ENV=` in the repo `.env` link, else `dev`.
+- Host commands set `QCTL_ENV` from the selected **provision profile**’s `env`
+  (`qctl … --profile` / `-p`). On the guest, seed bakes that value; day-2 tools
+  may override with their own `--env` / detect.
 
 | File | Role |
 |------|------|
-| `package.json` (+ `package-lock.json`) | Plugin deps; qctl → `node_modules` (frozen when `CI=true` or env ≠ `dev`) |
+| `package.json` (+ `package-lock.json`) | Plugin deps; qctl → `node_modules` (frozen when `CI=true` or env `production: true`) |
 | `.env.dev` / `.env.prod` (repo root) | Shared non-secrets (optional prod `@plugin` / `@initVw`); `# @internal` in root schema |
 | `provision/.env.schema` + `.env.<env>` | Host provision secrets for `!env` / `@tag(guest)`; optional `vw()` |
 | `provision/.env.local` | Machine-local overlay of provision env (gitignored) |
@@ -80,16 +82,18 @@ adds a package `.env.schema` + README.
 ## Provision YAML
 
 ```yaml
+# provision/common.yaml — platform + optional environments / profiles
 qctl:
   platform: rocky                          # or github:owner/repo[@x.y.z]
-# networking, disks, … — secret fields use !env
+# Env / overlay layers: networking, disks, … — secret fields use !env
 ```
 
 Host/guest binaries follow the running `qctl` (mise). `qctl.platform` selects
 which platform adapter module to seed/import; its release tag defaults to the
-host version. Varlock plugins are **not** provision pins — declare them in
-`package.json` `dependencies` (version SoT) and schemas with `# @plugin(@pkg)`
-(no `@version` in the decorator).
+host version. Profiles (`qctl.profiles`) pick env + target — see
+[provision.md](./provision.md). Varlock plugins are **not** provision pins —
+declare them in `package.json` `dependencies` (version SoT) and schemas with
+`# @plugin(@pkg)` (no `@version` in the decorator).
 
 - Committable provision layers (at least one required; merge
   common → target → env → env.target): `provision/common.yaml`,

@@ -109,7 +109,7 @@ describe('proxmox up', () => {
     ).rejects.toThrow(/exit 1|ISO missing|not found/)
     expect(seed).toHaveBeenCalled()
     expect(seed.mock.calls[0]?.[0]).toMatchObject({
-      profile: 'appliance',
+      seedProfile: 'appliance',
       target: 'proxmox',
       env: 'dev',
     })

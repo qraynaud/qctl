@@ -2,17 +2,19 @@
  * Hypervisor drivers: local (libvirt) and proxmox (PVE API).
  */
 import { resolveBootResources } from '../../lib/options.js'
+import { resolveProfileArgv } from '../../lib/profile-argv.js'
 import { resolveVmName } from '../../lib/target.js'
 import { die } from '../../lib/util.js'
 
 /** @import { VmArgv, VmDriver } from '../types.js' */
 
 /**
- * Resolve --name / memory / vcpus defaults, then load the driver for --target.
+ * Resolve provision profile → env/target, then --name / memory / vcpus, then driver.
  * @param {VmArgv} argv
  * @returns {Promise<VmDriver>}
  */
 export async function loadDriver(argv) {
+  resolveProfileArgv(argv)
   argv.name = resolveVmName(argv)
   resolveBootResources(argv)
   const target = argv.target || 'local'
@@ -24,5 +26,5 @@ export async function loadDriver(argv) {
     const { createDriver } = await import('./local.js')
     return /** @type {VmDriver} */ (createDriver(argv))
   }
-  die(`unknown --target ${target}`)
+  die(`unknown target ${target}`)
 }

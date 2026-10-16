@@ -145,7 +145,7 @@ describe('disksSchema', () => {
 })
 
 describe('collectDisksWarnings / assertDisksDataFilesystems', () => {
-  test('warns on type=single and prod data-only', () => {
+  test('warns on type=single and production data-only', () => {
     const disks = disksSchema.parse({
       data: { vw: { mount: '/vw' } },
       tanks: {
@@ -167,10 +167,17 @@ describe('collectDisksWarnings / assertDisksDataFilesystems', () => {
 
     diskMounts.clear()
     const dataOnly = disksSchema.parse({ data: { vw: { mount: '/vw' } } })
-    expect(collectDisksWarnings(dataOnly, { env: 'prod' })).toEqual([
-      'disks: --env prod with data volumes and no tanks (hardware RAID expected?)',
+    const envs = {
+      prod: { production: true },
+      dev: { production: false },
+    }
+    expect(collectDisksWarnings(dataOnly, { env: 'prod', environments: envs })).toEqual([
+      'disks: production env with data volumes and no tanks (hardware RAID expected?)',
     ])
-    expect(collectDisksWarnings(dataOnly, { env: 'dev' })).toEqual([])
+    expect(collectDisksWarnings(dataOnly, { env: 'dev', environments: envs })).toEqual([])
+    expect(collectDisksWarnings(dataOnly, { production: true })).toEqual([
+      'disks: production env with data volumes and no tanks (hardware RAID expected?)',
+    ])
   })
 
   test('assertDisksDataFilesystems rejects unknown fs', () => {

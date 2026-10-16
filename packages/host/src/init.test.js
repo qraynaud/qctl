@@ -48,7 +48,13 @@ describe('initInstance', () => {
     expect(readFileSync(join(result.root, 'provision', '.env.schema'), 'utf8')).toContain(
       'TANK_PASSPHRASE=',
     )
+    expect(existsSync(join(result.root, 'provision', 'common.yaml'))).toBe(true)
     expect(existsSync(join(result.root, 'provision', 'dev.yaml'))).toBe(true)
+    expect(readFileSync(join(result.root, 'provision', 'common.yaml'), 'utf8')).toContain(
+      'platform: rocky',
+    )
+    expect(readFileSync(join(result.root, '.env.schema'), 'utf8')).toContain('@type=string')
+    expect(readFileSync(join(result.root, '.env.schema'), 'utf8')).not.toContain('enum(dev, prod)')
     expect(existsSync(join(result.root, 'applications', '.gitkeep'))).toBe(true)
 
     const mise = readFileSync(join(result.root, 'mise.toml'), 'utf8')

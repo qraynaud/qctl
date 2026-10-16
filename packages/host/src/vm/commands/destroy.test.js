@@ -87,6 +87,7 @@ describe('vm destroy command', () => {
         /** @type {never} */ ({
           target: 'local',
           env: 'prod',
+          production: true,
           name: 'rocky',
           keepPersistent: false,
           yes: false,
@@ -111,6 +112,7 @@ describe('vm destroy command', () => {
         /** @type {never} */ ({
           target: 'local',
           env: 'prod',
+          production: true,
           name: 'rocky',
           keepPersistent: true,
           yes: true,

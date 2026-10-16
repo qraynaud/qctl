@@ -1,8 +1,8 @@
+import { sharedProfile } from '../lib/options.js'
 import { ensureAppliance } from './appliance-lifecycle.js'
 import { quadletUp, quadletUpAll } from './appliance-quadlet.js'
 import { listInstanceApps } from './apps.js'
 import { createLocalContext } from './context.js'
-import { sharedLocalEnv } from './options.js'
 import { die, log } from './util.js'
 
 /** @import { Argv } from 'yargs' */
@@ -15,7 +15,7 @@ export const describe = 'Start the nested appliance; optionally quadlet up apps 
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .positional('apps', {
       type: 'string',
       array: true,

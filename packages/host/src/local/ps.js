@@ -1,10 +1,10 @@
 import { chalk } from 'zx'
 
+import { sharedProfile } from '../lib/options.js'
 import { shellQuote } from '../lib/shell-quote.js'
 import { applianceExists, applianceRunning } from './appliance-lifecycle.js'
 import { createLocalContext } from './context.js'
 import { execInAppliance } from './exec-in.js'
-import { sharedLocalEnv } from './options.js'
 import { argvApps, log } from './util.js'
 
 /** @import { Argv } from 'yargs' */
@@ -17,7 +17,7 @@ export const describe = 'Appliance status and quadlet ps'
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .positional('apps', {
       type: 'string',
       array: true,

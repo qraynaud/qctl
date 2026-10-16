@@ -85,7 +85,7 @@ describe('local initTank', () => {
     )
     const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
     expect(joined).toMatch(/dry-run init-tank/)
-    expect(joined).toMatch(/seed --profile init-tank/)
+    expect(joined).toMatch(/seed --seed-profile init-tank/)
     expect(joined).toMatch(/pools=tank/)
     expect(joined).toMatch(/disposable boot/)
     expect(joined).not.toMatch(/wipe OS/)

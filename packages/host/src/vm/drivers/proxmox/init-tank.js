@@ -228,7 +228,7 @@ export async function initTank(argv) {
   if (dryRun) {
     const pin = await ensureCloudImage({ env: env || 'dev', target: 'proxmox' })
     console.log(chalk.green('vm: dry-run Proxmox init-tank steps:'))
-    console.log(`  1. seed --profile init-tank (pools=${selection.poolIds.join(',')})`)
+    console.log(`  1. seed --seed-profile init-tank (pools=${selection.poolIds.join(',')})`)
     console.log(
       `  2. ensure cloud image on PVE (${pin.file}: LAN upload from cache, else download-url)`,
     )
@@ -257,7 +257,8 @@ export async function initTank(argv) {
 
   console.log(chalk.cyan('vm: building init-tank seed…'))
   const seedResult = await runSeed({
-    profile: 'init-tank',
+    seedProfile: 'init-tank',
+    profile: argv.profile,
     allowMissingTier0: false,
     allowMissingFiles: false,
     env,
@@ -267,7 +268,7 @@ export async function initTank(argv) {
   })
   const isoPath = seedResult.isoPath
   if (!fs.existsSync(isoPath)) {
-    die(`init-tank ISO missing at ${isoPath} — run \`qctl vm seed --profile init-tank\``)
+    die(`init-tank ISO missing at ${isoPath} — run \`qctl vm seed --seed-profile init-tank\``)
   }
 
   const importVolid = await ensureCloudImageImport(client, {
@@ -452,7 +453,7 @@ export async function initTank(argv) {
       })
       console.log(chalk.green('vm: init-tank done'))
       console.log(chalk.dim(`  left appliance ${name} (disks.os kept); disposable boot removed`))
-      console.log(chalk.dim('  next: qctl vm up --target proxmox'))
+      console.log(chalk.dim(`  next: qctl vm up -p ${argv.profile}`))
     } else {
       await demoteToHolder(client, { vmid, name })
       console.log(chalk.green('vm: init-tank done'))
@@ -461,14 +462,14 @@ export async function initTank(argv) {
           `  kept ${expectedIds.length} persistent disk(s) on holder ${holderVmName(name)}`,
         ),
       )
-      console.log(chalk.dim('  next: qctl vm up --target proxmox'))
+      console.log(chalk.dim(`  next: qctl vm up -p ${argv.profile}`))
     }
     console.log(chalk.dim('  (appliance first-boot will import tank)'))
   } catch (err) {
     if (err instanceof Error && isGuestFatalError(err)) {
       await reportGuestFatalLeaveRunning(consoleFollow, err, {
         leaveHint: `vm: VM ${name} (vmid=${vmid}) left as-is for diagnosis (PVE console); destroy when done`,
-        destroyHint: `  qctl vm destroy --target proxmox --env ${env}`,
+        destroyHint: `  qctl vm destroy -p ${argv.profile}`,
       })
       consoleFollow = null
       return

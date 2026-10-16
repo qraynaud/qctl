@@ -5,7 +5,7 @@ import {
   DEFAULT_MEMORY_MIB,
   resolveBootResources,
   sharedDryRun,
-  sharedTarget,
+  sharedLibvirt,
 } from './options.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -17,11 +17,14 @@ describe('host lib options', () => {
     expect(DEFAULT_MEMORY_MIB).toBe(4096)
   })
 
-  test('sharedTarget / sharedDryRun register flags', async () => {
-    const help = await sharedDryRun(sharedTarget(yargs().scriptName('qctl'))).getHelp()
-    expect(help).toMatch(/--target/)
-    expect(help).toMatch(/--env/)
+  test('sharedLibvirt / sharedDryRun register flags (no --env/--target)', async () => {
+    const help = await sharedDryRun(sharedLibvirt(yargs().scriptName('qctl'))).getHelp()
+    expect(help).toMatch(/--profile|\s-p,/)
+    expect(help).toMatch(/--name/)
+    expect(help).toMatch(/--connect/)
     expect(help).toMatch(/--dry-run/)
+    expect(help).not.toMatch(/--env\b/)
+    expect(help).not.toMatch(/--target\b/)
   })
 
   test('resolveBootResources keeps explicit memory and vcpus', () => {

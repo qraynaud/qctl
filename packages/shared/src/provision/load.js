@@ -16,11 +16,11 @@ import { collectEnvRefs, parseProvisionYaml, resolveEnvRefs, stripOppositeTarget
 /** @import { YamlMapping, YamlValue } from '../yaml.js' */
 /** @import { ProvisionMapping } from './yaml.js' */
 
-/** Shared foundation basename; reserved as `--env`. */
+/** Shared foundation basename; reserved as env/profile name. */
 export const COMMON_PROVISION = 'common'
 
 /**
- * Target-layer basenames (`provision/<target>.yaml`); also reserved as `--env`.
+ * Target-layer basenames (`provision/<target>.yaml`); also reserved as env/profile names.
  * @type {ReadonlySet<string>}
  */
 export const PROVISION_TARGETS = Object.freeze(new Set(['local', 'proxmox']))
@@ -83,7 +83,7 @@ export function loadProvisionDocument(opts) {
   if (env === COMMON_PROVISION || PROVISION_TARGETS.has(env)) {
     throw new Error(
       `env "${env}" is reserved for provision/${env}.yaml `
-        + '(layer basename); use a different --env / QCTL_ENV',
+        + '(layer basename); pick a different profile.env / QCTL_ENV',
     )
   }
 

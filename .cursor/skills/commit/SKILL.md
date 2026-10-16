@@ -8,76 +8,57 @@ description: >-
 
 # Commit
 
-Commit the current working-copy changes in phases (git).
+Commit working-copy changes in phases (git).
 
-## Preflight
+## Preflight (blocking)
 
-1. Run `bun run test:lint`. Prefer `bun run test:lint -- --fix` first, then fix
-   anything left (mind warnings). Re-run until green with no actionable warnings
-   (or ask if clearly unrelated / out of scope).
-2. Run `bun run typecheck`. Fix failures (mind warnings) and re-run until green
-   (or ask if clearly unrelated / out of scope).
-3. Run `bun test:knip`. Fix failures.
-4. Run `bun test`. Fix failures and re-run until green (or ask if clearly
-   unrelated / out of scope).
-5. When green but warnings appear, skim them. Fix actionable ones even if you did
-   not introduce them (deprecations, lint noise, …).
+Run these **in order**. After any fix, restart from step 1.
 
-Note: after any fix in a step, restart from step 1.
+1. `bun run test:lint` — prefer `-- --write` first; re-run until clean.
+2. `bun run typecheck`
+3. `bun test:knip`
+4. `bun test` — must end with `0 fail` (and a non-zero process exit if anything failed).
+
+**Exit codes are SoT.** Do not treat a run as green from a truncated log or from
+`| tail` / `| head` without `set -o pipefail` — bash otherwise reports `tail`’s
+exit 0 and hides a failing `bun test` (including mid-suite `process.exit`). Prefer
+unpiped commands, or `set -o pipefail` before any pipe. Confirm each step’s exit
+code is 0 and that `bun test` printed `0 fail`.
+
+Skim warnings on green runs; fix actionable ones even if pre-existing.
 
 ## Commit in phases
 
-Split dirty files into ordered, shippable commits until intended work is gone.
-Skip secrets (`.env`, credentials) and dirty files that are **not** part of the work.
+Split dirty work into ordered, shippable commits. Skip secrets and unrelated dirty
+files. Put related docs/READMEs/`.cursor` skill edits in the **same** commit as
+the code.
 
-**Include related docs in the same commit**, not a follow-up:
+- One concern → one feature branch → preferably one commit (stack only if a single
+  commit would be unwieldy; never leave a broken intermediate).
+- Dependent features: stack branches; summarize merge order at the end.
+- Each commit must pass preflight above.
+- No half-wired imports or “fixed next commit” breakage.
 
-- `README.md` / `docs/` when they changed with that work
-- package READMEs when they match that commit
-- `.cursor/` rules or skills when they match that commit
+Git safety: never update git config; never `--no-verify` unless asked; never
+force-push; do not push unless asked. Stage **explicit paths**, then HEREDOC commit.
 
-Each commit must leave the tree working:
-
-- Each different feature should be in a dedicated branch
-- Prefer small commits (one concern = one branch = one commit). Do not split a single feature across commits
-  whenever possible.
-- If a commit is too big to be in a single commit, you can stack commits in the feature branch
-- Each commit should pass the preflight tests above
-- If a feature depends on another, you can put a branch below another in the commit tree
-- Larger is fine when a split would break build, types, or runtime.
-- No half-wired imports or “fixed in the next commit” breakage.
-
-Follow the repo git safety rules: never update git config; never `--no-verify`
-unless asked; never force-push; do not push unless asked. Stage only the paths for
-the current phase (`git add` those paths), then commit with a HEREDOC message.
-
-### Commit message style
+### Message style
 
 ```
 chore: scaffold Bun workspace for qctl tooling
 feat: release 0.1.0 of qctl (#1)
-chore: improve CI (#2)
-feat: build NoCloud seed ISO in-process with @gcu/iso9660 (#3)
 chore: extract shared init-tank guest-fatal wait helpers
 ```
 
-- Subject: `type: description` — use `feat:`, `chore:`, `docs:`, `fix:`, `ci:`
-- **Refactors are `chore:`** — do not use a `refactor:` type. Internal restructuring,
-  extractions, renames, and cleanup without user-facing behavior change → `chore:`
-- Imperative / concise; no trailing period on the subject
-- Optional body (1–2 sentences) for why when needed
-- Do not invent `(#N)` locally — GitHub adds that on PR merge
+- `feat:` / `chore:` / `docs:` / `fix:` / `ci:` — refactors are `chore:` (no `refactor:`)
+- Imperative subject, no trailing period; optional short why body
+- Do not invent `(#N)` — GitHub adds that on merge
 
 ### Loop
 
-1. In parallel: `git status` / `git diff` (staged + unstaged) / recent `git log`
-   — group paths into phases. Use the style above even if you see commit messages
-   in the history that look different.
-2. Stage and commit one phase with an **explicit path list** and a HEREDOC message
-   in `type: description` form (optional why body).
-3. Re-check status; repeat until nothing intended remains. Do not push unless asked.
-
-Example:
+1. `git status` / `git diff` / `git log` → plan phases.
+2. `git add` paths → HEREDOC `git commit`.
+3. Repeat until intended work is gone.
 
 ```bash
 git add path/a path/b
@@ -91,6 +72,4 @@ EOF
 
 ### End
 
-Once you are done, give the list of branches you created with what feature they ship
-in a correct merging order (so branch at the same history level can be in whatever order
-but branches below another must be after it in your summary).
+List branches created and what each ships, in merge order (dependents after bases).

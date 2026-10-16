@@ -12,6 +12,7 @@ import {
   DISK_VDEV_MIN_MEMBERS,
   DISK_VDEV_ROLES,
   DISK_VDEV_TYPES,
+  isProductionEnv,
   tankOptionsSchema,
 } from '@qctl/shared'
 
@@ -155,9 +156,13 @@ const disksBodySchema = z
 export const disksSchema = disksBodySchema.optional()
 
 /**
- * Soft warnings (type=single; prod data-only). Does not throw.
+ * Soft warnings (type=single; production data-only). Does not throw.
  * @param {z.infer<typeof disksSchema>} disks
- * @param {{ env?: string }} [opts]
+ * @param {{
+ *   env?: string,
+ *   environments?: Record<string, { production?: boolean }>,
+ *   production?: boolean,
+ * }} [opts]
  * @returns {string[]}
  */
 export function collectDisksWarnings(disks, opts = {}) {
@@ -175,8 +180,13 @@ export function collectDisksWarnings(disks, opts = {}) {
 
   const hasData = Object.keys(disks.data || {}).length > 0
   const hasTanks = Object.keys(disks.tanks || {}).length > 0
-  if (opts.env === 'prod' && hasData && !hasTanks) {
-    out.push('disks: --env prod with data volumes and no tanks (hardware RAID expected?)')
+  const production =
+    opts.production
+    ?? (opts.env != null && opts.environments != null
+      ? isProductionEnv(opts.env, opts.environments)
+      : false)
+  if (production && hasData && !hasTanks) {
+    out.push('disks: production env with data volumes and no tanks (hardware RAID expected?)')
   }
   return out
 }

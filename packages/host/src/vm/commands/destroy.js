@@ -48,8 +48,8 @@ export async function handler(argv) {
   }
 
   const fullWipe = !argv.keepPersistent
-  if (fullWipe && argv.env === 'prod' && !argv.dryRun) {
-    // Always interactive on prod full wipe (-y cannot skip).
+  if (fullWipe && argv.production && !argv.dryRun) {
+    // Always interactive on production full wipe (-y cannot skip).
     await confirmProdFullDestroy(argv.name)
   }
 

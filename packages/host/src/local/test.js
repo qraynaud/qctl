@@ -1,7 +1,7 @@
+import { sharedProfile } from '../lib/options.js'
 import { ensureAppliance, removeAppliance } from './appliance-lifecycle.js'
 import { dumpFailureLogs, quadletDown, quadletUp, waitQuadletHealthy } from './appliance-quadlet.js'
 import { createLocalContext } from './context.js'
-import { sharedLocalEnv } from './options.js'
 import { LocalExit, argvApps, log, logDim } from './util.js'
 
 /** @import { Argv } from 'yargs' */
@@ -15,7 +15,7 @@ export const describe =
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLocalEnv(yargs)
+  return sharedProfile(yargs)
     .positional('apps', {
       type: 'string',
       array: true,

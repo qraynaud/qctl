@@ -172,7 +172,10 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
 
   const sourceLabel = paths.map((p) => path.basename(p)).join(' + ')
   const data = parseProvisionOrThrow(raw, sourceLabel)
-  for (const w of collectDisksWarnings(data.disks, { env: e })) {
+  for (const w of collectDisksWarnings(data.disks, {
+    env: e,
+    environments: data.qctl.environments,
+  })) {
     console.warn(chalk.yellow(`vm: ${w}`))
   }
   const { ports, uplinks, vlans } = data.networking

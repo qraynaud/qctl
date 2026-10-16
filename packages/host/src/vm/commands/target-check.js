@@ -9,7 +9,7 @@ import { loadDriver } from '../drivers/index.js'
 
 export const command = 'target-check'
 export const describe =
-  'Verify host tools / provision / hypervisor config for the selected --target'
+  'Verify host tools / provision / hypervisor config for the selected profile target'
 
 /**
  * @param {Argv} yargs
@@ -26,7 +26,7 @@ export function builder(yargs) {
 export async function handler(argv) {
   const driver = await loadDriver(argv)
   if (typeof driver.check !== 'function') {
-    die(`target-check not implemented for --target ${argv.target}`)
+    die(`target-check not implemented for target ${argv.target}`)
   }
   console.log(chalk.cyan('vm target-check'), chalk.dim(`target=${argv.target} env=${argv.env}`))
   await driver.check(argv)

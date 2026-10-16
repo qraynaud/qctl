@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+import {
+  enrichQctlHostMetaFields,
+  qctlHostMetaFieldsSchema,
+  refineQctlHostMeta,
+} from '@qctl/shared'
+
 import { disksSchema } from './disks.js'
 import { filesSchema } from './files.js'
 import { registriesSchema } from './first-boot.js'
@@ -14,14 +20,23 @@ import {
   trimmedText,
 } from './zod-utils.js'
 
+/** @import { YamlMapping } from '@qctl/shared' */
+
+/**
+ * Host `qctl:` block: shared host-meta fields extended with platform, then enrichment.
+ */
+export const qctlSchema = qctlHostMetaFieldsSchema
+  .extend({
+    /** Platform pin (short name or github:…); omitted → rocky. */
+    platform: z.string().trim().min(1).default('rocky'),
+  })
+  .prefault({})
+  .transform(enrichQctlHostMetaFields)
+  .superRefine(refineQctlHostMeta)
+
 /** Strict provision document shape (before cross-field refines). */
 const provisionBodySchema = z.strictObject({
-  /** Platform pin (short name or github:…); omitted → rocky. */
-  qctl: z
-    .strictObject({
-      platform: z.string().trim().min(1).default('rocky'),
-    })
-    .prefault({}),
+  qctl: qctlSchema,
   networking: networkingSchema,
   local: localSchema.nullable().default(null),
   /** Admin SSH pubkeys + optional host-key tarball for seed. */
@@ -110,7 +125,7 @@ export const provisionSchema = provisionBodySchema
 
 /**
  * Parse provision YAML at a load boundary; Zod failures become labeled Errors.
- * @param {unknown} raw
+ * @param {YamlMapping} raw
  * @param {string} source file path or basename label
  * @returns {z.infer<typeof provisionSchema>}
  */

@@ -97,7 +97,7 @@ describe('seed ISO (@gcu/iso9660)', () => {
     process.env.HOME = home
 
     const result = await runSeed({
-      profile: 'appliance',
+      seedProfile: 'appliance',
       env: 'dev',
       target: 'local',
       allowMissingTier0: true,

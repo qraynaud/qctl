@@ -12,6 +12,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+import { BUILTIN_ENVIRONMENTS, isProductionEnv } from '../provision/production.js'
+
 /**
  * Distinctive varlock message when a `# @plugin` package is not in node_modules.
  * Keep in sync with a real load failure — see plugins.test.js.
@@ -84,16 +86,23 @@ export function packageDepsSatisfied(pkgRoot) {
 }
 
 /**
- * Frozen install when `CI=true` or `QCTL_ENV` is set and not `dev`.
+ * Frozen install when `CI=true` or the active env is marked `production: true`.
  *
- * @param {{ qctlEnv?: string, env?: Record<string, string | undefined> }} [opts]
+ * @param {{
+ *   qctlEnv?: string,
+ *   env?: Record<string, string | undefined>,
+ *   environments?: Record<string, { production?: boolean }>,
+ *   production?: boolean,
+ * }} [opts]
  * @returns {boolean}
  */
 export function shouldUseFrozenPackageInstall(opts = {}) {
   const env = opts.env ?? process.env
   if (String(env.CI ?? '') === 'true') return true
-  const qctlEnv = opts.qctlEnv ?? env.QCTL_ENV ?? 'dev'
-  return String(qctlEnv) !== 'dev'
+  if (opts.production === true) return true
+  if (opts.production === false) return false
+  const qctlEnv = String(opts.qctlEnv ?? env.QCTL_ENV ?? 'dev')
+  return isProductionEnv(qctlEnv, opts.environments ?? BUILTIN_ENVIRONMENTS)
 }
 
 /**
@@ -134,6 +143,8 @@ export async function installPackageDependencies(pkgRoot, opts = {}) {
  *   skipInstall?: boolean,
  *   qctlEnv?: string,
  *   env?: Record<string, string | undefined>,
+ *   environments?: Record<string, { production?: boolean }>,
+ *   production?: boolean,
  *   frozen?: boolean,
  * }} [opts]
  * @returns {Promise<{ root: string | null, installed: boolean, frozen: boolean }>}
@@ -141,7 +152,13 @@ export async function installPackageDependencies(pkgRoot, opts = {}) {
 export async function ensurePackageDependencies(startDir, opts = {}) {
   const pkgRoot = findPackageRoot(startDir)
   const frozen =
-    opts.frozen === true || shouldUseFrozenPackageInstall({ qctlEnv: opts.qctlEnv, env: opts.env })
+    opts.frozen === true
+    || shouldUseFrozenPackageInstall({
+      qctlEnv: opts.qctlEnv,
+      env: opts.env,
+      environments: opts.environments,
+      production: opts.production,
+    })
 
   if (!pkgRoot) {
     return { root: null, installed: false, frozen }

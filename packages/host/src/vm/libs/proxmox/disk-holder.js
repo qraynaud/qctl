@@ -48,7 +48,7 @@ export async function assertNameFreeForCreate(client, name, { allowHolder = fals
     die(
       `holder ${hname} already exists (vmid=${hvmid}) — refuse create `
         + `(would leave two VMs). Promote needs persistent disk serials on the holder; `
-        + `fix disks or: qctl vm destroy --target proxmox`,
+        + `fix disks or: qctl vm destroy`,
     )
   }
 }
