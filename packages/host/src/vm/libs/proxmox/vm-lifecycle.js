@@ -9,6 +9,7 @@ import {
   destroyHolder,
   emptyDiskState,
 } from './disk-holder.js'
+import { rockyTpmstate } from './tpm.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
 
@@ -69,6 +70,7 @@ export async function createAndStartRockyVm(client, opts) {
     serial0: 'socket',
     vga: 'serial0',
     boot: 'order=scsi0',
+    tpmstate0: rockyTpmstate(storage),
     scsi0: `${storage}:0,import-from=${importVolid},size=20G`,
     ide2: `${isoVolid},media=cdrom`,
   }
@@ -164,9 +166,14 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none' }) {
     return parked
   }
 
-  // keep === none: destroy all disks on this VM, delete VM, wipe holder
+  // keep === none: destroy all disks + TPM state on this VM, delete VM, wipe holder
   const toDestroy = []
   for (const [key, val] of Object.entries(cfg)) {
+    if (/^tpmstate\d+$/.test(key)) {
+      console.log(chalk.yellow(`vm: remove ${key}`))
+      toDestroy.push(key)
+      continue
+    }
     if (!/^(scsi|virtio|sata|ide)\d+$/.test(key) && !/^unused\d+$/.test(key)) continue
     if (/media=cdrom/.test(String(val))) {
       toDestroy.push(key)

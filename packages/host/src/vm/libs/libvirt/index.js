@@ -12,4 +12,5 @@ export {
   setDomainSerialNull,
   setDomainSerialTcp,
 } from './serial.js'
+export { reconcileDomainTpm } from './tpm.js'
 export { virsh } from './virsh.js'

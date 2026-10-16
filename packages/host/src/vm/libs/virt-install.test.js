@@ -30,5 +30,7 @@ describe('buildVirtInstallArgs', () => {
     expect(args).toContain('network=default,model=virtio')
     expect(args.join(' ')).toMatch(/tcp,host=127\.0\.0\.1:5555/)
     expect(args.join(' ')).toMatch(/device=cdrom/)
+    expect(args).toContain('--tpm')
+    expect(args).toContain('backend.type=emulator,backend.version=2.0,model=tpm-crb')
   })
 })

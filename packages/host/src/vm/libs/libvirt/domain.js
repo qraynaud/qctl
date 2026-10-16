@@ -105,7 +105,11 @@ export async function removeDomain(connect, name) {
     await virsh(connect, 'destroy', name).quiet().nothrow()
   }
 
-  let u = await virsh(connect, 'undefine', name, '--nvram').quiet().nothrow()
+  // Drop NVRAM + TPM state with the domain (recreate gets a fresh vTPM).
+  let u = await virsh(connect, 'undefine', name, '--nvram', '--tpm').quiet().nothrow()
+  if (u.exitCode !== 0 && (await domainExists(connect, name))) {
+    u = await virsh(connect, 'undefine', name, '--nvram').quiet().nothrow()
+  }
   if (u.exitCode !== 0 && (await domainExists(connect, name))) {
     u = await virsh(connect, 'undefine', name).quiet().nothrow()
   }
