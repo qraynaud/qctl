@@ -38,9 +38,10 @@ That writes schemas, root `package.json` (varlock plugin deps → `node_modules`
 `provision/`, `applications/` / `networks/` stubs, and a matching `mise.toml`
 (existing `mise.toml` is left alone unless you pass `--force`).
 
-Edit `provision/<env>.yaml` (and optional `provision/<env>.local.yaml` /
-`provision/<env>.proxmox.yaml` overlays) for networking, users, tank, and hypervisor
-sizing — see [docs/provision.md](docs/provision.md) for every field and commented samples.
+Edit provision layers (`common.yaml`, `<target>.yaml`, `<env>.yaml`,
+`<env>.<target>.yaml` — at least one; merge order in
+[docs/provision.md](docs/provision.md)) for networking, users, tank, and
+hypervisor sizing.
 
 Varlock `# @plugin` packages must be listed in the instance `package.json`
 `dependencies` (version SoT). In schemas use `# @plugin(@scope/name)` without a

@@ -45,7 +45,7 @@ exec). Defaults match other host commands (`--env dev`, `--target local`).
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--target` | `local` | `local` = libvirt passt/DHCP; `proxmox` needs `--host` |
-| `--env` | `dev` | Selects `provision/<env>.yaml` (+ overlay) for ports / name |
+| `--env` | `dev` | Selects provision layers for ports / name |
 | `--network` | `user` | `user`/`auto`: `127.0.0.1` + `ssh.forward`; `default`: DHCP lease |
 | `--user` | `rocky` | SSH admin user |
 | `--host` / `--port` | (derived) | Override endpoint (required for Proxmox) |
@@ -132,7 +132,7 @@ VM lifecycle against the instance `provision/` tree. Most subcommands share:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--target` | `local` | `local` = libvirt; `proxmox` = PVE API |
-| `--env` | `dev` | Selects `provision/<env>.yaml` (+ overlay) and related defaults |
+| `--env` | `dev` | Selects provision layers and related defaults |
 | `--name` | (derived) | VM / domain name |
 | `--connect` | `qemu:///system` | libvirt URI (`local` only) |
 | `--dry-run` | `false` | Print actions without changing the host/guest |
@@ -205,7 +205,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 Topology and provision wiring live in the instance:
 
-- `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlay)
+- provision layers: `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml` (at least one)
 - `!env` fields resolve from `provision/.env.<env>` (+ optional `.env.local`) via the bundled varlock graph API
 - Tier-0 credentials: `# @tag(guest)` keys on provision env (seeded into `/var/lib/rocky/tier0-pending/<KEY>`)
 - Platform selection: `qctl.platform` (`rocky` or `github:owner/repo[@x.y.z]`)

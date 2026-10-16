@@ -44,24 +44,96 @@ function writeProvisionEnv(root, devBody = 'VW_CLIENT_ID=user.from-env\n') {
 }
 
 describe('loadProvisionDocument', () => {
-  test('loads base + local overlay and strips proxmox', () => {
+  test('loads env + local overlay and strips proxmox', () => {
     const root = writeMinimalInstance(makeTempDir())
     temps.push(root)
     const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
-    expect(doc.basePath).toContain('dev.yaml')
+    expect(doc.commonPath).toBeNull()
+    expect(doc.targetPath).toBeNull()
+    expect(doc.envPath).toContain('dev.yaml')
     expect(doc.overlayPath).toContain('dev.local.yaml')
     expect(doc.envRefs).toContain('VW_CLIENT_ID')
     expect(doc.data.local).toEqual({ cpu: 2 })
     expect(doc.data.proxmox).toBeUndefined()
   })
 
-  test('throws when base yaml is missing', () => {
+  test('merges common → target → env → env.target', () => {
     const root = makeTempDir()
     temps.push(root)
-    expect(() => loadProvisionDocument({ root, env: 'dev' })).toThrow(/not found/)
+    writeFile(root, 'provision/common.yaml', 'local:\n  memory: 1024\n  cpu: 1\n')
+    writeFile(root, 'provision/local.yaml', 'local:\n  memory: 2048\n')
+    writeFile(root, 'provision/dev.yaml', 'local:\n  cpu: 4\n')
+    writeFile(root, 'provision/dev.local.yaml', 'local:\n  memory: 8192\n')
+
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.commonPath).toContain('common.yaml')
+    expect(doc.targetPath).toContain('local.yaml')
+    expect(doc.envPath).toContain('dev.yaml')
+    expect(doc.overlayPath).toContain('dev.local.yaml')
+    // target before env: env cpu wins over common; overlay memory wins last
+    expect(doc.data.local).toEqual({ cpu: 4, memory: 8192 })
   })
 
-  test('throws when base yaml is not a mapping', () => {
+  test('target merges before env when both present', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(root, 'provision/local.yaml', 'local:\n  cpu: 2\n  memory: 2048\n')
+    writeFile(root, 'provision/dev.yaml', 'local:\n  cpu: 8\n')
+
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.data.local).toEqual({ cpu: 8, memory: 2048 })
+  })
+
+  test('succeeds with only common.yaml', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(root, 'provision/common.yaml', 'qctl:\n  platform: rocky\n')
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.commonPath).toContain('common.yaml')
+    expect(doc.envPath).toBeNull()
+    expect(doc.data.qctl).toEqual({ platform: 'rocky' })
+  })
+
+  test('succeeds with only target.yaml', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(root, 'provision/local.yaml', 'local:\n  cpu: 2\n')
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.targetPath).toContain('local.yaml')
+    expect(doc.data.local).toEqual({ cpu: 2 })
+  })
+
+  test('succeeds with only env.target overlay', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(root, 'provision/dev.local.yaml', 'local:\n  cpu: 2\n')
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    expect(doc.overlayPath).toContain('dev.local.yaml')
+    expect(doc.data.local).toEqual({ cpu: 2 })
+  })
+
+  test('throws when no layer is present', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    expect(() => loadProvisionDocument({ root, env: 'dev', target: 'local' })).toThrow(
+      /no provision YAML found/,
+    )
+  })
+
+  test('throws when env is reserved name common', () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    expect(() => loadProvisionDocument({ root, env: 'common' })).toThrow(/reserved/)
+  })
+
+  test('throws when env is reserved target name', () => {
+    const root = writeMinimalInstance(makeTempDir())
+    temps.push(root)
+    expect(() => loadProvisionDocument({ root, env: 'local' })).toThrow(/reserved/)
+    expect(() => loadProvisionDocument({ root, env: 'proxmox' })).toThrow(/reserved/)
+  })
+
+  test('throws when a present layer is not a mapping', () => {
     const root = makeTempDir()
     temps.push(root)
     writeFile(root, 'provision/dev.yaml', '- just a list\n')

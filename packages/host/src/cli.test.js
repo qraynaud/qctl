@@ -129,7 +129,7 @@ describe('host CLI', () => {
     expect(stdout).toContain('--profile')
     expect(stdout).toContain('--allow-missing-tier0')
     expect(stdout).toContain('--instance-id')
-    expect(stdout).toContain('provision/<env>.yaml')
+    expect(stdout).toContain('common → target → env → env.target')
   })
 
   test('vm up --help works outside an instance', async () => {

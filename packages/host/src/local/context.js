@@ -59,7 +59,12 @@ export async function createLocalContext(argv, opts = {}) {
     target: 'local',
     processEnv: { ...process.env, QCTL_ENV: env },
   })
-  const data = parseProvisionOrThrow(loaded.data, loaded.basePath)
+  const sourceLabel =
+    [loaded.commonPath, loaded.targetPath, loaded.envPath, loaded.overlayPath]
+      .filter(Boolean)
+      .map((p) => basename(/** @type {string} */ (p)))
+      .join(' + ') || 'provision'
+  const data = parseProvisionOrThrow(loaded.data, sourceLabel)
   const apps = appsIdentityFromProvision(data)
   const appsUsername = apps.username
   const appsUid = apps.uid

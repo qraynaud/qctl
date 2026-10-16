@@ -9,7 +9,13 @@ export {
   loadHostGuestCredentials,
   provisionEnvDir,
 } from './host-env.js'
-export { loadProvision, loadProvisionDocument, provisionNeedsEnv } from './load.js'
+export {
+  COMMON_PROVISION,
+  PROVISION_TARGETS,
+  loadProvision,
+  loadProvisionDocument,
+  provisionNeedsEnv,
+} from './load.js'
 export {
   ENV_REF,
   collectEnvRefs,

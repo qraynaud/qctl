@@ -11,17 +11,20 @@ schema field, mainly via commented samples.
 
 | File | Role |
 |------|------|
-| `provision/<env>.yaml` | Base topology for `QCTL_ENV` / `--env` (required), e.g. `dev.yaml` |
-| `provision/<env>.<target>.yaml` | Optional overlay for `--target local` or `proxmox` |
+| `provision/common.yaml` | Shared foundation (all envs / targets) |
+| `provision/<target>.yaml` | Target layer, e.g. `local.yaml` / `proxmox.yaml` |
+| `provision/<env>.yaml` | Env layer for `QCTL_ENV` / `--env`, e.g. `dev.yaml` |
+| `provision/<env>.<target>.yaml` | Most-specific overlay, e.g. `dev.local.yaml` |
 | `provision/.env.schema` | Host graph schema for keys used by `!env` |
 | `provision/.env.<env>` | Host values (literals / `vw()`); committed lab values OK |
 | `provision/.env.local` | Machine-local host overrides (gitignored) |
 
 Load algorithm (`qctl vm …`, `qctl local …`, seed):
 
-1. Parse `provision/<env>.yaml`.
-2. If `provision/<env>.<target>.yaml` exists, **deep-merge** it onto the base
-   (maps merge by key; **arrays are replaced** by the overlay).
+1. **Deep-merge** present layers in this order (later wins; maps merge by key;
+   **arrays are replaced** by the later file):
+   `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml`.
+2. At least one of those four files must exist (any combination is fine).
 3. Drop the opposite hypervisor block (`local` vs `proxmox`).
 4. Resolve every `!env` from process env + `provision/.env.*` graph to a
    `Buffer` (empty process values do not win; missing keys error).
@@ -29,14 +32,15 @@ Load algorithm (`qctl vm …`, `qctl local …`, seed):
    and is stripped before that validation.
 
 ```text
-provision/dev.yaml              ← base (all targets)
-provision/dev.local.yaml        ← merged when --target local
-provision/dev.proxmox.yaml      ← merged when --target proxmox
+provision/common.yaml           ← foundation (all envs / targets)
+provision/local.yaml            ← target (before env)
+provision/dev.yaml              ← env (wins over target)
+provision/dev.local.yaml        ← env+target (always last)
 ```
 
-There is no third overlay layer beyond `<env>.<target>.yaml`. Prefer keeping shared
-topology in the base file and target-only knobs (`local:` / `proxmox:`, VLAN host
-IPs, API tokens) in the overlay.
+Reserved `--env` / `QCTL_ENV` names: `common`, `local`, `proxmox` (layer basenames).
+Prefer shared topology in `common.yaml`, target-wide knobs in `<target>.yaml`,
+env knobs in `<env>.yaml`, and env+target specifics in the overlay.
 
 ## `!env` tag
 

@@ -1,5 +1,5 @@
 /**
- * Zod schemas for provision/<env>.yaml (+ optional <env>.<target>.yaml).
+ * Zod schemas for provision YAML (common + <env> + optional <env>.<target>).
  * Named collections (ports, uplinks, vlans, proxmox.net) stay maps keyed by name.
  * Disks helpers: import from `./disks.js` / `./resolve-disks.js` / `@qctl/shared` directly.
  */

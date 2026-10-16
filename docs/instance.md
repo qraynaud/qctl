@@ -37,8 +37,10 @@ networks/
   <net>/.env.schema + <net>.network
 provision/.env.schema                # host provision graph (!env / @tag(guest))
 provision/.env.<env>                 # host provision values (+ optional .env.local)
-provision/<env>.yaml                 # topology + qctl.platform + !env
-provision/<env>.<target>.yaml        # optional overlay (local / proxmox)
+provision/common.yaml                # shared foundation (all envs / targets)
+provision/<target>.yaml              # target layer (local / proxmox)
+provision/<env>.yaml                 # env layer + qctl.platform + !env
+provision/<env>.<target>.yaml        # env+target overlay (always last)
 mise.toml                            # host: pin qctl-host (or _.path to sibling bin)
 # caches: ~/.cache/qctl/{images,tooling,repos/<hash>/seed}
 #          ~/.local/share/qctl/repos/<hash>/vms
@@ -89,7 +91,10 @@ host version. Varlock plugins are **not** provision pins — declare them in
 `package.json` `dependencies` (version SoT) and schemas with `# @plugin(@pkg)`
 (no `@version` in the decorator).
 
-- Committable: `provision/<env>.yaml` (+ `provision/<env>.<target>.yaml` overlays).
+- Committable provision layers (at least one required; merge
+  common → target → env → env.target): `provision/common.yaml`,
+  `provision/<target>.yaml`, `provision/<env>.yaml`,
+  `provision/<env>.<target>.yaml`.
 - Host resolves `!env` via `loadHostEnv` (bundled graph API over
   `provision/.env.schema` + `.env.<env>`, optional `.env.local`) — no `varlock` CLI.
 - VM/seed/image caches: XDG (`~/.cache/qctl`, `~/.local/share/qctl`), not in-repo.
