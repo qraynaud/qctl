@@ -33,8 +33,10 @@ const mapKey = z.string().trim().min(1)
  *
  * Intentionally process-lifetime — do **not** clear in production parse/schema code.
  * CLI loads provision once per process; clearing mid-parse would defeat uniqueness.
- * Tests that parse more than one disks document in the same process must
- * `diskMounts.clear()` in beforeEach/afterEach (or between parses).
+ *
+ * Tests: `tooling/test-preload.js` clears this in a global `afterEach` (via bunfig
+ * `[test].preload`). Still `diskMounts.clear()` between multiple parses inside one
+ * test case.
  *
  * @type {Set<string>}
  */

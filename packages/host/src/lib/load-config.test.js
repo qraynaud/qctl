@@ -29,7 +29,6 @@ const SECRET_ENV = {
 beforeEach(() => {
   resetRepoRootCache()
   clearEnvProvisionCache()
-  diskMounts.clear()
   Object.assign(process.env, SECRET_ENV)
 })
 
@@ -38,7 +37,6 @@ afterEach(() => {
   process.env = { ...origEnv }
   resetRepoRootCache()
   clearEnvProvisionCache()
-  diskMounts.clear()
   while (temps.length) {
     const dir = temps.pop()
     if (dir) removeTempDir(dir)

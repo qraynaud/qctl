@@ -1,11 +1,6 @@
-import { diskMounts } from './disks.js'
 import { firstBootCredentialsFromProvision, tankPassphraseCredName } from './first-boot.js'
 import { provisionSchema } from './parse.js'
-import { beforeEach, describe, expect, test } from 'bun:test'
-
-beforeEach(() => {
-  diskMounts.clear()
-})
+import { describe, expect, test } from 'bun:test'
 
 describe('tankPassphraseCredName', () => {
   test('prefixes pool id', () => {
@@ -16,7 +11,6 @@ describe('tankPassphraseCredName', () => {
 
 describe('firstBootCredentialsFromProvision', () => {
   test('emits tank_passphrase_<poolId> per encrypted tank (not TANK_PASSPHRASE)', () => {
-    diskMounts.clear()
     const data = provisionSchema.parse({
       networking: {
         ports: { ssh: { port: 22 } },

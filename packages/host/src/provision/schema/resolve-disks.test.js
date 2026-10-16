@@ -1,16 +1,12 @@
-import { DEFAULT_TANK_OPTIONS, diskMounts, disksSchema } from './disks.js'
+import { DEFAULT_TANK_OPTIONS, disksSchema } from './disks.js'
 import { resolveDisks } from './resolve-disks.js'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
 const rockyPlatform = {
   filesystems: /** @type {const} */ (['xfs', 'ext4']),
   defaultFs: 'xfs',
   osDisk: { id: 'os', size: '20G' },
 }
-
-beforeEach(() => {
-  diskMounts.clear()
-})
 
 describe('resolveDisks', () => {
   test('omitted disks.os → platform osDisk; data fs → defaultFs', () => {

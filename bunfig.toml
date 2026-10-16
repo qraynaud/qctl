@@ -3,3 +3,5 @@
 root = "."
 # Keep per-test budget tight; CLI smokes should finish quickly.
 timeout = 10000
+# Global hooks (e.g. diskMounts.clear after each test).
+preload = ["./tooling/test-preload.js"]

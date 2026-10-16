@@ -1,17 +1,13 @@
-import { diskMounts, disksSchema } from '../../provision/schema/disks.js'
+import { disksSchema } from '../../provision/schema/disks.js'
 import { resolveDisks } from '../../provision/schema/resolve-disks.js'
 import { allTankPoolIds, resolveInitTankPools, tankMembersForPools } from './init-tank-pools.js'
-import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 
 const platform = {
   filesystems: /** @type {const} */ (['xfs']),
   defaultFs: 'xfs',
   osDisk: { id: 'os', size: '20G' },
 }
-
-beforeEach(() => {
-  diskMounts.clear()
-})
 
 function sampleResolved() {
   return resolveDisks(

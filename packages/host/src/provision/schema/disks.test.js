@@ -8,7 +8,7 @@ import {
   disksVdevSchema,
 } from './disks.js'
 import { provisionSchema } from './parse.js'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
 const net = {
   networking: {
@@ -16,10 +16,6 @@ const net = {
     uplinks: { eth0: { dhcp4: true } },
   },
 }
-
-beforeEach(() => {
-  diskMounts.clear()
-})
 
 describe('disksSchema', () => {
   test('defaults os id to os and map ids to keys', () => {

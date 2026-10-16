@@ -8,7 +8,6 @@ import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 import { initInstance } from '../../../init.js'
 import { clearEnvProvisionCache } from '../../../lib/load-config.js'
 import { getSeed, resetRepoRootCache } from '../../../lib/paths.js'
-import { diskMounts } from '../../../provision/schema/disks.js'
 import { resolveSeedPaths } from './iso.js'
 import { runSeed } from './run.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -26,7 +25,6 @@ const temps = []
 beforeEach(() => {
   clearEnvProvisionCache()
   resetRepoRootCache()
-  diskMounts.clear()
   const base = makeTempDir()
   temps.push(base)
   process.env.QCTL_CACHE_HOME = join(base, 'cache')
@@ -37,7 +35,6 @@ afterEach(() => {
   process.chdir(origCwd)
   resetRepoRootCache()
   clearEnvProvisionCache()
-  diskMounts.clear()
   if (origDist === undefined) delete process.env.QCTL_GUEST_DIST
   else process.env.QCTL_GUEST_DIST = origDist
   if (origCache === undefined) delete process.env.QCTL_CACHE_HOME
