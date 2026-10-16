@@ -1,5 +1,5 @@
 [Unit]
-Description=Rocky init-tank: create tank, export, poweroff (qctl init --profile init-tank)
+Description=Rocky init-tank: create tank, export, poweroff (qctl _internal_init --profile init-tank)
 DefaultDependencies=yes
 After=network-online.target rocky-tier0-seal.service
 Wants=network-online.target
@@ -16,7 +16,7 @@ Environment=ROCKY_TANK_CREATE_I_UNDERSTAND=yes
 # Mirror logs to serial — init-tank has no SSH; journal alone is useless on failure.
 StandardOutput=journal+console
 StandardError=journal+console
-ExecStart=/usr/local/bin/qctl init --profile init-tank
+ExecStart=/usr/local/bin/qctl _internal_init --profile init-tank
 # On failure stay up so host timeout + serial console can diagnose.
 SuccessExitStatus=0
 

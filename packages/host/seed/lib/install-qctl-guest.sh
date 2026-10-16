@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install guest qctl tooling from the NoCloud seed (embedded by `qctl vm seed` under
 # qctl-guest/ on the cidata volume) — runs first in cloud-init runcmd, before the
-# units that exec `qctl init`.
+# units that exec `qctl _internal_init`.
 #
 # Installs:
 #   qctl-guest                 → /usr/local/bin/qctl                (guest build; stages / quadlet / secret)

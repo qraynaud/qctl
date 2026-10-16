@@ -54,14 +54,15 @@ version pin. qctl installs them into `node_modules` (no npm CLI). Commit
 | Role | Binary | Docs |
 |------|--------|------|
 | Workstation | `qctl-host` → `qctl` | [packages/host/README.md](packages/host/README.md) — `init`, `new`, `sync`, `local …`, `vm …`, `seed-kit` |
-| Appliance | `qctl-guest` → `/usr/local/bin/qctl` | [packages/guest/README.md](packages/guest/README.md) — `init`, `list`/`stage`, `plugins ensure`, `quadlet …`, `secret check\|sync` |
+| Appliance | `qctl-guest` → `/usr/local/bin/qctl` | [packages/guest/README.md](packages/guest/README.md) — `quadlet …`, `secret check\|sync` ([INTERNAL.md](packages/guest/INTERNAL.md) for first-boot) |
 
 ## Docs
 
 | Doc | What |
 |-----|------|
 | [packages/host/README.md](packages/host/README.md) | Host CLI reference |
-| [packages/guest/README.md](packages/guest/README.md) | Guest CLI reference |
+| [packages/guest/README.md](packages/guest/README.md) | Guest CLI reference (day-2) |
+| [packages/guest/INTERNAL.md](packages/guest/INTERNAL.md) | Guest first-boot / debug commands (`_internal_*`) |
 | [docs/instance.md](docs/instance.md) | Instance layout, schemas, provision, seed |
 | [docs/provision.md](docs/provision.md) | Provision YAML fields, overlays, commented samples |
 | [docs/secrets.md](docs/secrets.md) | `@sensitive` → Podman; `@tag(guest)` credentials |

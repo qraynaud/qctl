@@ -143,7 +143,7 @@ First-boot secrets come from seed Tier-0 (`tank_passphrase_<poolId>` from
 `disks.tanks.*.passphrase`, `SSH_HOST_KEYS`, `ADMIN_*`, `DEPLOY_KEY`,
 `@tag(container-registry)`). Prod bindings use `@initVw` + `vw()`; lab uses literals.
 `bw` (if used) comes from provision `packages.http` / `packages.distro`. Extra installs:
-`packages.{distro,pipx,http}` in `provision/<env>.yaml` → seed `packages.json` → guest `qctl init`
+`packages.{distro,pipx,http}` in `provision/<env>.yaml` → seed `packages.json` → guest `qctl _internal_init`
 (appliance + init-tank). `pipx` is installed on the guest only when `packages.pipx` is
 non-empty.
 Day-2 Podman secrets: `qctl secret sync`. `/usr/local/bin/quadlet` is installed by
@@ -169,30 +169,31 @@ cloud-init installs the guest tooling from the NoCloud ISO (`lib/install-qctl-gu
 `qctl-guest` → `/usr/local/bin/qctl`, `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/` (guest import),
 `varlock-local-encrypt` (SEA sibling for disk cache; no varlock CLI) under
 `/usr/local/lib/qctl/`. Instance `# @plugin` packages resolve from the repo
-`node_modules` (install via `qctl plugins ensure` / graph load), installs packages,
+`node_modules` (install via `qctl _internal_plugins ensure` / graph load), installs packages,
 enables linger for `apps`, installs OpenZFS, enables
 `rocky-tier0-seal` + `rocky-first-boot`, then **`wait-qctl-init.sh`** runs
 `systemctl start rocky-first-boot` (plain start — oneshot already waits for ExecStart;
 do not use `start --wait` with `RemainAfterExit=yes` or cloud-final hangs forever) and
-**requires** `/var/lib/rocky/first-boot.done`. If `qctl init` fails, that script exits
+**requires** `/var/lib/rocky/first-boot.done`. If `qctl _internal_init` fails, that script exits
 non-zero so **`cloud-init status` is error** (not a false “done”). The same script is
 installed as `scripts/per-boot/90-rocky-wait-qctl-init.sh` so a reboot mid-runcmd cannot
 skip the gate: once the unit is enabled, every boot waits for the stamp until it exists.
-The unit runs **`qctl init`** (stages live in `qctl-guest`):
+The unit runs **`qctl _internal_init`** (stages live in `qctl-guest`):
 
 ```
 network-up → host-baseline → data-mounts → tier0-seal → ssh-host-keys → admin-user
 → start-services → registry-login → tank-import → zfs-drill → hg-clone → ready-stamp
 ```
 
-`vm init-tank` runs `qctl init --profile init-tank`
+`vm init-tank` runs `qctl _internal_init --profile init-tank`
 (`tier0-seal → data-mounts → tank-create → poweroff`).
-Resume after a failure with `qctl init --from <stage>`; preview with `qctl init --dry-run`.
+Resume after a failure with `qctl _internal_init --from <stage>`; preview with
+`qctl _internal_init --dry-run`.
 `rocky-tier0-seal.service` stays a separate unit (it must seal credentials *before*
 `LoadCredentialEncrypted=` on the init unit loads them) and calls
-`qctl stage tier0-seal`; the stage is idempotent inside `qctl init`.
+`qctl _internal_stage tier0-seal`; the stage is idempotent inside `_internal_init`.
 Tier-0 / provision secrets are declared in `provision/.env.schema` (scaffold via
-`qctl init`).
+host `qctl init`).
 
 `qctl vm seed` builds `nocloud.iso` (volume label `cidata`, Joliet) in-process via
 `@gcu/iso9660` — no `genisoimage` / `xorriso` / FAT fallback.

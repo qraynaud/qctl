@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe('init command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('init')
+    expect(mod.command).toBe('_internal_init')
     expect(mod.describe).toContain('First-boot')
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')

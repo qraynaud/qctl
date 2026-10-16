@@ -57,7 +57,7 @@ export async function installInitPackages(opts) {
   const vcs = (env.ROCKY_REPO_VCS || env.QCTL_REPO_VCS || '').trim() || undefined
   const disks = await loadDisksPackageHints(env)
   if (!disks) {
-    log(`qctl init: no disks.json — skipping storage package capabilities (fs/zfs)`)
+    log(`qctl _internal_init: no disks.json — skipping storage package capabilities (fs/zfs)`)
   }
   const capabilities = capabilitiesForProfile(opts.profile, { vcs, disks })
   const extra = await loadExtraPackages(env)
@@ -65,7 +65,7 @@ export async function installInitPackages(opts) {
   if (opts.dryRun) {
     const manifest = packagesForCapabilities(platform.packages, capabilities, extra)
     log(
-      `qctl init: packages (dry-run) capabilities=[${capabilities.join(', ')}] `
+      `qctl _internal_init: packages (dry-run) capabilities=[${capabilities.join(', ')}] `
         + `distro=${manifest.distro.length} pipx=${manifest.pipx.length} `
         + `http=${manifest.http.length}`,
     )
@@ -73,7 +73,7 @@ export async function installInitPackages(opts) {
   }
 
   log(
-    `qctl init: installing platform packages (profile=${opts.profile}${vcs ? ` vcs=${vcs}` : ''})`,
+    `qctl _internal_init: installing platform packages (profile=${opts.profile}${vcs ? ` vcs=${vcs}` : ''})`,
   )
   const manifest = await installCapabilityPackages(platform, {
     capabilities,

@@ -135,7 +135,7 @@ and Podman secrets ([secrets.md](./secrets.md)).
 
 ## Guest: first boot
 
-`qctl init [--profile default|init-tank]` is the only first-boot entrypoint (systemd
-invokes it before the instance repo may exist). Stages live in `@qctl/guest`; the
-platform module only supplies package recipes. Details:
-[packages/guest/README.md](../packages/guest/README.md).
+`qctl _internal_init [--profile default|init-tank]` is the only first-boot entrypoint
+(systemd invokes it before the instance repo may exist). Stages live in `@qctl/guest`;
+the platform module only supplies package recipes. Details:
+[packages/guest/INTERNAL.md](../packages/guest/INTERNAL.md).

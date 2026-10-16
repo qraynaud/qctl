@@ -1,8 +1,8 @@
 #!/bin/bash
-# Gate cloud-init on rocky-first-boot (qctl init) completing with a ready stamp.
+# Gate cloud-init on rocky-first-boot (qctl _internal_init) completing with a ready stamp.
 #
 # Invoked from cloud-init runcmd (after packages) and from scripts/per-boot so a
-# reboot mid-seed cannot report cloud-init "done" while qctl init failed or never
+# reboot mid-seed cannot report cloud-init "done" while qctl _internal_init failed or never
 # ran. Before the unit is enabled, per-boot exits 0 and defers to runcmd.
 #
 # Do NOT use `systemctl start --wait`: with Type=oneshot + RemainAfterExit=yes,
@@ -20,7 +20,7 @@ say() {
 }
 
 if [[ -f $STAMP ]]; then
-  say "rocky-wait-qctl-init: stamp present ($STAMP) — qctl init already OK"
+  say "rocky-wait-qctl-init: stamp present ($STAMP) — qctl _internal_init already OK"
   exit 0
 fi
 
@@ -33,7 +33,7 @@ fi
 
 systemctl daemon-reload
 
-say "rocky-wait-qctl-init: starting $UNIT (qctl init)…"
+say "rocky-wait-qctl-init: starting $UNIT (qctl _internal_init)…"
 if ! systemctl start "$UNIT"; then
   say "rocky-wait-qctl-init: ERROR: $UNIT failed"
   systemctl status "$UNIT" --no-pager -l || true
@@ -49,5 +49,5 @@ if [[ ! -f $STAMP ]]; then
 fi
 
 say "rocky-wait-qctl-init: OK — $STAMP"
-say "Rocky cloud-init OK — qctl init stamped ($STAMP)"
+say "Rocky cloud-init OK — qctl _internal_init stamped ($STAMP)"
 cat "$STAMP" || true

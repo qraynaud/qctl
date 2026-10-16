@@ -20,7 +20,7 @@ await platform.networking.ensureUp(ctx)
 ```
 
 Pipx / http installs come from provision `packages:` (seed `packages.json`); guest
-`qctl init` applies them (`installPipxPackages` / `installHttpPackages` with Bun fetch).
+`qctl _internal_init` applies them (`installPipxPackages` / `installHttpPackages` with Bun fetch).
 
 ## Develop
 

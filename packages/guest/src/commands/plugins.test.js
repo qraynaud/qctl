@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 
 describe('plugins command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('plugins')
+    expect(mod.command).toBe('_internal_plugins')
     expect(mod.describe).toContain('node_modules')
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')

@@ -3,7 +3,7 @@ import { runInit } from '../init/run.js'
 /** @import { Argv } from 'yargs' */
 /** @import { InitProfile } from '@qctl/shared' */
 
-export const command = 'init'
+export const command = '_internal_init'
 export const describe = 'First-boot / appliance init (systemd); runs ordered stages'
 /** Hidden from default `qctl -h` (shown with `--help-with-internals`). */
 export const internal = true
