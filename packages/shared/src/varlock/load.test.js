@@ -124,6 +124,43 @@ describe('loadEnvGraphForDir', () => {
 
     expect(ensure).toHaveBeenCalledTimes(1)
     expect(ensure.mock.calls[0]?.[0]).toBe(root)
+    expect(ensure.mock.calls[0]?.[1]).toMatchObject({ frozen: false })
+  })
+
+  test('passes frozen: true through to ensurePackageDependencies', async () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'inst',
+        private: true,
+        dependencies: { '@qctl/does-not-exist-plugin': '1.0.0' },
+      }),
+    )
+    writeFile(root, '.env.schema', ['# ---', '# @public @optional', 'X=', ''].join('\n'))
+    writeFile(
+      root,
+      '.env.dev',
+      ['# @plugin(@qctl/does-not-exist-plugin)', '# ---', 'X=1', ''].join('\n'),
+    )
+
+    const ensure = spyOn(plugins, 'ensurePackageDependencies').mockResolvedValue({
+      root,
+      installed: true,
+      frozen: true,
+    })
+
+    await expect(
+      loadEnvGraphForDir(root, {
+        env: NO_ENV,
+        qctlEnv: 'dev',
+        skipCache: true,
+        frozen: true,
+      }),
+    ).rejects.toThrow(VARLOCK_UNRESOLVED_PLUGIN_RE)
+
+    expect(ensure).toHaveBeenCalledWith(root, expect.objectContaining({ frozen: true }))
   })
 
   test('skipPluginEnsure does not reify on unresolved plugin', async () => {

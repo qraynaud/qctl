@@ -166,4 +166,34 @@ describe('findPackageRoot / package deps', () => {
     const again = await ensurePackageDependencies(root, ensureOpts)
     expect(again.installed).toBe(false)
   }, 60_000)
+
+  test('installPackageDependencies omits devDependencies', async () => {
+    const root = await tempDir()
+    const prodSrc = join(root, 'prod-plugin')
+    const devSrc = join(root, 'dev-plugin')
+    for (const [dir, name] of [
+      [prodSrc, '@qctl/prod-plugin'],
+      [devSrc, '@qctl/dev-plugin'],
+    ]) {
+      mkdirSync(join(dir, 'dist'), { recursive: true })
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ name, version: '1.0.0', main: 'dist/index.cjs' }),
+      )
+      writeFileSync(join(dir, 'dist/index.cjs'), 'module.exports = {}\n')
+    }
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'inst',
+        private: true,
+        dependencies: { '@qctl/prod-plugin': `file:${prodSrc}` },
+        devDependencies: { '@qctl/dev-plugin': `file:${devSrc}` },
+      }),
+    )
+
+    await installPackageDependencies(root, { frozen: false })
+    expect(isPackageInstalled(root, '@qctl/prod-plugin')).toBe(true)
+    expect(isPackageInstalled(root, '@qctl/dev-plugin')).toBe(false)
+  }, 60_000)
 })

@@ -45,20 +45,18 @@ stage is idempotent inside `_internal_init`.
 
 ## `qctl _internal_plugins ensure`
 
-Install the instance `package.json` dependencies into `node_modules` (in-process
-Arborist — no npm CLI). Varlock resolves `# @plugin` packages from `node_modules`
-(not plugins-cache). Graph loads reify once on varlock’s unresolved-plugin error.
+Install the instance `package.json` production dependencies into `node_modules`
+(in-process Arborist, `omit=dev` — no npm CLI). Varlock resolves `# @plugin`
+packages from `node_modules` (not plugins-cache). Graph loads reify once on
+varlock’s unresolved-plugin error.
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--dir` | instance root / cwd | Directory used to locate `package.json` |
 
-Install mode:
-
-- **Mutable** when `CI` is not `true` and the active env is not marked
-  `production: true` — may create/update `package-lock.json`.
-- **Frozen** when `CI=true` or the active env is `production: true` — requires a
-  committed `package-lock.json` and does not rewrite it.
+Guest installs are always **frozen**: require a committed `package-lock.json` and
+do not rewrite it. Generate/update the lockfile on the host with a non-frozen
+install (`CI` unset and a non-production env), then commit it.
 
 ```bash
 qctl _internal_plugins ensure

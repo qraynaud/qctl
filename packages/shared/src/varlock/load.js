@@ -24,6 +24,9 @@ import { GUEST_TAG } from './tags.js'
  *   interactive unlock can persist `sessionTtl` like official `@initBwp`).
  * @property {boolean} [skipPluginEnsure]
  *   when true, skip one-shot package.json reify after a missing-plugin schema error.
+ * @property {boolean} [frozen]
+ *   when true, force frozen Arborist install (require package-lock, do not rewrite it).
+ *   Guest paths should pass this; host may leave it unset (CI / production env still freeze).
  */
 
 /**
@@ -163,7 +166,11 @@ export async function loadEnvGraphForDir(dir, opts = {}) {
 
   if (failBlob && opts.skipPluginEnsure !== true && isVarlockUnresolvedPluginError(failBlob)) {
     try {
-      await ensurePackageDependencies(dir, { qctlEnv, env: base })
+      await ensurePackageDependencies(dir, {
+        qctlEnv,
+        env: base,
+        frozen: opts.frozen === true,
+      })
     } catch (err) {
       throw new Error(`varlock plugin ensure failed for ${dir}: ${errMessage(err)}`)
     }

@@ -43,7 +43,11 @@ export function enginesForSecret(packageRootful, crossEngine) {
  * @returns {Promise<SensitiveItem[]>}
  */
 export async function loadSensitiveItems(dir, opts = {}) {
-  const graph = await loadEnvGraphForDir(dir, { env: opts.env, qctlEnv: opts.qctlEnv })
+  const graph = await loadEnvGraphForDir(dir, {
+    env: opts.env,
+    qctlEnv: opts.qctlEnv,
+    frozen: true,
+  })
   const packageRootful = opts.rootful === true
   const cross = keysWithTag(graph, CROSS_ENGINE_TAG)
   return resolvedSensitive(graph).map(({ key, value }) => ({

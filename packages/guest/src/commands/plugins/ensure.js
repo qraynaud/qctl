@@ -20,9 +20,9 @@ export function builder(yargs) {
     })
     .epilogue(
       'Varlock loads third-party plugins from node_modules. qctl runs an in-process '
-        + 'npm install (Arborist) — no npm CLI required. Graph loads also ensure deps '
-        + 'when needed. Frozen (package-lock only, no lock rewrite) when CI=true or '
-        + 'QCTL_ENV is not dev.',
+        + 'Arborist install (production deps only, omit=dev) — no npm CLI. Graph loads '
+        + 'also ensure deps when needed. Guest installs are always frozen: require a '
+        + 'committed package-lock.json and do not rewrite it.',
     )
 }
 
@@ -57,16 +57,16 @@ export async function handler(argv) {
   }
 
   try {
-    const { installed, frozen } = await ensurePackageDependencies(pkgRoot, {
+    const { installed } = await ensurePackageDependencies(pkgRoot, {
       qctlEnv: process.env.QCTL_ENV,
       env: process.env,
+      frozen: true,
     })
-    const mode = frozen ? 'frozen' : 'mutable'
     if (installed) {
-      console.log(`qctl _internal_plugins ensure: installed deps in ${pkgRoot} (${mode})`)
+      console.log(`qctl _internal_plugins ensure: installed deps in ${pkgRoot} (frozen)`)
     } else {
       console.log(
-        `qctl _internal_plugins ensure: node_modules already satisfied (${pkgRoot}, ${mode})`,
+        `qctl _internal_plugins ensure: node_modules already satisfied (${pkgRoot}, frozen)`,
       )
     }
   } catch (err) {

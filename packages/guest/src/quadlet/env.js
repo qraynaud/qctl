@@ -127,6 +127,7 @@ async function applyGraph(renv, ctx, dir) {
     env: ctx.baseEnv,
     qctlEnv: renv.qctlEnv,
     skipSensitive: true,
+    frozen: true,
   })
   renv.graphValues = resolvedNonSensitive(graph, { includeInternal: true })
   renv.sensitive = sensitiveKeys(graph)
@@ -308,6 +309,7 @@ export async function renderUnitEnvFile(unitDir, packageRenv, ctx) {
     env: ctx.baseEnv,
     qctlEnv: packageRenv.qctlEnv,
     skipSensitive: true,
+    frozen: true,
   })
   const values = resolvedNonSensitive(graph, { includeInternal: false })
   const sensitive = sensitiveKeys(graph)
