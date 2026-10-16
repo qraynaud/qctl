@@ -5,6 +5,8 @@ import { runInit } from '../init/run.js'
 
 export const command = 'init'
 export const describe = 'First-boot / appliance init (systemd); runs ordered stages'
+/** Hidden from default `qctl -h` (shown with `--help-with-internals`). */
+export const internal = true
 
 /**
  * @param {Argv} yargs

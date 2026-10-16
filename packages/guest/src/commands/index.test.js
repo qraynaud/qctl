@@ -20,4 +20,14 @@ describe('guest commands registry', () => {
       expect(typeof c.handler).toBe('function')
     }
   })
+
+  test('marks first-boot / debug commands as internal', () => {
+    const byCmd = Object.fromEntries(commands.map((c) => [String(c.command).split(' ')[0], c]))
+    expect(byCmd.init?.internal).toBe(true)
+    expect(byCmd.list?.internal).toBe(true)
+    expect(byCmd.stage?.internal).toBe(true)
+    expect(byCmd.plugins?.internal).toBe(true)
+    expect(byCmd.quadlet?.internal).toBe(false)
+    expect(byCmd.secret?.internal).toBe(false)
+  })
 })

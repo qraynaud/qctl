@@ -10,15 +10,20 @@ with packages + networking hooks. The Rocky seed kit lives in
 
 ```bash
 qctl --help
-qctl init --help
-qctl plugins ensure --help
 qctl quadlet --help
 qctl secret --help
+# first-boot / debug / plugin tooling (also still runnable):
+qctl --help-with-internals
 ```
+
+Default `qctl -h` / `--help` lists day-2 commands (`quadlet`, `secret`) and
+mentions `--help-with-internals` in the epilogue. Bare `qctl` (no args) shows the
+same public command list without that hint. Internal commands (`init`, `list`,
+`stage`, `plugins`) stay runnable; `qctl --help-with-internals` lists them.
 
 ## Commands
 
-### `qctl init`
+### `qctl init` (internal)
 
 Run ordered first-boot stages until the ready stamp. Invoked by systemd on first boot
 (before the instance repo may exist). Dynamically `import()`s the staged platform module
@@ -33,11 +38,11 @@ to install capability packages, then runs stages in-process.
 Platform module: `$QCTL_PLATFORM_MODULE` → sole `qctl-platform-*.mjs` under
 `/usr/local/lib/qctl` → beside this binary.
 
-### `qctl list` / `qctl stage`
+### `qctl list` / `qctl stage` (internal)
 
 List or run a single init stage (debugging / resume).
 
-### `qctl plugins ensure`
+### `qctl plugins ensure` (internal)
 
 Install the instance `package.json` dependencies into `node_modules` (in-process
 Arborist — no npm CLI). Varlock resolves `# @plugin` packages from `node_modules`

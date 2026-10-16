@@ -32,6 +32,33 @@ describe('registerCommands', () => {
 
     expect(ran).toEqual(['ping'])
   })
+
+  test('hides internal commands from help unless withInternals', async () => {
+    const pub = { command: 'pub', describe: 'public cmd', handler() {} }
+    const hid = {
+      command: 'hid',
+      describe: 'internal cmd',
+      internal: true,
+      handler() {},
+    }
+
+    const hiddenHelp = await registerCommands(yargs([]), [pub, hid])
+      .scriptName('cli')
+      .help()
+      .wrap(null)
+      .getHelp()
+    expect(hiddenHelp).toContain('pub')
+    expect(hiddenHelp).toContain('public cmd')
+    expect(hiddenHelp).not.toMatch(/\bhid\b/)
+
+    const fullHelp = await registerCommands(yargs([]), [pub, hid], { withInternals: true })
+      .scriptName('cli')
+      .help()
+      .wrap(null)
+      .getHelp()
+    expect(fullHelp).toContain('hid')
+    expect(fullHelp).toContain('internal cmd')
+  })
 })
 
 describe('exitZeroOnMissingCommand', () => {
