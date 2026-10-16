@@ -26,19 +26,19 @@ Matches prod appliance roles (lab uses tiny qcow2s; same counts and serials):
 
 | File | Role |
 |------|------|
-| [`user-data.yaml`](../seed/cloud-init/user-data.yaml) | Shared `#cloud-config` for appliance + init-tank (`profile` Nunjucks); Tier-0 incl. `TANK_PASSPHRASE` |
+| [`user-data.yaml`](../seed/cloud-init/user-data.yaml) | Shared `#cloud-config` for appliance + init-tank (`profile` Nunjucks); Tier-0 incl. `tank_passphrase_<poolId>` |
 | [`meta-data.yaml`](../seed/cloud-init/meta-data.yaml) | NoCloud `instance-id` / `local-hostname` (default `rocky`) |
-| [`network-config.yaml`](../seed/cloud-init/network-config.yaml) | Fallback NoCloud net v2; `vm seed` renders from `secrets.networking.uplinks` / `vlans` |
+| [`network-config.yaml`](../seed/cloud-init/network-config.yaml) | Fallback NoCloud net v2; `vm seed` renders from `provision.networking.uplinks` / `vlans` |
 
 `qctl vm seed` reads `provision/<env>.yaml` + `!env`.
 `--profile appliance` (default) vs `--profile init-tank`. Templates use YAML tags resolved at seed build (**cloud-init never sees them**):
 
 | Tag | Meaning |
 |-----|---------|
-| `!template "…"` | Inline **Nunjucks**. Context: `secrets.*` = secrets YAML; seed-only `env`, `instance_id`, `profile` / `is_init_tank`, `admin_ssh_authorized_keys`, …. Empty output drops that `write_files` entry. Filter: `named`. |
+| `!template "…"` | Inline **Nunjucks**. Context: `provision.*` = provision YAML; seed-only `env`, `instance_id`, `profile` / `is_init_tank`, `admin_ssh_authorized_keys`, …. Empty output drops that `write_files` entry. Filter: `named`. |
 | `!file path` | Embed seed-kit `<path>` (`lib/…`, `first-boot/…`). Nunjucks only if the file contains `{{` / `{%`; empty render drops the entry. |
 
-Bake `secrets/<env>.yaml` into seed as `secrets.*` (e.g. DNAT in `lib/dnat-apply.sh`,
+Bake `provision/<env>.yaml` into seed as `provision.*` (e.g. `ports.json` for guest DNAT,
 `vlan-parents.env`, `ROCKY_APPS_SUBID_*` / `ROCKY_APPS_SUBGID_*` for `/etc/subuid` +
 `/etc/subgid`) — no YAML parsing on the guest.
 Appliance users under `users` are optional. Defaults: `admin` (uid/gid 1000; password
@@ -88,7 +88,7 @@ Cache downloads under `~/.cache/qctl/images/`.
 4. SSH as the VW Login **`rocky`** username with the injected admin key
    (`PermitRootLogin no`). Impersonate apps: `runuser -u apps -- …`.
 
-NoCloud applies seed-rendered `network-config` (uplinks only from secrets; macvlan parents are dummy ifaces — not 802.1Q on eth0;
+NoCloud applies seed-rendered `network-config` (uplinks only from provision; macvlan parents are dummy ifaces — not 802.1Q on eth0;
 fallback template is DHCP on `eth0`). That is the
 path that must work on a laptop libvirt/QEMU VM.
 
@@ -117,7 +117,7 @@ Rendered into user-data / systemd credentials by `qctl vm seed`:
 | Admin SSH public key(s) | `ssh.authorized_keys` in `provision/<env>.yaml` (or `~/.ssh` fallback) | `/etc/rocky/admin_ssh_authorized_keys`; `admin-user` stage installs on VW admin (not root) |
 | Tier-0 VW credentials | `provision/.env.*` keys with `@tag(guest)` | `/etc/credstore.encrypted/*` + `LoadCredentialEncrypted` on `rocky-first-boot` |
 | Pre-clone / registry secrets | [`bootstrap/`](../../bootstrap/) | Baked into seed; used before `hg-clone` |
-| Tank passphrase | Prefer omit from seed | `tank-import` / `tank-create` re-seed `/etc/credstore/rocky/tank_passphrase` from bootstrap |
+| Tank passphrase(s) | Prefer omit from seed | `tank-import` / `tank-create` re-seed `/etc/credstore/rocky/tank_passphrase_<poolId>` from Tier-0 |
 
 `apps` has **no** SSH keys and **no** sudo. Cockpit/sudo/SSH admin comes from VW Login
 `rocky` (`admin-user` stage; `sshd` starts in `start-services`). Root SSH is disabled. Host bootstrap
@@ -137,14 +137,13 @@ The `hg-clone` stage writes it under the **admin** `~/.ssh/deploy_key`, then
 `/etc/mercurial/hgrc` via provision `files:` (override by listing that path yourself).
 Init-tank does not auto-add mercurial.
 
-### `bw` unlock paths (before `tank`)
+### `bw` unlock paths (before tanks)
 
-First-boot secrets come from the seeded bootstrap graph (instance `bootstrap/` →
-guest `/usr/local/lib/qctl/bootstrap/`): `TANK_PASSPHRASE`, `SSH_HOST_KEYS`,
-`ADMIN_*`, `DEPLOY_KEY`, `@tag(container-registry)`. Prod bindings use `@initVw` +
-`vw()`; lab uses literals.
+First-boot secrets come from seed Tier-0 (`tank_passphrase_<poolId>` from
+`disks.tanks.*.passphrase`, `SSH_HOST_KEYS`, `ADMIN_*`, `DEPLOY_KEY`,
+`@tag(container-registry)`). Prod bindings use `@initVw` + `vw()`; lab uses literals.
 `bw` (if used) comes from provision `packages.http` / `packages.distro`. Extra installs:
-`packages.{distro,pipx,http}` in `provision/<env>.yaml` → cloud-init `install-packages.sh`
+`packages.{distro,pipx,http}` in `provision/<env>.yaml` → seed `packages.json` → guest `qctl init`
 (appliance + init-tank). `pipx` is installed on the guest only when `packages.pipx` is
 non-empty.
 Day-2 Podman secrets: `qctl secret sync`. `/usr/local/bin/quadlet` is installed by
@@ -153,10 +152,11 @@ Day-2 Podman secrets: `qctl secret sync`. `/usr/local/bin/quadlet` is installed 
 1. **Path A:** `/vw` already has CLI vault data → Tier-0 unlocks offline → `tank-import` re-seeds tank key file if missing → import/mount (VW need not be up). Keep the `/vw` disk across OS rebuilds.
 2. **Path B:** empty `/vw` → login+sync to a **reachable** VW → then same.
 
-**Reboot (normal):** `zfs-import*` imports the pool; **`zfs-mount-generator`** emits
-`zfs-load-key@tank.service` from `/etc/zfs/zfs-list.cache/tank` (needs `zfs-zed`), then mounts.
-Key file: `file:///etc/credstore/rocky/tank_passphrase`. Vendor `zfs-load-key.service` is a
-`/dev/null` stub — do not unmask it; there is no real unit underneath.
+**Reboot (normal):** `zfs-import*` imports pools; **`zfs-mount-generator`** emits
+`zfs-load-key@<poolId>.service` from `/etc/zfs/zfs-list.cache/<poolId>` (needs `zfs-zed`),
+then mounts. Key file: `file:///etc/credstore/rocky/tank_passphrase_<poolId>`. Vendor
+`zfs-load-key.service` is a `/dev/null` stub — do not unmask it; there is no real unit
+underneath.
 
 **Export/import drill (`zfs-drill` stage):** `zpool export` → import → unlock → verify `/tank/.rocky-canary`. Skip with `ROCKY_SKIP_ZFS_DRILL=1`.
 
@@ -170,8 +170,7 @@ cloud-init installs the guest tooling from the NoCloud ISO (`lib/install-qctl-gu
 `varlock-local-encrypt` (SEA sibling for disk cache; no varlock CLI) under
 `/usr/local/lib/qctl/`. Instance `# @plugin` packages resolve from the repo
 `node_modules` (install via `qctl plugins ensure` / graph load), installs packages,
-enables linger for `apps`, installs OpenZFS, runs `install-packages.sh` (Mercurial via
-pipx when `repo.vcs: hg` on appliance), enables
+enables linger for `apps`, installs OpenZFS, enables
 `rocky-tier0-seal` + `rocky-first-boot`, then **`wait-qctl-init.sh`** runs
 `systemctl start rocky-first-boot` (plain start — oneshot already waits for ExecStart;
 do not use `start --wait` with `RemainAfterExit=yes` or cloud-final hangs forever) and
@@ -182,11 +181,12 @@ skip the gate: once the unit is enabled, every boot waits for the stamp until it
 The unit runs **`qctl init`** (stages live in `qctl-guest`):
 
 ```
-network-up → host-baseline (+/vw) → tier0-seal → ssh-host-keys → admin-user
+network-up → host-baseline → data-mounts → tier0-seal → ssh-host-keys → admin-user
 → start-services → registry-login → tank-import → zfs-drill → hg-clone → ready-stamp
 ```
 
-`vm init-tank` runs `qctl init --profile init-tank` (`vw-mount → tank-create → poweroff`).
+`vm init-tank` runs `qctl init --profile init-tank`
+(`tier0-seal → data-mounts → tank-create → poweroff`).
 Resume after a failure with `qctl init --from <stage>`; preview with `qctl init --dry-run`.
 `rocky-tier0-seal.service` stays a separate unit (it must seal credentials *before*
 `LoadCredentialEncrypted=` on the init unit loads them) and calls

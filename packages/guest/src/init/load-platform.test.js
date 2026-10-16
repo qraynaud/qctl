@@ -1,11 +1,16 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { packagesMapWithRequired } from '@qctl/shared'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { loadPlatformModule } from './load-platform.js'
 import { PLATFORM_MODULE_NAME } from './platform.js'
 import { afterEach, describe, expect, test } from 'bun:test'
+
+const stubPackages = packagesMapWithRequired(
+  Object.fromEntries(['curl', 'jq', 'unzip', 'zfs'].map((c) => [c, { distro: [c] }])),
+)
 
 /** @type {string[]} */
 const temps = []
@@ -26,7 +31,7 @@ describe('loadPlatformModule', () => {
       path,
       `export const platform = {
   id: 'test-plat',
-  packages: { curl: { distro: ['curl'] } },
+  packages: ${JSON.stringify(stubPackages)},
   async installPackages() {},
 }
 export default platform

@@ -1,10 +1,15 @@
 /**
  * VM config: `provision/<env>.yaml` (+ `<env>.<target>.yaml`) via
  * `@qctl/shared` `loadProvision` (`!env` from process.env /
- * `provision/.env.<env>` via loadHostEnv), then zod-validated by the secrets
+ * `provision/.env.<env>` via loadHostEnv), then zod-validated by the provision
  * schema. Tier-0 credentials come from provision YAML
  * (`tank` / `admin` / `repo.deploy_key` / …) via `!env`. Optional extra
  * `@tag(guest)` keys are still sealed. Admin SSH pubkeys: `ssh.authorized_keys`.
+ *
+ * Prefer {@link loadEnvProvisionSafe} for soft paths; {@link loadEnvProvision}
+ * dies on failure. One successful env+target (+ instance root) per process
+ * lifetime (cached); failures are not cached. Call
+ * {@link clearEnvProvisionCache} in tests.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -14,18 +19,34 @@ import { chalk, path } from 'zx'
 import { loadHostGuestCredentials, loadProvision } from '@qctl/shared'
 
 import {
+  alignProxmoxNets,
+  collectDisksWarnings,
   firstBootCredentialsFromProvision,
-  parseSecretsFile,
-} from '../provision/secrets-schema/index.js'
+  parseProvisionOrThrow,
+} from '../provision/schema/index.js'
 import { getProvision, tryGetRepoRoot } from './paths.js'
 import { TARGETS } from './target.js'
 import { die } from './util.js'
 
 /** @import { YamlMapping } from '@qctl/shared' */
-/** @import { FirstBootCredentials } from '../provision/secrets-schema/first-boot.js' */
+/** @import { FirstBootCredentials } from '../provision/schema/first-boot.js' */
+/** @import { LoadedProvision, LoadEnvProvisionResult } from './load-config-types.js' */
 
 /** Preferred pubkey filenames (ed25519 first). */
 const SSH_PUB_CANDIDATES = ['id_ed25519.pub', 'id_rsa.pub']
+
+/**
+ * Single-flight cache: one env+target per process (commands never mix).
+ * @type {{ key: string, result: LoadEnvProvisionResult } | null}
+ */
+let provisionCache = null
+
+/**
+ * Drop the provision load cache (tests / rare re-load after mutating YAML).
+ */
+export function clearEnvProvisionCache() {
+  provisionCache = null
+}
 
 /**
  * @param {string} filePath
@@ -78,7 +99,6 @@ function fallbackSshAuthorizedKeys(provisionPaths) {
       if (keys.length) return { keys, source: fp }
     }
   }
-  // Prefer HOME so tests (and unusual shells) can redirect without touching the real home.
   const home = process.env.HOME?.trim() || homedir()
   const homeSsh = path.join(home, '.ssh')
   for (const name of SSH_PUB_CANDIDATES) {
@@ -90,22 +110,35 @@ function fallbackSshAuthorizedKeys(provisionPaths) {
 }
 
 /**
- * Load config for env (+ target overlay) from the instance `provision/`.
- * Throws on missing instance/file, unresolved `!env`, or schema errors.
- * Use {@link loadEnvSecrets} from command handlers to exit instead.
- *
- * @param {{ env?: string, target?: string }} [opts]
+ * @param {string} target
+ * @returns {"local" | "proxmox"}
  */
-export async function loadEnvSecretsOrThrow({ env = 'dev', target = 'local' } = {}) {
-  const e = env || 'dev'
-  const t = /** @type {"local" | "proxmox"} */ (
+function normalizeTarget(target) {
+  return /** @type {"local" | "proxmox"} */ (
     /** @type {readonly string[]} */ (TARGETS).includes(target) ? target : 'local'
   )
+}
 
+/**
+ * @param {string} e
+ * @param {"local" | "proxmox"} t
+ * @returns {string}
+ */
+function cacheKey(e, t) {
+  return `${e}\0${t}`
+}
+
+/**
+ * Uncached load (throws). Used only by {@link loadEnvProvisionSafe}.
+ * @param {{ env: string, target: "local" | "proxmox" }} opts
+ * @returns {Promise<LoadedProvision>}
+ */
+async function loadEnvProvisionUncached({ env: e, target: t }) {
   const root = tryGetRepoRoot()
   if (!root) {
     throw new Error(
-      `not inside a qctl instance repo (no provision/*.yaml with a qctl: block above ${process.cwd()})\n`
+      `not inside a qctl instance repo `
+        + `(no provision/*.yaml with a qctl: block above ${process.cwd()})\n`
         + '  Run `qctl init <dir>` to scaffold one, or cd into an existing instance.',
     )
   }
@@ -129,34 +162,13 @@ export async function loadEnvSecretsOrThrow({ env = 'dev', target = 'local' } = 
     throw err
   }
 
-  /** @type {string | null} */
-  let platform = null
-  const qctl = raw.qctl
-  if (qctl && typeof qctl === 'object' && !Array.isArray(qctl)) {
-    const q = /** @type {YamlMapping} */ (qctl)
-    if (typeof q.platform === 'string' && q.platform.trim()) {
-      platform = q.platform.trim()
-    } else if (
-      q.tooling
-      && typeof q.tooling === 'object'
-      && !Array.isArray(q.tooling)
-      && typeof (/** @type {YamlMapping} */ (q.tooling).platform) === 'string'
-    ) {
-      // Legacy `qctl.tooling.platform: rocky@x.y.z` — prefer new `qctl.platform`.
-      platform = String(/** @type {YamlMapping} */ (q.tooling).platform).trim()
-      console.warn(
-        chalk.yellow(
-          'vm: qctl.tooling.platform is deprecated; use qctl.platform'
-            + ' (e.g. platform: rocky or github:owner/repo)',
-        ),
-      )
-    }
-    delete raw.qctl
-  }
-
   const sourceLabel = paths.map((p) => path.basename(p)).join(' + ')
-  const parsed = parseSecretsFile(raw, sourceLabel)
-  const { data, ports, uplinks, vlans, nets, local, proxmox, packages, files } = parsed
+  const data = parseProvisionOrThrow(raw, sourceLabel)
+  for (const w of collectDisksWarnings(data.disks, { env: e })) {
+    console.warn(chalk.yellow(`vm: ${w}`))
+  }
+  const { ports, uplinks, vlans } = data.networking
+  const nets = alignProxmoxNets(uplinks, data.proxmox?.net)
 
   /** @type {string[]} */
   let sshList = collectSshAuthorizedKeys(data.ssh?.authorized_keys)
@@ -170,47 +182,91 @@ export async function loadEnvSecretsOrThrow({ env = 'dev', target = 'local' } = 
     }
   }
 
-  // First-boot secrets from provision YAML (!env-resolved) + optional @tag(guest) extras.
   const fromProvision = firstBootCredentialsFromProvision(data)
   const fromGuestTag = await loadHostGuestCredentials(root, processEnv)
-  /** @type {FirstBootCredentials & Record<string, string | Buffer>} */
+  /** @type {FirstBootCredentials} */
   const guest = { ...fromGuestTag, ...fromProvision }
 
   return {
     env: e,
     target: t,
-    /** Directory of provision YAML (for logs / seed context). */
     provisionDir: getProvision(),
     path: paths.join(' + '),
     paths,
     data,
-    /** From `qctl.platform` (stripped from `data`); short name or github:owner/repo. */
-    platform,
+    platform: data.qctl.platform,
     sshAuthorizedKeys: sshList.length ? `${sshList.join('\n')}\n` : '',
-    /** Tier-0 pending: provision first-boot slots + optional `@tag(guest)` extras. */
     guest,
-    local,
-    proxmox,
+    local: data.local,
+    proxmox: data.proxmox,
     nets,
     networking: data.networking || null,
     ports,
     uplinks,
     vlans,
-    /** Normalized `packages.{distro,pipx,http}` (VCS mercurial applied at appliance seed). */
-    packages: packages ?? { distro: [], pipx: [], http: [] },
-    /** Normalized `files:` → cloud-init write_files (VCS hgrc applied at appliance seed). */
-    files: files ?? [],
+    packages: data.packages,
+    files: data.files,
   }
 }
 
 /**
- * Same as {@link loadEnvSecretsOrThrow} but prints the error and exits 1.
- * @param {Parameters<typeof loadEnvSecretsOrThrow>[0]} [opts]
+ * Soft load: never throws for provision/schema errors.
+ * Caches the first successful env+target (+ instance root); repeating the same
+ * key returns cache; a different key throws (commands do not mix envs).
+ * Failures are not cached — they are often cwd / missing-instance transients
+ * (poisoning later loads in the same process, e.g. bun test workers).
+ *
+ * @param {{ env?: string, target?: string }} [opts]
+ * @returns {Promise<LoadEnvProvisionResult>}
  */
-export async function loadEnvSecrets(opts) {
-  try {
-    return await loadEnvSecretsOrThrow(opts)
-  } catch (err) {
-    return die(err instanceof Error ? err.message : String(err))
+export async function loadEnvProvisionSafe({ env = 'dev', target = 'local' } = {}) {
+  const e = env || 'dev'
+  const t = normalizeTarget(target || 'local')
+  const root = tryGetRepoRoot()
+  const key = `${root ?? ''}\0${cacheKey(e, t)}`
+
+  if (provisionCache) {
+    if (provisionCache.key === key) return provisionCache.result
+    const parts = provisionCache.key.split('\0')
+    const cachedEnv = parts[1] ?? '?'
+    const cachedTarget = parts[2] ?? '?'
+    throw new Error(
+      `loadEnvProvisionSafe: already loaded env=${cachedEnv} target=${cachedTarget}; `
+        + `refusing env=${e} target=${t} (clearEnvProvisionCache in tests if needed)`,
+    )
   }
+
+  try {
+    const provision = await loadEnvProvisionUncached({ env: e, target: t })
+    const result = /** @type {const} */ ({ ok: true, provision })
+    provisionCache = { key, result }
+    return result
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
+
+/**
+ * Load config for env (+ target overlay). Throws on failure.
+ * @param {{ env?: string, target?: string }} [opts]
+ * @returns {Promise<LoadedProvision>}
+ */
+export async function loadEnvProvisionOrThrow(opts = {}) {
+  const r = await loadEnvProvisionSafe(opts)
+  if (!r.ok) throw new Error(r.error)
+  return r.provision
+}
+
+/**
+ * Same as {@link loadEnvProvisionOrThrow} but prints the error and exits 1.
+ * @param {{ env?: string, target?: string }} [opts]
+ * @returns {Promise<LoadedProvision>}
+ */
+export async function loadEnvProvision(opts = {}) {
+  const r = await loadEnvProvisionSafe(opts)
+  if (!r.ok) return die(r.error)
+  return r.provision
 }

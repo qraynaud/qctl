@@ -22,22 +22,21 @@ describe('disk-holder', () => {
 
   test('emptyDiskState and diskStateFromConfig parse serials', () => {
     const empty = emptyDiskState(100)
-    expect(empty.vw).toBeNull()
-    expect(empty.data.every((d) => d == null)).toBe(true)
+    expect(empty.volids).toEqual({})
 
     const state = diskStateFromConfig(
       {
         scsi0: 'local-lvm:vm-100-disk-0',
-        scsi1: 'local-lvm:vm-100-disk-1,serial=rocky-vw',
+        scsi1: 'local-lvm:vm-100-disk-1,serial=vw',
         scsi2: 'local-lvm:vm-100-disk-2,serial=rocky-data0',
         scsi3: 'local-lvm:vm-100-disk-3,serial=rocky-special0',
         ide2: 'local:iso/seed.iso,media=cdrom',
       },
       100,
     )
-    expect(state.vw).toBe('local-lvm:vm-100-disk-1')
-    expect(state.data[0]).toBe('local-lvm:vm-100-disk-2')
-    expect(state.special[0]).toBe('local-lvm:vm-100-disk-3')
+    expect(state.volids.vw).toBe('local-lvm:vm-100-disk-1')
+    expect(state.volids['rocky-data0']).toBe('local-lvm:vm-100-disk-2')
+    expect(state.volids['rocky-special0']).toBe('local-lvm:vm-100-disk-3')
   })
 
   test('assertNameFreeForCreate dies when name exists', async () => {

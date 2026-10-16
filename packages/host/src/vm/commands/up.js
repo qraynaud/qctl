@@ -1,6 +1,6 @@
 import { chalk } from 'zx'
 
-import { sharedBoot, sharedDryRun, sharedPasstPorts } from '../../lib/options.js'
+import { sharedBoot, sharedDryRun } from '../../lib/options.js'
 import { loadDriver } from '../drivers/index.js'
 
 /** @import { Argv } from 'yargs' */
@@ -15,11 +15,12 @@ export const describe =
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedDryRun(sharedPasstPorts(sharedBoot(yargs)))
+  return sharedDryRun(sharedBoot(yargs))
     .option('wipe-os', {
       type: 'boolean',
       default: false,
-      describe: 'Undefine domain + recreate OS overlay (keep /vw + tank vdevs), then virt-install',
+      describe:
+        'Recreate disks.os only (undefine + fresh OS overlay); leave data + tank members untouched',
     })
     .option('force-download', {
       type: 'boolean',

@@ -45,7 +45,7 @@ function getNjk() {
       commentEnd: '#]',
     },
   })
-  /** list | named('ssh') → entry with that name, or null */
+  /** list | named('ssh') → entry with that name, or null (legacy array-of-{name} shape) */
   env.addFilter('named', (/** @type {YamlValue} */ list, /** @type {string} */ name) => {
     if (!Array.isArray(list)) return null
     return (

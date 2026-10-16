@@ -1,6 +1,8 @@
 import {
   GITIGNORE,
+  PROVISION_DEV_YAML,
   PROVISION_ENV_SCHEMA,
+  PROVISION_README,
   ROOT_ENV_DEV,
   packageReadme,
   treeEnvSchema,
@@ -11,7 +13,20 @@ describe('scaffold templates', () => {
   test('static scaffolds include expected anchors', () => {
     expect(GITIGNORE).toContain('.env.local')
     expect(PROVISION_ENV_SCHEMA).toContain('TANK_PASSPHRASE=')
+    expect(PROVISION_ENV_SCHEMA).toContain('tank_passphrase_<id>')
     expect(ROOT_ENV_DEV).toContain('ENV=dev')
+  })
+
+  test('provision scaffold uses disks topology (no top-level tank)', () => {
+    expect(PROVISION_DEV_YAML).toMatch(/^disks:/m)
+    expect(PROVISION_DEV_YAML).toContain('tanks:')
+    expect(PROVISION_DEV_YAML).toContain('role: data')
+    expect(PROVISION_DEV_YAML).toContain('role: special')
+    expect(PROVISION_DEV_YAML).toContain('passphrase: !env TANK_PASSPHRASE')
+    expect(PROVISION_DEV_YAML).not.toMatch(/^tank:/m)
+    expect(PROVISION_README).toContain('disks.tanks')
+    expect(PROVISION_README).toContain('init-tank')
+    expect(PROVISION_README).not.toMatch(/`tank`/)
   })
 
   test('treeEnvSchema imports root and package-local files', () => {

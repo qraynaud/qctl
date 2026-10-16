@@ -3,7 +3,7 @@
  */
 import { chalk } from 'zx'
 
-import { loadEnvSecretsOrThrow } from '../lib/load-config.js'
+import { loadEnvProvisionOrThrow } from '../lib/load-config.js'
 import { tryGetRepoRoot } from '../lib/paths.js'
 import { errMessage } from '../lib/util.js'
 import { parsePlatformRef } from '../tooling/platform-ref.js'
@@ -46,7 +46,7 @@ export async function runSync(argv) {
         try {
           let platformModule = parsePlatformRef('rocky').moduleFile
           try {
-            const sec = await loadEnvSecretsOrThrow({
+            const sec = await loadEnvProvisionOrThrow({
               env: argv.env || 'dev',
               target: argv.target || 'local',
             })

@@ -38,8 +38,12 @@ Skip secrets (`.env`, credentials) and dirty files that are **not** part of the 
 
 Each commit must leave the tree working:
 
-- Prefer small commits (one concern). Do not split a single feature across commits
-  if that would leave it half-wired — one larger commit is better.
+- Each different feature should be in a dedicated branch
+- Prefer small commits (one concern = one branch = one commit). Do not split a single feature across commits
+  whenever possible.
+- If a commit is too big to be in a single commit, you can stack commits in the feature branch
+- Each commit should pass the preflight tests above
+- If a feature depends on another, you can put a branch below another in the commit tree
 - Larger is fine when a split would break build, types, or runtime.
 - No half-wired imports or “fixed in the next commit” breakage.
 
@@ -80,6 +84,13 @@ git add path/a path/b
 git commit -m "$(cat <<'EOF'
 feat: short why-focused subject
 
+optional description
 EOF
 )"
 ```
+
+### End
+
+Once you are done, give the list of branches you created with what feature they ship
+in a correct merging order (so branch at the same history level can be in whatever order
+but branches below another must be after it in your summary).

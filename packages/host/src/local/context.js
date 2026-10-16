@@ -4,15 +4,14 @@ import { findInstanceRoot, loadProvision } from '@qctl/shared'
 
 import { portsFromArgv } from '../lib/options.js'
 import { which } from '../lib/util.js'
-import { appsIdentityFromProvision, parseSecretsFile } from '../provision/secrets-schema/index.js'
+import { appsIdentityFromProvision, parseProvisionOrThrow } from '../provision/schema/index.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { localContainerName, localTestContainerName } from './name.js'
 import { localPublishPodmanArgs } from './ports-publish.js'
 import { localApplianceUidMapArgs } from './uidmap.js'
 import { die } from './util.js'
 
-/** @import { YamlMapping } from '@qctl/shared' */
-/** @import { PortEntry } from '../vm/types.js' */
+/** @import { PortsMap } from '../vm/types.js' */
 
 /**
  * @typedef {object} LocalContext
@@ -28,7 +27,7 @@ import { die } from './util.js'
  * @property {string} platformModulePath
  * @property {string} platformBasename
  * @property {string} image
- * @property {PortEntry[]} ports
+ * @property {PortsMap} ports
  * @property {string[]} publishArgs
  * @property {string[]} uidMapArgs
  */
@@ -60,15 +59,8 @@ export async function createLocalContext(argv, opts = {}) {
     target: 'local',
     processEnv: { ...process.env, QCTL_ENV: env },
   })
-  const qctlBlock = /** @type {YamlMapping | undefined} */ (
-    /** @type {YamlMapping} */ (loaded.data).qctl
-  )
-  const platformFromProvision =
-    qctlBlock && typeof qctlBlock.platform === 'string' ? qctlBlock.platform.trim() : ''
-  const raw = /** @type {YamlMapping} */ ({ ...loaded.data })
-  delete raw.qctl
-  const parsed = parseSecretsFile(raw, loaded.basePath)
-  const apps = appsIdentityFromProvision(parsed.data)
+  const data = parseProvisionOrThrow(loaded.data, loaded.basePath)
+  const apps = appsIdentityFromProvision(data)
   const appsUsername = apps.username
   const appsUid = apps.uid
   const appsGid = apps.gid
@@ -80,8 +72,8 @@ export async function createLocalContext(argv, opts = {}) {
     target: 'local',
     required: true,
     quiet: true,
-    // Avoid loadEnvSecrets (ssh.authorized_keys warning) — we already have provision.
-    platform: platformFromProvision || 'rocky',
+    // Avoid loadEnvProvision (ssh.authorized_keys warning) — we already have provision.
+    platform: data.qctl.platform,
   })
   if (!tooling) {
     die('failed to resolve qctl-guest / platform module')

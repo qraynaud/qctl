@@ -1,16 +1,15 @@
 /**
  * Host-side seed profile helpers (packages + VCS defaults).
  */
-import { applyVcsFileDefaults } from '../../../provision/secrets-schema/files.js'
-import { applyVcsPackageDefaults } from '../../../provision/secrets-schema/packages.js'
+import { applyVcsFileDefaults } from '../../../provision/schema/files.js'
+import { applyVcsPackageDefaults } from '../../../provision/schema/packages.js'
 
-/** @import { loadEnvSecrets } from '../../../lib/load-config.js' */
-/** @import { GuestFile } from '../../../provision/secrets-schema/files.js' */
-/** @import { NormalizedPackages } from '../../../provision/secrets-schema/packages.js' */
+/** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
+/** @import { GuestFile } from '../../../provision/schema/files.js' */
+/** @import { NormalizedPackages } from '../../../provision/schema/packages.js' */
 /** @import { SeedProfile as VmSeedProfile } from '../../types.js' */
 
 /** @typedef {VmSeedProfile} SeedProfile */
-/** @typedef {Awaited<ReturnType<typeof loadEnvSecrets>>} LoadedSecrets */
 
 /** Profile templates (paths resolved per env via resolveSeedPaths). */
 export const SEED_PROFILES = {
@@ -58,9 +57,9 @@ export function filesForSeedProfile(profileName, files, vcs) {
 }
 
 /**
- * @param {LoadedSecrets} sec
+ * @param {LoadedProvision} sec
  * @param {SeedProfile | string} profileName
- * @returns {LoadedSecrets}
+ * @returns {LoadedProvision}
  */
 export function applySeedProfileDefaults(sec, profileName) {
   const vcs = sec.data?.repo?.vcs === 'hg' ? 'hg' : 'git'

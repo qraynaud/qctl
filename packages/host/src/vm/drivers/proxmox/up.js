@@ -1,9 +1,13 @@
 import { chalk, fs } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
-import { assertProxmoxDiskPlan } from '../../../lib/target.js'
 import { die } from '../../../lib/util.js'
 import { IMAGE } from '../../commands/download.js'
+import {
+  attachSpecsFromMembers,
+  persistentDiskIds,
+  summarizeAttachModes,
+  withAttachModes,
+} from '../../libs/attach-mode.js'
 import { classifyCloudInitOutcome, classifyRebootReady } from '../../libs/console.js'
 import {
   assertNameFreeForCreate,
@@ -16,11 +20,13 @@ import {
   createAndStartRockyVm,
   destroyRockyVm,
   detachAndDeleteSeedIso,
+  disksWithReuseVolids,
   ensureCloudImageImport,
   reconcileRockyAppliance,
   restoreProxmoxDisplay,
   uploadSeedIso,
 } from '../../libs/proxmox/vm.js'
+import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { runSeed } from '../../libs/seed/run.js'
 import { runVmUp } from '../../libs/up-pipeline.js'
 import { clientFrom, ping } from './shared.js'
@@ -57,17 +63,21 @@ async function printSshHint() {
 async function proxmoxDryRun(argv) {
   const { name, env, wipeOs, timeout, noConsole } = argv
   const timeoutSec = timeout || 2700
+  const resolved = await resolveProvisionDisks({
+    env: env || 'dev',
+    target: argv.target || 'proxmox',
+  })
   console.log(
     chalk.green(
       `vm: dry-run Proxmox up name=${name} env=${env} `
-        + `(OS + /vw + data×${DATA_COUNT} + special×${SPECIAL_COUNT}`
+        + `(${summarizeAttachModes(withAttachModes(resolved.members))}`
         + `${wipeOs ? '; wipe-os' : ''})`,
     ),
   )
   console.log(chalk.dim('  would: appliance seed ISO, ensure image'))
   console.log(
     chalk.dim(
-      `  if VM exists → reconcile+start; else if holder with rocky-vw → promote; `
+      `  if VM exists → reconcile+start; else if holder with persistent disks → promote; `
         + `else create only when name and ${holderVmName(name)} are both free`,
     ),
   )
@@ -100,8 +110,8 @@ async function startProxmoxVm(client, vmid, name) {
  */
 function proxmoxBackend() {
   return {
-    assertReady: (argv) => {
-      assertProxmoxDiskPlan({ target: argv.target || 'proxmox', env: argv.env })
+    assertReady: async () => {
+      /* attach-mode enforced at create/reconcile */
     },
 
     dryRun: (argv) => proxmoxDryRun(argv),
@@ -115,15 +125,17 @@ function proxmoxBackend() {
     },
 
     reconcile: async (argv, existing) => {
-      const { memory, vcpus, vwSize, dataSize, specialSize } = argv
+      const { memory, vcpus, env } = argv
+      const resolved = await resolveProvisionDisks({
+        env: env || 'dev',
+        target: argv.target || 'proxmox',
+      })
       await reconcileRockyAppliance(existing.client, {
         vmid: existing.vmid,
         name: existing.name,
         memory,
         vcpus,
-        vwSize,
-        dataSize,
-        specialSize,
+        disks: attachSpecsFromMembers(resolved.members),
       })
     },
 
@@ -153,21 +165,17 @@ function proxmoxBackend() {
       `vm: VM ${existing.name} left running for diagnosis (serial display kept)`,
 
     createFirstBoot: async (argv, _signal, _opts) => {
-      const {
-        name,
-        memory,
-        vcpus,
-        vwSize,
-        dataSize,
-        specialSize,
-        wipeOs,
-        forceDownload,
-        env,
-        cidata,
-      } = argv
+      const { name, memory, vcpus, wipeOs, forceDownload, env, cidata } = argv
 
       const client = await ping(argv)
       let vmid = await client.findVmidByName(name)
+      const resolved = await resolveProvisionDisks({
+        env: env || 'dev',
+        target: argv.target || 'proxmox',
+      })
+      const expectedIds = persistentDiskIds(resolved.members)
+      const osSize = resolved.os.size || '20G'
+      const diskSpecs = attachSpecsFromMembers(resolved.members)
 
       console.log(chalk.cyan('vm: building appliance seed…'))
       const seedResult = await runSeed({
@@ -199,7 +207,9 @@ function proxmoxBackend() {
       })
 
       const held = await loadDisksFromHolder(client, name)
-      if (held?.vw) {
+      const holderReady =
+        held && expectedIds.length > 0 && expectedIds.every((id) => held.volids[id])
+      if (holderReady) {
         const clash = await client.findVmidByName(name)
         if (clash != null) {
           die(`cannot promote ${holderVmName(name)}: VM ${name} already exists (vmid=${clash})`)
@@ -211,12 +221,14 @@ function proxmoxBackend() {
           vcpus,
           importVolid,
           isoVolid,
+          osSize,
+          expectedIds,
         }))
       } else {
         await assertNameFreeForCreate(client, name)
         console.log(
           chalk.cyan(
-            `vm: no holder ${holderVmName(name)} — creating fresh VM `
+            `vm: no complete holder ${holderVmName(name)} — creating fresh VM `
               + `(tank not initialized; run init-tank or create by hand)`,
           ),
         )
@@ -224,11 +236,10 @@ function proxmoxBackend() {
           name,
           memory,
           vcpus,
-          vwSize,
-          dataSize,
-          specialSize,
           importVolid,
           isoVolid,
+          osSize,
+          disks: disksWithReuseVolids(diskSpecs, held),
         }))
       }
 

@@ -12,7 +12,7 @@ module.exports = {
   expandHomePath: parse.expandHomePath,
   resolveVwAccountId: parse.resolveVwAccountId,
   formatVwAccountId: parse.formatVwAccountId,
-  parseVwArgs: parse.parseVwArgs,
+  vwArgsSchema: parse.vwArgsSchema,
   INIT_VW_KEYS: parse.INIT_VW_KEYS,
   parseInitVwArgKeys: parse.parseInitVwArgKeys,
   parseInitVwArgs: parse.parseInitVwArgs,

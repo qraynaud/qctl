@@ -3,8 +3,8 @@ import { path } from 'zx'
 
 import { isEmptyCredential } from '@qctl/shared'
 
-import { loadEnvSecrets } from '../../../lib/load-config.js'
-import { errMessage } from '../../../lib/util.js'
+import { loadEnvProvisionSafe } from '../../../lib/load-config.js'
+import { tankPassphraseCredName } from '../../../provision/schema/first-boot.js'
 import { createCheckReport } from '../../libs/check-report.js'
 import { createProxmoxClient } from '../../libs/proxmox/client.js'
 import { formatNetsLabel, tryLoadProxmoxConfig } from '../../libs/proxmox/config.js'
@@ -49,7 +49,7 @@ export async function check(argv) {
   const report = createCheckReport('proxmox')
   const envName = String(argv.env || 'dev')
 
-  report.section('Secrets / API config')
+  report.section('Provision / API config')
   const { config, errors, usable } = await tryLoadProxmoxConfig({ env: envName })
   for (const e of errors) report.fail(e)
   if (config) {
@@ -64,38 +64,43 @@ export async function check(argv) {
   }
 
   report.section(`Seed config (provision/, env=${envName}, target=proxmox)`)
-  let secrets
-  try {
-    secrets = await loadEnvSecrets({ env: envName, target: 'proxmox' })
-  } catch (err) {
-    report.fail(errMessage(err))
-    secrets = null
-  }
-  if (secrets) {
-    report.ok(`loaded ${secrets.paths.map((p) => path.basename(p)).join(' + ')}`)
+  const loaded = await loadEnvProvisionSafe({ env: envName, target: 'proxmox' })
+  if (!loaded.ok) {
+    report.fail(loaded.error)
+  } else {
+    const { provision } = loaded
+    report.ok(`loaded ${provision.paths.map((p) => path.basename(p)).join(' + ')}`)
 
-    if (secrets.sshAuthorizedKeys) report.ok('admin SSH key present')
+    if (provision.sshAuthorizedKeys) report.ok('admin SSH key present')
     else report.warn('no ssh.authorized_keys in provision/ and no ~/.ssh id_*.pub — seed will fail')
 
-    const tier0Missing = [
-      isEmptyCredential(secrets.guest?.TANK_PASSPHRASE) && 'TANK_PASSPHRASE',
-    ].filter(Boolean)
-    if (tier0Missing.length === 0) report.ok('first-boot Tier-0 (TANK_PASSPHRASE) present')
-    else {
+    /** @type {string[]} */
+    const expectedTankPass = []
+    for (const tank of Object.values(provision.data.disks?.tanks || {})) {
+      if (tank.passphrase) expectedTankPass.push(tankPassphraseCredName(tank.id))
+    }
+    const tier0Missing = expectedTankPass.filter((k) => isEmptyCredential(provision.guest?.[k]))
+    if (expectedTankPass.length === 0) {
+      report.ok('first-boot Tier-0: no encrypted tanks')
+    } else if (tier0Missing.length === 0) {
+      report.ok(`first-boot Tier-0 (${expectedTankPass.join(', ')}) present`)
+    } else {
       report.warn(
-        `missing first-boot Tier-0 ${tier0Missing.join(', ')} — set provision tank.passphrase (!env)`,
+        `missing first-boot Tier-0 ${tier0Missing.join(', ')} — set disks.tanks.*.passphrase (!env)`,
       )
     }
   }
 
   if (argv.env === 'prod') {
     report.section('Environment')
-    report.warn('--env prod physical disk mapping is TODO; prefer --env dev for virtual disks')
+    report.ok(
+      'attach-mode: omit disks.*.size for physical (by-id / holder serial); set size for virtual',
+    )
   }
 
   report.section('API connectivity')
   if (!usable || !config) {
-    report.fail('skipped API checks — fix Proxmox secrets above')
+    report.fail('skipped API checks — fix Proxmox provision above')
   } else {
     const client = createProxmoxClient(/** @type {ProxmoxConfig} */ (config))
     const ver = await client.softGet('/version')
@@ -225,8 +230,8 @@ export async function check(argv) {
   }
 
   report.section('Create path')
-  report.ok('init-tank + up (dev): holder <name>-disks via rename/promote (disks stay attached)')
-  report.warn('--env prod physical disk mapping still TODO')
+  report.ok('init-tank + up: holder <name>-disks via rename/promote (disks stay attached)')
+  report.ok('disk topology from provision disks: + platform defaults (attach-mode)')
 
   report.finish()
 }

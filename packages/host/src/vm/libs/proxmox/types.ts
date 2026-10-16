@@ -1,33 +1,38 @@
 /**
  * Proxmox API / VM lifecycle types.
+ * Provision-shaped fields are derived from Zod schemas (see provision/schema/types).
  */
+import type {
+  AlignedProxmoxNet,
+  ProxmoxNetEntry,
+  ProxmoxTarget,
+} from '../../../provision/schema/types.js'
 
-export type ProxmoxNet = {
-  bridge: string
-  model?: string
-  vlan?: number | null
-  trunks?: number[] | null
-  mac?: string | null
-  firewall?: boolean | number | string | null
-  tag?: number | null
-}
+export type { AlignedProxmoxNet, ProxmoxNetEntry, ProxmoxTarget }
 
+/** Provision net entry (aligned rows may include uplink `name`). */
+export type ProxmoxNet = ProxmoxNetEntry & { name?: string }
+
+/**
+ * Runtime client config from {@link loadProxmoxConfig}.
+ * API credentials are load-time required strings; NIC / vmid shapes follow provision schemas.
+ */
 export type ProxmoxConfig = {
   apiUrl: string
   apiToken: string
   node: string
   storage: string
   imageStorage?: string
-  vmid?: number | null
-  nets: ProxmoxNet[]
+  vmid?: NonNullable<ProxmoxTarget['vmid']>
+  nets: AlignedProxmoxNet[]
   /** Present on loadProxmoxConfig / tryLoad results (diagnostics). */
   provisionDir?: string
   env?: string
-  secretsPath?: string
-  bridge?: string
-  vlan?: number | null
-  trunks?: number[] | null
-  mac?: string | null
+  provisionPath?: string
+  bridge?: ProxmoxNetEntry['bridge']
+  vlan?: NonNullable<ProxmoxNetEntry['vlan']>
+  trunks?: NonNullable<ProxmoxNetEntry['trunks']>
+  mac?: NonNullable<ProxmoxNetEntry['mac']>
 }
 
 export type RequestOpts = {
@@ -42,32 +47,43 @@ export type SoftResult = { ok: true; data: unknown } | { ok: false; error: strin
 /** QEMU config / create form — disk keys are dynamic (`scsiN`, …). */
 export type QemuConfig = Record<string, string | number | boolean | undefined | null>
 
+/** serial → volid for persistent (non-OS) disks on a VM/holder. */
 export type DiskState = {
-  vw: string | null
-  data: (string | null)[]
-  special: (string | null)[]
+  volids: Record<string, string>
   vmid?: number
+}
+
+/** One non-OS disk to attach at create/reconcile time. */
+export type AttachDiskSpec = {
+  id: string
+  mode: 'virtual' | 'physical'
+  size?: string
+  kind: 'data' | 'tank'
+  /** Reuse existing volid (holder promote / reconcile). */
+  volid?: string | null
 }
 
 export type CreateRockyVmOpts = {
   name: string
   memory: number
   vcpus: number
-  vwSize: string
-  dataSize: string
-  specialSize: string
   importVolid: string
   isoVolid: string
-  vwVolid?: string | null
-  dataVolids?: (string | null)[] | null
-  specialVolids?: (string | null)[] | null
+  /** OS import size (default 20G). */
+  osSize?: string
+  /** Non-OS disks in attach order. */
+  disks: AttachDiskSpec[]
   vmid?: number | null
+  /** Required persistent serials when promoting a holder. */
+  expectedIds?: string[]
 }
 
 export type DestroyRockyVmOpts = {
   vmid: number
   name?: string
   keep?: 'none' | 'vw' | 'persistent'
+  /** When keep=vw, wipe these tank member serials (leave data volumes). */
+  tankIds?: string[]
 }
 
 export type QemuListEntry = {

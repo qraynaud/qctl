@@ -22,7 +22,9 @@ describe('console helpers', () => {
 
   test('matchInitTankFatal detects fatal patterns', () => {
     expect(matchInitTankFatal('rocky-init-tank: ERROR: boom')).toMatch(/ERROR/)
-    expect(matchInitTankFatal('qctl init: stage vw-mount: no /vw disk')).toMatch(/vw-mount/)
+    expect(matchInitTankFatal('qctl init: stage data-mounts: no disk with serial "vw"')).toMatch(
+      /data-mounts/,
+    )
     expect(matchInitTankFatal('qctl init: stage tier0-seal: missing pending')).toMatch(/tier0-seal/)
     expect(matchInitTankFatal('stage tank-create: refusing to create')).toMatch(/tank-create/)
     expect(matchInitTankFatal('harmless line')).toBeNull()

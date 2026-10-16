@@ -15,8 +15,8 @@ export async function destroy(argv) {
     console.log(
       chalk.dim(
         `vm: would destroy Proxmox VM ${argv.name}`
-          + (argv.keepData
-            ? ' (keep-data → demote to holder)'
+          + (argv.keepPersistent
+            ? ' (keep-persistent → demote to holder)'
             : ' + holder <name>-disks (full wipe)'),
       ),
     )
@@ -28,11 +28,11 @@ export async function destroy(argv) {
     await destroyRockyVm(client, {
       vmid,
       name: argv.name,
-      keep: argv.keepData ? 'persistent' : 'none',
+      keep: argv.keepPersistent ? 'persistent' : 'none',
     })
   } else {
     console.log(chalk.dim(`vm: Proxmox VM ${argv.name} not defined`))
     // Still wipe holder on full destroy (e.g. after init-tank only).
-    if (!argv.keepData) await destroyHolder(client, argv.name)
+    if (!argv.keepPersistent) await destroyHolder(client, argv.name)
   }
 }

@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.5.1'
+export const QCTL_VERSION = '0.6.0-pre'
 
 /**
  * @param {never} value
@@ -17,8 +17,35 @@ export {
   instanceBootstrapDir,
   resolveBootstrapDir,
 } from './bootstrap.js'
+export {
+  DEFAULT_TANK_OPTIONS,
+  DISK_VDEV_MIN_MEMBERS,
+  DISK_VDEV_ROLES,
+  DISK_VDEV_TYPES,
+} from './disks/constants.js'
+export {
+  disksJsonDataVolumeSchema,
+  disksJsonMemberSchema,
+  disksJsonOsSchema,
+  disksJsonSchema,
+  disksJsonTankMemberSchema,
+  disksJsonTankSchema,
+  disksJsonVdevSchema,
+  disksPackageHints,
+} from './disks/disks-json.js'
+export { tankOptionsSchema } from './disks/tank-options.js'
+export { tankPassphraseCredName } from './disks/tank-passphrase.js'
+export {
+  VDEV_ROLE_REGISTRY,
+  vdevGeometryArgv,
+  vdevRoleArgv,
+  vdevTypeGeometry,
+  zfsAcltype,
+} from './disks/vdev-registry.js'
+export { buildZpoolCreateArgv } from './disks/zpool-create.js'
 export { findInstanceRoot, hasQctlProvision, isInstanceRoot } from './instance.js'
 export { deepMerge, isYamlMapping } from './merge.js'
+export { dnatEntriesFromPorts, portEntrySchema, portsSchema } from './networking/ports.js'
 export {
   emptyPackages,
   mergePackages,
@@ -30,14 +57,20 @@ export {
 } from './packages/manifest.js'
 export { MERCURIAL_PIPX_DEFAULT } from './packages/mercurial.js'
 export {
+  definePackagesMap,
   definePlatform,
   distroPackagesForCapabilities,
   expandCapabilities,
   installCapabilityPackages,
   packagesForCapabilities,
+  packagesMapWithRequired,
+  parsePlatformModule,
   platformCapabilityRecipeSchema,
   platformModuleSchema,
+  platformModuleSchemaFor,
   platformPackagesMapSchema,
+  platformPackagesMapSchemaFor,
+  requiredPlatformCapabilitySchema,
 } from './platform/index.js'
 export {
   ENV_REF,

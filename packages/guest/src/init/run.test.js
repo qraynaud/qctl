@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { packagesMapWithRequired } from '@qctl/shared'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { capabilitiesForProfile } from './capabilities.js'
@@ -8,22 +9,36 @@ import { PLATFORM_MODULE_NAME } from './platform.js'
 import { runInit } from './run.js'
 import { describe, expect, test } from 'bun:test'
 
+/** @import { PlatformModule, PlatformPackagesMap } from '@qctl/shared' */
+
 const ROOT = join(import.meta.dir, '../../../..')
 
 const DEFAULT = ['network-up', 'host-baseline', 'ready-stamp']
-const INIT_TANK = ['tier0-seal', 'vw-mount', 'tank-create', 'poweroff']
+const INIT_TANK = ['tier0-seal', 'data-mounts', 'tank-create', 'poweroff']
 
 /** Capability keys guest profiles may request (fake platform map). */
 const FAKE_CAPS = [
-  ...capabilitiesForProfile('default', { vcs: 'git' }),
-  ...capabilitiesForProfile('init-tank'),
+  ...capabilitiesForProfile('default', {
+    vcs: 'git',
+    disks: { filesystems: ['xfs', 'ext4'], hasTanks: true },
+  }),
+  ...capabilitiesForProfile('init-tank', {
+    disks: { filesystems: ['xfs'], hasTanks: true },
+  }),
 ]
+
+/** @returns {PlatformPackagesMap} */
+function fakePackagesMap() {
+  return packagesMapWithRequired(
+    Object.fromEntries([...new Set(FAKE_CAPS)].map((c) => [c, { distro: [c] }])),
+  )
+}
 
 /**
  * @param {string} dir
  */
 function writeFakePlatformModule(dir) {
-  const packages = Object.fromEntries([...new Set(FAKE_CAPS)].map((c) => [c, { distro: [c] }]))
+  const packages = fakePackagesMap()
   writeFileSync(
     join(dir, PLATFORM_MODULE_NAME),
     `export const platform = {
@@ -43,9 +58,10 @@ export default platform
 }
 
 /** Fake platform for runInit (skipPackages still loads the module for networking). */
+/** @type {PlatformModule} */
 const fakePlatform = {
   id: 'fake',
-  packages: Object.fromEntries([...new Set(FAKE_CAPS)].map((c) => [c, { distro: [c] }])),
+  packages: fakePackagesMap(),
   installPackages: async () => {},
   networking: {
     planEnsureUp: () => [],
@@ -229,7 +245,7 @@ describe('qctl init (CLI)', () => {
         QCTL_PLATFORM_MODULE: join(dir, PLATFORM_MODULE_NAME),
       })
       expect(r.code).toBe(0)
-      expect(r.stdout).toContain('== vw-mount')
+      expect(r.stdout).toContain('== data-mounts')
       expect(r.stdout).toContain('== poweroff')
       expect(r.stdout).toContain('(dry-run)')
     } finally {

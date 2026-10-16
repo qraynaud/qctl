@@ -7,7 +7,7 @@ export type InitProfile = 'default' | 'init-tank'
 export type PlatformStage =
   | 'network-up'
   | 'host-baseline'
-  | 'vw-mount'
+  | 'data-mounts'
   | 'tier0-seal'
   | 'ssh-host-keys'
   | 'admin-user'

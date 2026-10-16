@@ -1,7 +1,7 @@
 /**
  * Proxmox API config from provision/<env>.yaml + provision/<env>.proxmox.yaml
  */
-import { loadEnvSecrets } from '../../../lib/load-config.js'
+import { loadEnvProvision, loadEnvProvisionSafe } from '../../../lib/load-config.js'
 import { tryGetRepoRoot } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
 
@@ -16,7 +16,7 @@ export {
  */
 export async function loadProxmoxConfig(opts = {}) {
   const env = opts.env || 'dev'
-  const sec = await loadEnvSecrets({ env, target: 'proxmox' })
+  const sec = await loadEnvProvision({ env, target: 'proxmox' })
   const pve = sec.proxmox || {}
 
   const apiUrl = String(pve.api_url || '').replace(/\/+$/, '')
@@ -37,21 +37,13 @@ export async function loadProxmoxConfig(opts = {}) {
   const storage = (pve.storage != null && String(pve.storage).trim()) || 'local-lvm'
   const imageStorage = (pve.image_storage != null && String(pve.image_storage).trim()) || 'local'
 
-  let vmid = null
-  if (pve.vmid != null && String(pve.vmid).trim() !== '') {
-    vmid = Number(pve.vmid)
-    if (!Number.isInteger(vmid) || vmid < 100) {
-      die(`proxmox.vmid must be an integer ≥ 100 (got ${pve.vmid})`)
-    }
-  }
-
   const nets = sec.nets
-  const primary = nets[0] || { bridge: 'vmbr0', vlan: null, trunks: null, mac: null }
+  const primary = nets[0] || { bridge: 'vmbr0' }
 
   return {
     provisionDir: sec.provisionDir,
     env,
-    secretsPath: sec.path,
+    provisionPath: sec.path,
     apiUrl,
     apiToken,
     node,
@@ -62,7 +54,7 @@ export async function loadProxmoxConfig(opts = {}) {
     vlan: primary.vlan,
     trunks: primary.trunks,
     mac: primary.mac,
-    vmid,
+    vmid: pve.vmid,
   }
 }
 
@@ -72,6 +64,7 @@ export async function loadProxmoxConfig(opts = {}) {
  */
 export async function tryLoadProxmoxConfig(opts = {}) {
   const env = opts.env || 'dev'
+  /** @type {string[]} */
   const errors = []
 
   if (!tryGetRepoRoot()) {
@@ -82,16 +75,11 @@ export async function tryLoadProxmoxConfig(opts = {}) {
     }
   }
 
-  let sec
-  try {
-    sec = await loadEnvSecrets({ env, target: 'proxmox' })
-  } catch (err) {
-    return {
-      config: null,
-      errors: [err instanceof Error ? err.message : String(err)],
-      usable: false,
-    }
+  const loaded = await loadEnvProvisionSafe({ env, target: 'proxmox' })
+  if (!loaded.ok) {
+    return { config: null, errors: [loaded.error], usable: false }
   }
+  const sec = loaded.provision
 
   const pve = sec.proxmox || {}
   const apiUrl = String(pve.api_url || '').replace(/\/+$/, '')
@@ -108,21 +96,12 @@ export async function tryLoadProxmoxConfig(opts = {}) {
   }
   if (!node) errors.push(`proxmox.node missing in ${sec.path}`)
 
-  let vmid = null
-  if (pve.vmid != null && String(pve.vmid).trim() !== '') {
-    vmid = Number(pve.vmid)
-    if (!Number.isInteger(vmid) || vmid < 100) {
-      errors.push(`proxmox.vmid must be an integer ≥ 100 (got ${pve.vmid})`)
-      vmid = null
-    }
-  }
-
   const nets = sec.nets
-  const primary = nets[0] || { bridge: 'vmbr0', vlan: null, trunks: null, mac: null }
+  const primary = nets[0] || { bridge: 'vmbr0' }
   const config = {
     provisionDir: sec.provisionDir,
     env,
-    secretsPath: sec.path,
+    provisionPath: sec.path,
     apiUrl: apiUrl || null,
     apiToken: apiToken || null,
     node: node || null,
@@ -133,7 +112,7 @@ export async function tryLoadProxmoxConfig(opts = {}) {
     vlan: primary.vlan,
     trunks: primary.trunks,
     mac: primary.mac,
-    vmid,
+    vmid: pve.vmid,
   }
 
   const usable =

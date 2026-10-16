@@ -16,6 +16,7 @@ describe('profiles', () => {
     expect([...DEFAULT_STAGES]).toEqual([
       'network-up',
       'host-baseline',
+      'data-mounts',
       'tier0-seal',
       'ssh-host-keys',
       'admin-user',
@@ -29,7 +30,7 @@ describe('profiles', () => {
   })
 
   test('init-tank stage order', () => {
-    expect([...INIT_TANK_STAGES]).toEqual(['tier0-seal', 'vw-mount', 'tank-create', 'poweroff'])
+    expect([...INIT_TANK_STAGES]).toEqual(['tier0-seal', 'data-mounts', 'tank-create', 'poweroff'])
   })
 
   test('stagesForProfile', () => {
@@ -60,7 +61,7 @@ describe('first-boot stages (provision → Tier-0)', () => {
     for (const name of [
       'network-up',
       'host-baseline',
-      'vw-mount',
+      'data-mounts',
       'tier0-seal',
       'start-services',
       'poweroff',

@@ -13,9 +13,9 @@ Related: [README.md](README.md) (index), [`cloud-init/README.md`](cloud-init/REA
 ### Workstation (libvirt)
 
 ```bash
-qctl vm seed                 # Tier-0 from provision/.env.*; topology + SSH from provision/*.yaml
-qctl vm destroy --keep-data  # drop OS only; keep /vw + tank vdevs
-qctl vm up --wipe-os         # fresh OS overlay + same seed → first-boot Path A
+qctl vm seed                        # Tier-0 from provision/.env.*; topology + SSH from provision/*.yaml
+qctl vm destroy --keep-persistent   # drop OS only; keep disks.data + tank members
+qctl vm up --wipe-os                # fresh OS overlay + same seed → first-boot Path A
 ```
 
 If tank disks were never initialized: `qctl vm init-tank` once, then
@@ -35,14 +35,14 @@ If tank disks were never initialized: `qctl vm init-tank` once, then
 
 | Layer | Location |
 |-------|----------|
-| **SoT** | VW Login **`rocky`** custom field **`tank-passphrase`** |
-| **On disk** | `/etc/credstore/rocky/tank_passphrase` (plaintext by design; crypto-shred + VW re-seed) |
-| **ZFS** | `keylocation=file:///etc/credstore/rocky/tank_passphrase` |
-| **Reboot** | `zfs-mount-generator` + `/etc/zfs/zfs-list.cache/tank` → `zfs-load-key@tank` |
+| **SoT** | VW Login **`rocky`** custom field **`tank-passphrase`** (or per-pool fields) |
+| **On disk** | `/etc/credstore/rocky/tank_passphrase_<poolId>` (plaintext by design; crypto-shred + VW re-seed) |
+| **ZFS** | `keylocation=file:///etc/credstore/rocky/tank_passphrase_<poolId>` |
+| **Reboot** | `zfs-mount-generator` + `/etc/zfs/zfs-list.cache/<poolId>` → `zfs-load-key@<poolId>` |
 
-First-boot `tank-import` / `tank-create` resolve bootstrap `TANK_PASSPHRASE` (prod: `vw()`
-after `@initVw` unlocks `/vw`) and reseed the on-disk file when missing. Prefer **not**
-baking the passphrase into the seed ISO.
+First-boot `tank-import` / `tank-create` reseed each encrypted pool from Tier-0
+`tank_passphrase_<poolId>` (from `disks.tanks.<id>.passphrase: !env …`; prod often
+`vw()` after `@initVw` unlocks `/vw`). Prefer **not** baking passphrases into the seed ISO.
 
 Never put Vaultwarden CLI apodata (`@initVw(appDataDir=…)`) on encrypted `tank`.
 On-box VW **container** data belongs on `/tank`.
@@ -62,14 +62,14 @@ On-box VW **container** data belongs on `/tank`.
 1. Restore a reachable Vaultwarden (e.g. restic → temp host; point DNS), **or** use
    personal/prod VW (`serverUrl` on `@initVw` in `bootstrap/.env.prod`).
 2. Rebuild Rocky; `@initVw` apikey login+sync into `/vw` (first graph resolve that needs VW).
-3. `tank-import` writes key file from `TANK_PASSPHRASE` → unlock `tank` → Quadlets.
+3. `tank-import` writes `tank_passphrase_<poolId>` → unlock pools → Quadlets.
    If private images: ensure `@tag(container-registry)` bindings apply (`registry-login`).
 
 ## Fallback
 
 Workstation that previously synced VW: copy Tier-0 into seed creds (or a small recovery
-script that injects them). Avoid pasting the pool passphrase by hand if the bootstrap
-graph can still resolve `TANK_PASSPHRASE`.
+script that injects them). Avoid pasting pool passphrases by hand if the bootstrap
+graph can still resolve `tank_passphrase_<poolId>` / provision `!env`.
 
 ## Worst
 

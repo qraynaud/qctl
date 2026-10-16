@@ -1,5 +1,5 @@
-# NoCloud network-config v2 — rendered by `qctl vm seed` from secrets networking.uplinks/vlans.
-# This file is the structural default when secrets omit uplinks (eth0 DHCP only).
+# NoCloud network-config v2 — rendered by `qctl vm seed` from provision networking.uplinks/vlans.
+# This file is the structural default when provision omits uplinks (eth0 DHCP only).
 version: 2
 ethernets:
   eth0:

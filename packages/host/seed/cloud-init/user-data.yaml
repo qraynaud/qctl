@@ -1,12 +1,12 @@
 #cloud-config
 # Shared seed for `vm up` (appliance) and `vm init-tank`.
 # Tags (resolved at seed build; cloud-init never sees them):
-#   !template "…" — inline Nunjucks (secrets.* = YAML; env / instance_id / profile / …)
+#   !template "…" — inline Nunjucks (provision.* = YAML; env / instance_id / profile / …)
 #   !file path    — embed seed-kit/<path> (Nunjucks only if file has {{ or {%)
 # Empty !template / !file result drops that write_files entry.
 #
 # `profile` is `appliance` (default) or `init-tank`. Tier-0 pending files
-# (including TANK_PASSPHRASE from provision tank.passphrase) are injected by
+# (tank_passphrase_<poolId> from disks.tanks.*.passphrase) are injected by
 # `qctl vm seed` into /var/lib/rocky/tier0-pending/<KEY>, sealed by
 # rocky-tier0-seal / `qctl stage tier0-seal`, then LoadCredentialEncrypted into
 # the init unit.
@@ -25,11 +25,11 @@ bootcmd:
       if [ ! -f /var/lib/rocky/first-boot.done ]; then systemctl mask sshd.service sshd.socket firewalld.service cockpit.socket qemu-guest-agent.service; fi
       {% endif %}
   - !template |
-      {% if secrets.networking.vlans %}
-      {% for v in secrets.networking.vlans -%}
-      ip link del {{ v.name }} 2>/dev/null || true
-      ip link add {{ v.name }} type dummy
-      ip link set {{ v.name }} up || true
+      {% if provision.networking.vlans %}
+      {% for name, v in provision.networking.vlans -%}
+      ip link del {{ name }} 2>/dev/null || true
+      ip link add {{ name }} type dummy
+      ip link set {{ name }} up || true
       {% endfor -%}
       {% else %}
       true
@@ -38,11 +38,11 @@ bootcmd:
   - [sh, -c, "for i in $(seq 1 90); do ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'rocky bootcmd: no egress yet' >&2; exit 0"]
 
 users:
-  - name: !template "{{ secrets.users.apps.username }}"
-    uid: !template "{{ secrets.users.apps.uid }}"
-    gid: !template "{{ secrets.users.apps.gid }}"
+  - name: !template "{{ provision.users.apps.username }}"
+    uid: !template "{{ provision.users.apps.uid }}"
+    gid: !template "{{ provision.users.apps.gid }}"
     system: true
-    homedir: !template "/home/{{ secrets.users.apps.username }}"
+    homedir: !template "/home/{{ provision.users.apps.username }}"
     no_create_home: false
     shell: /bin/bash
     lock_passwd: true
@@ -84,22 +84,22 @@ write_files:
     permissions: "0644"
     content: !template |
       QCTL_ENV={{ env }}
-      ROCKY_REPO_VCS={{ secrets.repo.vcs or 'git' }}
-      ROCKY_QUADLET_USER={{ secrets.users.apps.username }}
-      ROCKY_APPS_SUBID_START={{ secrets.users.apps.subuid.start }}
-      ROCKY_APPS_SUBID_COUNT={{ secrets.users.apps.subuid.count }}
-      ROCKY_APPS_SUBGID_START={{ secrets.users.apps.subgid.start }}
-      ROCKY_APPS_SUBGID_COUNT={{ secrets.users.apps.subgid.count }}
-      {%- if secrets.repo.url %}
-      ROCKY_HG_URL={{ secrets.repo.url }}
-      ROCKY_REPO_URL={{ secrets.repo.url }}
+      ROCKY_REPO_VCS={{ provision.repo.vcs or 'git' }}
+      ROCKY_QUADLET_USER={{ provision.users.apps.username }}
+      ROCKY_APPS_SUBID_START={{ provision.users.apps.subuid.start }}
+      ROCKY_APPS_SUBID_COUNT={{ provision.users.apps.subuid.count }}
+      ROCKY_APPS_SUBGID_START={{ provision.users.apps.subgid.start }}
+      ROCKY_APPS_SUBGID_COUNT={{ provision.users.apps.subgid.count }}
+      {%- if provision.repo.url %}
+      ROCKY_HG_URL={{ provision.repo.url }}
+      ROCKY_REPO_URL={{ provision.repo.url }}
       {%- endif %}
-      {%- if secrets.repo.dir %}
-      ROCKY_REPO_DIR={{ secrets.repo.dir }}
+      {%- if provision.repo.dir %}
+      ROCKY_REPO_DIR={{ provision.repo.dir }}
       {%- endif %}
-      {%- if secrets.repo.branch %}
-      ROCKY_REPO_BRANCH={{ secrets.repo.branch }}
-      ROCKY_HG_BRANCH={{ secrets.repo.branch }}
+      {%- if provision.repo.branch %}
+      ROCKY_REPO_BRANCH={{ provision.repo.branch }}
+      ROCKY_HG_BRANCH={{ provision.repo.branch }}
       {%- endif %}
 
   - path: /usr/local/lib/rocky/vlan-parents.env
@@ -111,16 +111,6 @@ write_files:
     owner: root:root
     permissions: "0755"
     content: !file lib/install-qctl-guest.sh
-
-  - path: /usr/local/lib/rocky/dnat-apply.sh
-    owner: root:root
-    permissions: "0755"
-    content: !file lib/dnat-apply.sh
-
-  - path: /usr/local/lib/rocky/install-packages.sh
-    owner: root:root
-    permissions: "0755"
-    content: !file lib/install-packages.sh
 
   - path: /usr/local/lib/rocky/wait-qctl-init.sh
     owner: root:root
@@ -167,7 +157,7 @@ write_files:
     content: !file first-boot/rocky-tier0-seal.service
 
   # Tier-0 pending injected by seed → /var/lib/rocky/tier0-pending/<KEY>
-  # (includes TANK_PASSPHRASE from provision tank.passphrase).
+  # (tank_passphrase_<poolId> from disks.tanks.*.passphrase; disks.json topology).
 
   - path: /etc/systemd/system/rocky-first-boot.service.d/tier0.conf
     owner: root:root
@@ -178,6 +168,18 @@ write_files:
     owner: root:root
     permissions: "0644"
     content: !file lib/tier0-loadcredential.conf
+
+  # init-tank only: which pools to zpool create (host `vm init-tank [poolId…]`).
+  - path: /etc/environment.d/92-rocky-init-tank.conf
+    owner: root:root
+    permissions: "0644"
+    content: !template |
+      {% if is_init_tank %}
+      ROCKY_INIT_TANK_POOLS={{ init_tank_pools }}
+      ROCKY_ZFS_POOL={{ init_tank_primary_pool }}
+      {% if init_tank_force %}ROCKY_INIT_TANK_FORCE=yes
+      {% endif %}
+      {% endif %}
 
 runcmd:
   - !template |
@@ -196,12 +198,11 @@ runcmd:
         dnf install -y zfs
       fi
       modprobe zfs
-      /usr/local/lib/rocky/install-packages.sh
       systemctl enable --now rocky-tier0-seal.service
       systemctl enable rocky-init-tank-prep.service
       systemctl start rocky-init-tank-prep.service
       {% else %}
-      loginctl enable-linger {{ secrets.users.apps.username }}
+      loginctl enable-linger {{ provision.users.apps.username }}
       dnf -y upgrade --refresh
       dnf install -y epel-release
       dnf install -y dnf-plugins-core python3 curl jq unzip tar bash-completion \
@@ -225,7 +226,6 @@ runcmd:
           echo "WARN: cockpit-zfs install failed (often python3-libzfs vs ZoL libzfs ABI); continuing" >&2
         fi
       fi
-      /usr/local/lib/rocky/install-packages.sh
       systemctl enable zfs-import-cache.service zfs-import-scan.service zfs-mount.service zfs-zed.service
       systemctl enable rocky-tier0-seal.service
       systemctl enable rocky-first-boot.service
@@ -237,6 +237,6 @@ final_message: !template |
   Rocky init-tank: prep will create tank, export, and power off. No SSH.
   {% else %}
   Rocky cloud-init OK — qctl init stamped (/var/lib/rocky/first-boot.done).
-  Tank unlock: keylocation=file:///etc/credstore/rocky/tank_passphrase
+  Tank unlock: keylocation=file:///etc/credstore/rocky/tank_passphrase_<poolId>
   Expect disks: OS + /vw + 5 data (raidz2) + 2 special (mirror).
   {% endif %}

@@ -1,4 +1,5 @@
 import adminUser from './admin-user.js'
+import dataMounts from './data-mounts.js'
 import hgClone from './hg-clone.js'
 import hostBaseline from './host-baseline.js'
 import networkUp from './network-up.js'
@@ -10,7 +11,6 @@ import startServices from './start-services.js'
 import tankCreate from './tank-create.js'
 import tankImport from './tank-import.js'
 import tier0Seal from './tier0-seal.js'
-import vwMount from './vw-mount.js'
 import zfsDrill from './zfs-drill.js'
 
 /** @import { Stage } from './types.js' */
@@ -19,7 +19,7 @@ import zfsDrill from './zfs-drill.js'
 const ALL = [
   networkUp,
   hostBaseline,
-  vwMount,
+  dataMounts,
   tier0Seal,
   sshHostKeys,
   adminUser,

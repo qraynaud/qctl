@@ -1,10 +1,10 @@
 import { chalk, fs } from 'zx'
 
 import { portsFromArgv } from '../../../lib/options.js'
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { requireBins } from '../../../lib/util.js'
 import { vmPaths } from '../../libs/disks.js'
 import { virsh } from '../../libs/libvirt/index.js'
+import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
 
 /** @import { VmArgv } from '../../types.js' */
@@ -20,14 +20,20 @@ export async function status(argv) {
   const r = await virsh(connect, 'dominfo', name).nothrow()
   if (r.exitCode !== 0) {
     console.log(chalk.yellow(`vm: domain ${name} not defined`))
-    const p = vmPaths(name)
-    console.log(`  os: ${fs.existsSync(p.os) ? p.os : '(missing)'}`)
-    console.log(`  vw: ${fs.existsSync(p.vw) ? p.vw : '(missing)'}`)
-    for (let i = 0; i < DATA_COUNT; i++) {
-      console.log(`  data${i}: ${fs.existsSync(p.data[i]) ? p.data[i] : '(missing)'}`)
-    }
-    for (let i = 0; i < SPECIAL_COUNT; i++) {
-      console.log(`  special${i}: ${fs.existsSync(p.special[i]) ? p.special[i] : '(missing)'}`)
+    try {
+      const resolved = await resolveProvisionDisks({
+        env: argv.env || 'dev',
+        target: argv.target || 'local',
+      })
+      const p = vmPaths(name, resolved)
+      console.log(`  os: ${fs.existsSync(p.os.path) ? p.os.path : '(missing)'}`)
+      for (const e of p.attached) {
+        console.log(`  ${e.id}: ${fs.existsSync(e.path) ? e.path : '(missing)'}`)
+      }
+    } catch (err) {
+      console.log(
+        chalk.dim(`  (could not resolve disks: ${err instanceof Error ? err.message : err})`),
+      )
     }
     return
   }
@@ -36,7 +42,6 @@ export async function status(argv) {
     connect,
     name,
     ports: portsFromArgv(argv),
-    argv,
     network: argv.network === 'auto' ? 'user' : argv.network,
   })
 }

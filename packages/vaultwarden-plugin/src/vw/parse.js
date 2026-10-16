@@ -49,73 +49,45 @@ const DEFAULT_VW_ACCOUNT = Symbol('vw.default')
  * }} VwCall
  */
 
-const vwArgsSchema = z
-  .object({
-    /** Omitted / empty → {@link DEFAULT_VW_ACCOUNT}. */
-    accountId: z.string().min(1, 'vw(): account id must be a non-empty string').optional(),
-    item: z.string().min(1, 'vw(): item name must be a non-empty string'),
-    field: z.string().min(1, 'vw(): field= must be a non-empty string').optional(),
-    attachment: z.string().min(1, 'vw(): attachment= must be a non-empty string').optional(),
-    encoding: z
-      .enum(['utf8', 'base64'], {
-        error: 'vw(): encoding must be utf8 or base64',
-      })
-      .optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.field !== undefined && data.attachment !== undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'vw(): use field= or attachment=, not both',
-        path: ['field'],
-      })
-    }
-    if (data.encoding !== undefined && data.attachment === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'vw(): encoding= requires attachment=',
-        path: ['encoding'],
-      })
-    }
-  })
-  .transform((data) => {
-    const accountId = data.accountId ?? DEFAULT_VW_ACCOUNT
-    if (data.attachment !== undefined) {
-      return {
-        kind: /** @type {const} */ ('attachment'),
-        item: data.item,
-        file: data.attachment,
-        encoding: data.encoding ?? 'utf8',
-        accountId,
-      }
-    }
-    return {
-      kind: /** @type {const} */ ('field'),
-      item: data.item,
-      field: data.field ?? 'password',
-      accountId,
-    }
-  })
+const vwItem = z.string().min(1, 'vw(): item name must be a non-empty string')
+/** Omitted → {@link DEFAULT_VW_ACCOUNT} in the branch transforms. */
+const vwAccountIdIn = z.string().min(1, 'vw(): account id must be a non-empty string').optional()
+const vwEncoding = z.enum(['utf8', 'base64'], {
+  error: 'vw(): encoding must be utf8 or base64',
+})
 
-/**
- * Validate resolved `vw()` arguments (after varlock resolver strings are awaited).
- * @param {{
- *   accountId?: string,
- *   item?: string,
- *   field?: string,
- *   attachment?: string,
- *   encoding?: string,
- * }} raw
- * @returns {VwCall}
- */
-function parseVwArgs(raw) {
-  const r = vwArgsSchema.safeParse(raw)
-  if (!r.success) {
-    const msg = r.error.issues.map((i) => i.message).join('; ')
-    throw new Error(msg || 'vw(): invalid arguments')
-  }
-  return r.data
-}
+/** `vw(..., attachment=, encoding?)` — encoding defaults to utf8. */
+const vwAttachmentArgsSchema = z
+  .strictObject({
+    accountId: vwAccountIdIn,
+    item: vwItem,
+    attachment: z.string().min(1, 'vw(): attachment= must be a non-empty string'),
+    encoding: vwEncoding.default('utf8'),
+  })
+  .transform((d) => ({
+    kind: /** @type {const} */ ('attachment'),
+    item: d.item,
+    file: d.attachment,
+    encoding: d.encoding,
+    accountId: d.accountId ?? DEFAULT_VW_ACCOUNT,
+  }))
+
+/** `vw(...)` / `vw(..., field=)` — field defaults to password. */
+const vwFieldArgsSchema = z
+  .strictObject({
+    accountId: vwAccountIdIn,
+    item: vwItem,
+    field: z.string().min(1, 'vw(): field= must be a non-empty string').default('password'),
+  })
+  .transform((d) => ({
+    kind: /** @type {const} */ ('field'),
+    item: d.item,
+    field: d.field,
+    accountId: d.accountId ?? DEFAULT_VW_ACCOUNT,
+  }))
+
+/** Attachment first; exclusivity is structural (each branch is strict). */
+const vwArgsSchema = z.union([vwAttachmentArgsSchema, vwFieldArgsSchema])
 
 /** Allowed `@initVw(...)` named arguments. */
 const INIT_VW_KEYS = /** @type {const} */ ([
@@ -164,12 +136,9 @@ const INIT_VW_KEYS = /** @type {const} */ ([
  * >} InitVwRawBag
  */
 
-/** Empty string → undefined so `$BW_SESSION` can be unset in the graph. */
+/** Omit the key to leave unset; blank strings are rejected. */
 const initVwOptString = (/** @type {string} */ name) =>
-  z.preprocess(
-    (v) => (v === '' || v == null ? undefined : v),
-    z.string().min(1, `@initVw: ${name} must be a non-empty string`).optional(),
-  )
+  z.string().min(1, `@initVw: ${name} must be a non-empty string`).optional()
 
 /**
  * Unresolved varlock decorator arg: either a literal or a resolver `{ resolve() }`.
@@ -239,39 +208,39 @@ const resolvedCacheTtl = z
   ])
   .optional()
 
-/**
- * Unwrap varlock process-time args: bare literals arrive as StaticValueResolver
- * (`{ isStatic: true, staticValue }`), not plain strings.
- * @param {string | InitVwArgValue | null | undefined} v
- * @returns {string | InitVwArgValue | undefined}
- */
-function unwrapStaticArg(v) {
-  if (v == null || v === '') return undefined
-  if (typeof v === 'string') return v
-  if (typeof v === 'object' && v.isStatic === true && typeof v.staticValue === 'string') {
-    return v.staticValue
-  }
-  return v
-}
-
-/**
- * Account id must be a static string at process time (keys the client map).
- * Varlock wraps `id=perso` / `id="perso"` as StaticValueResolver — both OK.
- * Dynamic resolvers (`$FOO`, function calls) are rejected.
- */
-const initVwIdLiteral = z.preprocess((v) => {
-  const unwrapped = unwrapStaticArg(/** @type {string | InitVwArgValue | null | undefined} */ (v))
-  if (unwrapped == null || unwrapped === '') return undefined
-  return unwrapped
-}, z
+/** Non-empty trimmed string (shared by bare `id=` and StaticValueResolver). */
+const initVwIdString = z
   .string({ error: '@initVw: id= must be a non-empty string literal' })
   .trim()
   .min(1, '@initVw: id= must be a non-empty string literal')
-  .optional())
+
+/**
+ * Varlock `id=perso` / `id="perso"` → StaticValueResolver; unwrap to the literal.
+ * Dynamic resolvers (`$FOO`, function calls) fail the union.
+ * `z.object` (not strict): resolvers also carry methods like `resolve`.
+ */
+const initVwIdStaticResolver = z
+  .object({
+    isStatic: z.literal(true),
+    staticValue: initVwIdString,
+  })
+  .transform((o) => o.staticValue)
+
+/**
+ * Account id must be a static string at process time (keys the client map).
+ */
+const initVwIdLiteral = z
+  .union([initVwIdString, initVwIdStaticResolver], {
+    error: '@initVw: id= must be a non-empty string literal',
+  })
+  .optional()
+
+const initVwIdRequiresAppDataDir = (/** @type {{ id?: string, appDataDir?: string }} */ data) =>
+  data.id == null || data.appDataDir != null
 
 /** Process-time `@initVw` args: known keys only; values still unresolved. */
 const initVwKeysSchema = z
-  .object({
+  .strictObject({
     id: initVwIdLiteral,
     appDataDir: unresolvedStringArg('appDataDir'),
     sessionToken: unresolvedStringArg('sessionToken'),
@@ -284,20 +253,13 @@ const initVwKeysSchema = z
     syncTtl: unresolvedTtlArg('syncTtl'),
     bin: unresolvedStringArg('bin'),
   })
-  .strict()
-  .superRefine((data, ctx) => {
-    // Named accounts need a dedicated bw data dir so vaults do not clash.
-    if (data.id != null && data.appDataDir == null) {
-      ctx.addIssue({
-        code: 'custom',
-        message: '@initVw: id= requires appDataDir=',
-        path: ['appDataDir'],
-      })
-    }
+  .refine(initVwIdRequiresAppDataDir, {
+    message: '@initVw: id= requires appDataDir=',
+    path: ['appDataDir'],
   })
 
 const initVwArgsSchema = z
-  .object({
+  .strictObject({
     id: initVwOptString('id'),
     appDataDir: initVwOptString('appDataDir'),
     sessionToken: initVwOptString('sessionToken'),
@@ -310,22 +272,13 @@ const initVwArgsSchema = z
     syncTtl: resolvedCacheTtl,
     bin: initVwOptString('bin'),
   })
-  .strict()
-  .superRefine((data, ctx) => {
-    if (Boolean(data.clientId) !== Boolean(data.clientSecret)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: '@initVw: clientId and clientSecret must both be set (or both omitted)',
-        path: data.clientId ? ['clientSecret'] : ['clientId'],
-      })
-    }
-    if (data.id != null && data.appDataDir == null) {
-      ctx.addIssue({
-        code: 'custom',
-        message: '@initVw: id= requires appDataDir=',
-        path: ['appDataDir'],
-      })
-    }
+  .refine(initVwIdRequiresAppDataDir, {
+    message: '@initVw: id= requires appDataDir=',
+    path: ['appDataDir'],
+  })
+  .refine((data) => Boolean(data.clientId) === Boolean(data.clientSecret), {
+    message: '@initVw: clientId and clientSecret must both be set (or both omitted)',
+    path: ['clientSecret'],
   })
 
 /**
@@ -397,7 +350,7 @@ module.exports = {
   expandHomePath,
   resolveVwAccountId,
   formatVwAccountId,
-  parseVwArgs,
+  vwArgsSchema,
   INIT_VW_KEYS,
   parseInitVwArgKeys,
   parseInitVwArgs,

@@ -2,10 +2,10 @@ import { $, chalk, path } from 'zx'
 
 import { portsFromArgv } from '../../../lib/options.js'
 import { getImages } from '../../../lib/paths.js'
-import { portByName, resolvePorts } from '../../../lib/ports.js'
 import { HOST_DEPS, die, requireBins, which } from '../../../lib/util.js'
 import { ensureCloudImage } from '../../../tooling/platform-tooling.js'
 import { downloadImage } from '../../commands/download.js'
+import { summarizeAttachModes, withAttachModes } from '../../libs/attach-mode.js'
 import {
   classifyCloudInitOutcome,
   classifyRebootReady,
@@ -25,6 +25,7 @@ import {
   setDomainSerialTcp,
   virsh,
 } from '../../libs/libvirt/index.js'
+import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { ensureSeed } from '../../libs/seed/iso.js'
 import { runSeed } from '../../libs/seed/run.js'
 import { printLocalSshInfo } from '../../libs/ssh-hints.js'
@@ -34,7 +35,7 @@ import { sleep, waitForLocalTcpPorts } from '../../libs/wait.js'
 
 /** @import { SerialFollow } from '../../libs/console.js' */
 /** @import { VmUpBackend } from '../../libs/up-pipeline.js' */
-/** @import { PortEntry, VmArgv } from '../../types.js' */
+/** @import { PortsMap, VmArgv } from '../../types.js' */
 
 /** @typedef {Awaited<ReturnType<typeof startSerialTcpFollow>>} TcpFollow */
 
@@ -47,7 +48,7 @@ import { sleep, waitForLocalTcpPorts } from '../../libs/wait.js'
  * @property {number} vcpus
  * @property {string} network
  * @property {string} osinfo
- * @property {PortEntry[]} ports
+ * @property {PortsMap} ports
  * @property {Awaited<ReturnType<typeof ensureDisks>>} disks
  * @property {Awaited<ReturnType<typeof ensureSeed>>} seed
  * @property {string | null} [state]
@@ -85,13 +86,12 @@ async function waitUntilNotShuttingDown(connect, name, timeoutSec = 120) {
  * @returns {Promise<void>}
  */
 async function finishAfterConsole(session, signal) {
-  const { connect, name, ports, argv, network } = session
+  const { connect, name, ports, network } = session
   await restartWithSerialNull(connect, name)
   if (network !== 'default') {
-    const resolved = resolvePorts(ports, argv)
-    const sshFwd = portByName(resolved, 'ssh')?.forward
-    const cockpitFwd = portByName(resolved, 'cockpit')?.forward
-    const forwards = /** @type {number[]} */ ([sshFwd, cockpitFwd].filter((p) => p != null))
+    const sshFwd = ports.ssh?.forward
+    const cockpitFwd = ports.cockpit?.forward
+    const forwards = [sshFwd, cockpitFwd].filter((p) => p != null)
     await waitForLocalTcpPorts({
       ports: forwards,
       sshPorts: sshFwd != null ? [sshFwd] : [],
@@ -100,7 +100,7 @@ async function finishAfterConsole(session, signal) {
       timeoutSec: 180,
     })
   }
-  await printLocalSshInfo({ connect, name, ports, argv, network })
+  await printLocalSshInfo({ connect, name, ports, network })
 }
 
 /**
@@ -113,9 +113,6 @@ async function prepareLocalUp(argv) {
     connect,
     memory,
     vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
     network: networkArg,
     osinfo,
     wipeOs,
@@ -125,10 +122,14 @@ async function prepareLocalUp(argv) {
   } = argv
   const network = networkArg === 'auto' ? 'user' : networkArg
   const ports = portsFromArgv(argv)
+  const resolved = await resolveProvisionDisks({
+    env: env || 'dev',
+    target: argv.target || 'local',
+  })
 
   console.log(
     chalk.dim(
-      `  connect=${connect}; layout: OS + /vw + data×5 (raidz2) + special×2 (mirror) + seed`,
+      `  connect=${connect}; disks: ${summarizeAttachModes(withAttachModes(resolved.members))}`,
     ),
   )
 
@@ -160,9 +161,7 @@ async function prepareLocalUp(argv) {
   const disks = await ensureDisks({
     name,
     baseImage,
-    vwSize,
-    dataSize,
-    specialSize,
+    resolved,
     wipeOs,
     wipeTank: false,
     dryRun: false,
@@ -196,9 +195,6 @@ async function localDryRun(argv) {
     connect,
     memory,
     vcpus,
-    vwSize,
-    dataSize,
-    specialSize,
     network: networkArg,
     osinfo,
     wipeOs,
@@ -209,10 +205,14 @@ async function localDryRun(argv) {
   const network = networkArg === 'auto' ? 'user' : networkArg
   const timeoutSec = timeout
   const ports = portsFromArgv(argv)
+  const resolved = await resolveProvisionDisks({
+    env: env || 'dev',
+    target: argv.target || 'local',
+  })
 
   console.log(
     chalk.dim(
-      `  connect=${connect}; layout: OS + /vw + data×5 (raidz2) + special×2 (mirror) + seed`,
+      `  connect=${connect}; disks: ${summarizeAttachModes(withAttachModes(resolved.members))}`,
     ),
   )
   const pin = await ensureCloudImage({ env: env || 'dev', target: 'local' })
@@ -222,9 +222,7 @@ async function localDryRun(argv) {
   const disks = await ensureDisks({
     name,
     baseImage,
-    vwSize,
-    dataSize,
-    specialSize,
+    resolved,
     wipeOs,
     wipeTank: false,
     dryRun: true,
@@ -240,7 +238,6 @@ async function localDryRun(argv) {
     disks,
     seed,
     ports,
-    argv,
     network,
     osinfo,
     serialTcpPort: noConsole ? undefined : 9,
@@ -284,7 +281,6 @@ function localBackend(state) {
           existing.connect,
           existing.name,
           existing.ports,
-          existing.argv,
         )
         if (changed) state = await waitUntilNotShuttingDown(existing.connect, existing.name)
       }
@@ -310,7 +306,7 @@ function localBackend(state) {
       if (state !== 'shut off') {
         die(
           `domain ${name} is ${state || 'missing'} — expected shut off after down; `
-            + `use destroy (--keep-data) then up, or --wipe-os to recreate`,
+            + `use destroy (--keep-persistent) then up, or --wipe-os to recreate`,
         )
       }
       await setDomainSerialNull(connect, name)
@@ -327,7 +323,7 @@ function localBackend(state) {
       if (state !== 'shut off') {
         die(
           `domain ${name} is ${state || 'missing'} — expected shut off after down; `
-            + `use destroy (--keep-data) then up, or --wipe-os to recreate`,
+            + `use destroy (--keep-persistent) then up, or --wipe-os to recreate`,
         )
       }
       const follow = await startSerialTcpFollow({ classify: classifyRebootReady })
@@ -347,7 +343,6 @@ function localBackend(state) {
         connect: existing.connect,
         name: existing.name,
         ports: existing.ports,
-        argv: existing.argv,
         network: existing.network,
       })
     },
@@ -359,7 +354,6 @@ function localBackend(state) {
           connect: existing.connect,
           name: existing.name,
           ports: existing.ports,
-          argv: existing.argv,
           network: existing.network,
         })
         return
@@ -369,7 +363,6 @@ function localBackend(state) {
         connect: existing.connect,
         name: existing.name,
         ports: existing.ports,
-        argv: existing.argv,
         network: existing.network,
       })
     },
@@ -378,8 +371,7 @@ function localBackend(state) {
 
     createFirstBoot: async (_argv, _signal, { wantSerial }) => {
       if (!state.session) throw new Error('local up: prepare() did not run')
-      const { connect, name, memory, vcpus, disks, seed, ports, argv, network, osinfo } =
-        state.session
+      const { connect, name, memory, vcpus, disks, seed, ports, network, osinfo } = state.session
 
       /** @type {TcpFollow | null} */
       let follow = null
@@ -398,7 +390,6 @@ function localBackend(state) {
         disks,
         seed,
         ports,
-        argv,
         network,
         osinfo,
         serialTcpPort,

@@ -1,10 +1,16 @@
 /**
- * Rocky OS networking: NetworkManager egress + firewalld DNAT apply.
+ * Rocky OS networking: NetworkManager egress + firewalld DNAT from ports.json.
  * Guest stages call these via `platform.networking` after dynamic import.
  */
 import { existsSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 
-/** @import { PlatformNetworkCtx, PlatformNetworking } from '@qctl/shared' */
+import { dnatEntriesFromPorts, portsSchema } from '@qctl/shared'
+
+/** @import { PlatformNetworkCtx, PlatformNetworking, PortsMap } from '@qctl/shared' */
+
+const DEFAULT_PORTS_JSON = '/usr/local/lib/rocky/ports.json'
+const DEFAULT_ROUTE_LOCALNET_CONF = '/etc/sysctl.d/90-rocky-route-localnet.conf'
 
 /**
  * @param {PlatformNetworkCtx} ctx
@@ -61,24 +67,64 @@ export async function ensureUp(ctx) {
  * @returns {string[]}
  */
 export function planApplyDnat(ctx) {
-  const dnat = ctx.env.QCTL_DNAT_APPLY?.trim() || '/usr/local/lib/rocky/dnat-apply.sh'
-  return [`DNAT script: ${dnat}`]
+  const portsJson = ctx.env.QCTL_PORTS_JSON?.trim() || DEFAULT_PORTS_JSON
+  return [`DNAT from ${portsJson} (firewalld → 127.0.0.1)`]
 }
 
 /**
- * Run the seed-baked firewalld DNAT helper (if present).
+ * Apply firewalld DNAT forwards from seed-injected `ports.json` (entries with `dnat`).
  * @param {PlatformNetworkCtx} ctx
  */
 export async function applyDnat(ctx) {
-  const dnatApply = ctx.env.QCTL_DNAT_APPLY?.trim() || '/usr/local/lib/rocky/dnat-apply.sh'
-  if (!existsSync(dnatApply)) {
-    ctx.log(`rocky-services: no ${dnatApply} — skipping DNAT forwards`)
+  const portsJson = ctx.env.QCTL_PORTS_JSON?.trim() || DEFAULT_PORTS_JSON
+  if (!existsSync(portsJson)) {
+    ctx.log(`rocky-services: no ${portsJson} — skipping DNAT forwards`)
     return
   }
-  ctx.log(`rocky-services: applying DNAT forwards from ${dnatApply}`)
-  const r = await ctx.exec(['bash', dnatApply])
-  if (r.code !== 0) {
-    throw new Error(`DNAT apply failed: ${r.stderr.trim()}`)
+
+  /** @type {PortsMap} */
+  let ports
+  try {
+    ports = portsSchema.parse(JSON.parse(await readFile(portsJson, 'utf8')))
+  } catch (err) {
+    throw new Error(
+      `DNAT: failed to read ${portsJson}: ${err instanceof Error ? err.message : err}`,
+    )
+  }
+
+  const dnats = dnatEntriesFromPorts(ports)
+  if (!dnats.length) {
+    ctx.log(`rocky-services: no ports with dnat in ${portsJson} — skipping`)
+    return
+  }
+
+  ctx.log(`rocky-services: applying ${dnats.length} DNAT forward(s) from ${portsJson} → 127.0.0.1`)
+
+  const routeLocalnet = ctx.env.QCTL_ROUTE_LOCALNET_CONF?.trim() || DEFAULT_ROUTE_LOCALNET_CONF
+  await writeFile(
+    routeLocalnet,
+    [
+      '# Rocky: firewalld DNAT → 127.0.0.1 (rootless PublishPort); from ports.json',
+      'net.ipv4.conf.all.route_localnet=1',
+      'net.ipv4.conf.default.route_localnet=1',
+      '',
+    ].join('\n'),
+  )
+  const sysctl = await ctx.exec(['sysctl', '-p', routeLocalnet])
+  if (sysctl.code !== 0) {
+    throw new Error(`DNAT sysctl failed: ${sysctl.stderr.trim()}`)
+  }
+
+  for (const { name, port, dnat } of dnats) {
+    const bare = `port=${port}:proto=tcp:toport=${dnat}`
+    const withAddr = `${bare}:toaddr=127.0.0.1`
+    // Best-effort remove of prior rules (missing → non-zero; ignore).
+    await ctx.exec(['firewall-cmd', '--permanent', `--remove-forward-port=${bare}`])
+    await ctx.exec(['firewall-cmd', '--permanent', `--remove-forward-port=${withAddr}`])
+    const add = await ctx.exec(['firewall-cmd', '--permanent', `--add-forward-port=${withAddr}`])
+    if (add.code !== 0) {
+      throw new Error(`DNAT add ${name} (${port}→${dnat}) failed: ${add.stderr.trim()}`)
+    }
   }
 }
 

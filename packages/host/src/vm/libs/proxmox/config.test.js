@@ -3,11 +3,15 @@ import * as paths from '../../../lib/paths.js'
 import { loadProxmoxConfig, tryLoadProxmoxConfig } from './config.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
+/** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
+
 afterEach(() => {
   // @ts-expect-error restore
   paths.tryGetRepoRoot.mockRestore?.()
   // @ts-expect-error restore
-  loadConfig.loadEnvSecrets.mockRestore?.()
+  loadConfig.loadEnvProvision.mockRestore?.()
+  // @ts-expect-error restore
+  loadConfig.loadEnvProvisionSafe.mockRestore?.()
   // @ts-expect-error restore
   process.exit.mockRestore?.()
   // @ts-expect-error restore
@@ -22,9 +26,9 @@ describe('proxmox config', () => {
     expect(r.errors[0]).toMatch(/instance repo/)
   })
 
-  test('loadProxmoxConfig builds config from secrets', async () => {
-    spyOn(loadConfig, 'loadEnvSecrets').mockResolvedValue(
-      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvSecrets>>} */ (
+  test('loadProxmoxConfig builds config from provision', async () => {
+    spyOn(loadConfig, 'loadEnvProvision').mockResolvedValue(
+      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvProvision>>} */ (
         /** @type {never} */ ({
           path: '/tmp/provision/.env.dev',
           provisionDir: '/tmp/provision',
@@ -36,7 +40,7 @@ describe('proxmox config', () => {
             storage: 'local-lvm',
             image_storage: 'local',
           },
-          nets: [{ bridge: 'vmbr0', vlan: null, trunks: null, mac: null }],
+          nets: [{ bridge: 'vmbr0' }],
         })
       ),
     )
@@ -48,9 +52,10 @@ describe('proxmox config', () => {
 
   test('tryLoadProxmoxConfig marks usable when fields present', async () => {
     spyOn(paths, 'tryGetRepoRoot').mockReturnValue('/tmp/instance')
-    spyOn(loadConfig, 'loadEnvSecrets').mockResolvedValue(
-      /** @type {Awaited<ReturnType<typeof loadConfig.loadEnvSecrets>>} */ (
-        /** @type {never} */ ({
+    spyOn(loadConfig, 'loadEnvProvisionSafe').mockResolvedValue({
+      ok: true,
+      provision: /** @type {LoadedProvision} */ (
+        /** @type {unknown} */ ({
           path: '/tmp/provision/.env.dev',
           provisionDir: '/tmp/provision',
           paths: ['/tmp/provision/.env.dev'],
@@ -62,7 +67,7 @@ describe('proxmox config', () => {
           nets: [],
         })
       ),
-    )
+    })
     const r = await tryLoadProxmoxConfig({ env: 'dev' })
     expect(r.usable).toBe(true)
     expect(r.config?.node).toBe('pve')

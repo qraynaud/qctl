@@ -17,7 +17,7 @@ Related: [README.md](README.md) (index), [cloud-init/README.md](cloud-init/READM
 | Keep `/vw` + data/special across OS wipe                                             | Reattach surviving `/vw` + tank disks to new Rocky VM                                 |
 | First-boot VW Path A                                                                       | Offline unlock from `/vw` during bootstrap graph resolve                             |
 | First-boot VW Path B                                                                       | Empty `/vw`: apikey login + sync to reachable VW during graph resolve                |
-| First-boot `tank-import` stage                                                          | Reseed key from `TANK_PASSPHRASE`; `zpool import` + `keylocation=file://…`          |
+| First-boot `tank-import` stage                                                          | Reseed `tank_passphrase_<poolId>`; `zpool import` + `keylocation=file://…`          |
 | First-boot `35` export→import drill                                                  | Cold handoff rehearsal: export on old host → import+unlock on Rocky                   |
 | Gate 6 reboot                                                                        | Official `zfs-mount-generator` + `/etc/zfs/zfs-list.cache/tank` → `zfs-load-key@tank` |
 | VW Login `rocky` (admin + `tank-passphrase`; `container-registry-N`; attachments `ssh-host-keys.tar.gz` / `heptapod-deploy-key`) | Same SoT Login in prod VW |
@@ -78,7 +78,7 @@ test -f /var/lib/rocky/first-boot.done && echo stamp_ok
 - [ ] `id -nG apps` includes `systemd-journal` (podman logs / Cockpit journal)
 - [ ] `runuser -u apps -- systemctl --user is-active podman.socket` → `active` (API sock for podman-proxy-rootless)
 - [ ] `systemctl is-active podman.socket` → `active` (API sock for podman-proxy-rootful)
-- [ ] firewalld forward-ports baked into `/usr/local/lib/rocky/dnat-apply.sh` (run by `start-services`) (`port`→`127.0.0.1:dnat`) + `route_localnet=1`
+- [ ] firewalld forward-ports from `/usr/local/lib/rocky/ports.json` (guest `applyDnat` in `start-services`) (`port`→`127.0.0.1:dnat`) + `route_localnet=1`
 - [ ] Optional: bootstrap `@tag(container-registry)` applied (`registry-login` stage; auth for root + apps)
 - [ ] `/etc/subuid` + `/etc/subgid` have `apps:…` only (admin SSH user has none — Podman is apps-only)
 - [ ] `runuser -u apps -- podman info` succeeds (no subuid ERRO)
@@ -115,7 +115,7 @@ zfs version | head -3
 ```bash
 findmnt /vw
 # Path A drill: wipe OS only, leave /vw, re-seed Tier-0, boot offline or with VW down
-# qctl vm destroy --keep-data && qctl vm up --wipe-os
+# qctl vm destroy --keep-persistent && qctl vm up --wipe-os
 ```
 
 ---
@@ -129,7 +129,7 @@ Pool must already exist (`qctl vm init-tank` or dedicated
 
 - [ ] `zpool list` shows `tank`; health ONLINE
 - [ ] Encryption on; `zfs get encryption,keystatus,keylocation tank`
-- [ ] `keylocation` is `file:///etc/credstore/rocky/tank_passphrase`
+- [ ] `keylocation` is `file:///etc/credstore/rocky/tank_passphrase_tank`
 - [ ] Datasets mounted under `/tank`; canary `/tank/.rocky-canary` readable
 - [ ] `/tank/rocky` clone path exists after Gate 7 (may be empty until then)
 
@@ -165,6 +165,7 @@ journalctl -u rocky-first-boot.service -b --no-pager | grep -E 'drill|== zfs-dri
 
 - [ ] Reboot VM; `tank` imported + unlocked **without** interactive passphrase
 - [ ] Official path: `/etc/zfs/zfs-list.cache/tank` present; `zfs-load-key@tank.service` generated (vendor `zfs-load-key.service` stays a `/dev/null` stub)
+- [ ] Key file still `file:///etc/credstore/rocky/tank_passphrase_tank`
 - [ ] `/tank/.rocky-canary` still present
 - [ ] `/vw` still mounted; bootstrap / `qctl secret sync` can resolve VW secrets again if needed
 
@@ -172,6 +173,7 @@ journalctl -u rocky-first-boot.service -b --no-pager | grep -E 'drill|== zfs-dri
 reboot
 # after SSH returns:
 test -s /etc/zfs/zfs-list.cache/tank && systemctl cat zfs-load-key@tank.service | head -15
+test -r /etc/credstore/rocky/tank_passphrase_tank
 zfs get -H keystatus tank   # available
 findmnt /tank && cat /tank/.rocky-canary
 ```

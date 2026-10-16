@@ -5,7 +5,7 @@ import { die } from '../../../lib/util.js'
 import { redefineDomainXml, stopDomainForRedefine } from './domain.js'
 import { virsh } from './virsh.js'
 
-/** @import { PortEntry, VmArgv } from '../../types.js' */
+/** @import { PortsMap } from '../../types.js' */
 
 /**
  * @param {string} ifaceXml
@@ -29,13 +29,12 @@ function passtForwardFingerprint(ifaceXml) {
 /**
  * Rewrite passt <portForward> on user interfaces from ports list (host→guest on 127.0.0.1).
  * @param {string} xml
- * @param {PortEntry[]} ports
- * @param {Partial<VmArgv>} [argv]
+ * @param {PortsMap} ports
  * @returns {string | null} new domain XML, or null if unchanged / not applicable
  */
-export function patchPasstPortForwardsXml(xml, ports, argv = {}) {
-  const desiredFp = passtDesiredFingerprint(ports, argv)
-  const desiredXml = passtForwardsXml(ports, argv)
+export function patchPasstPortForwardsXml(xml, ports) {
+  const desiredFp = passtDesiredFingerprint(ports)
+  const desiredXml = passtForwardsXml(ports)
   if (!desiredXml) return null
   let touched = false
   let anyPasst = false
@@ -65,33 +64,28 @@ export function patchPasstPortForwardsXml(xml, ports, argv = {}) {
  * Stops the guest if a redefine is needed. Returns true if XML changed.
  * @param {string} connect
  * @param {string} name
- * @param {PortEntry[]} ports
- * @param {Partial<VmArgv>} [argv]
+ * @param {PortsMap} ports
  * @returns {Promise<boolean>}
  */
-export async function reconcilePasstPortForwards(connect, name, ports, argv = {}) {
+export async function reconcilePasstPortForwards(connect, name, ports) {
   const dump = await virsh(connect, 'dumpxml', name).nothrow()
   if (dump.exitCode !== 0) {
     die(`dumpxml ${name} failed: ${String(dump.stderr || dump.stdout).trim()}`)
   }
-  if (patchPasstPortForwardsXml(String(dump.stdout), ports, argv) == null) {
+  if (patchPasstPortForwardsXml(String(dump.stdout), ports) == null) {
     return false
   }
 
-  await stopDomainForRedefine(
-    connect,
-    name,
-    `update passt port forwards (${passtSummary(ports, argv)})`,
-  )
+  await stopDomainForRedefine(connect, name, `update passt port forwards (${passtSummary(ports)})`)
 
   const ok = await redefineDomainXml(
     connect,
     name,
-    (xml) => patchPasstPortForwardsXml(xml, ports, argv),
+    (xml) => patchPasstPortForwardsXml(xml, ports),
     'passt-fwd',
   )
   if (ok) {
-    console.log(chalk.dim(`vm: passt hostfwd ${passtSummary(ports, argv)}`))
+    console.log(chalk.dim(`vm: passt hostfwd ${passtSummary(ports)}`))
   }
   return ok
 }

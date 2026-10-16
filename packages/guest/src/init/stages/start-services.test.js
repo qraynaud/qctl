@@ -1,7 +1,11 @@
+import { packagesMapWithRequired } from '@qctl/shared'
+
 import { createContext } from '../context.js'
 import { StageError } from '../errors.js'
 import startServices from './start-services.js'
 import { describe, expect, test } from 'bun:test'
+
+const stubPackages = packagesMapWithRequired()
 
 describe('start-services stage', () => {
   test('plan includes unmask and dnat lines', () => {
@@ -10,7 +14,7 @@ describe('start-services stage', () => {
       log: () => {},
       platform: {
         id: 'fake',
-        packages: {},
+        packages: stubPackages,
         installPackages: async () => {},
         networking: { planApplyDnat: () => ['apply dnat'] },
       },
@@ -27,7 +31,7 @@ describe('start-services stage', () => {
       isRoot: () => false,
       platform: {
         id: 'fake',
-        packages: {},
+        packages: stubPackages,
         installPackages: async () => {},
         networking: { applyDnat: async () => {} },
       },
@@ -40,7 +44,7 @@ describe('start-services stage', () => {
       env: { QCTL_ENV: 'dev' },
       log: () => {},
       isRoot: () => true,
-      platform: { id: 'fake', packages: {}, installPackages: async () => {} },
+      platform: { id: 'fake', packages: stubPackages, installPackages: async () => {} },
     })
     await expect(startServices.run(ctx)).rejects.toThrow(/applyDnat/)
   })

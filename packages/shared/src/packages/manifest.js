@@ -8,33 +8,25 @@ const pkgName = z.string().trim().min(1)
 /** `packages.pipx` entry: bare package spec or `{ package, inject? }`. */
 export const packagesPipxItemSchema = z.union([
   pkgName,
-  z
-    .object({
-      package: pkgName,
-      inject: z.array(pkgName).optional(),
-    })
-    .strict(),
+  z.strictObject({
+    package: pkgName,
+    inject: z.array(pkgName).optional(),
+  }),
 ])
 
 /**
  * `packages.http` entry: download URL → binary.
  */
 export const packagesHttpItemSchema = z
-  .object({
+  .strictObject({
     url: z.string().trim().url(),
     bin: pkgName.optional(),
     dest: z.string().trim().min(1).optional(),
     test: z.string().trim().min(1).optional(),
   })
-  .strict()
-  .superRefine((data, ctx) => {
-    if (!data.bin && !data.dest) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'need bin (zip member / /usr/local/bin name) or dest (absolute path)',
-        path: ['bin'],
-      })
-    }
+  .refine((data) => data.bin != null || data.dest != null, {
+    message: 'need bin (zip member / /usr/local/bin name) or dest (absolute path)',
+    path: ['bin'],
   })
 
 /**
@@ -44,13 +36,11 @@ export const packagesHttpItemSchema = z
  * @property {{ url: string, bin: string | null, dest: string | null, test: string | null }[]} http
  */
 
-export const packagesManifestSchema = z
-  .object({
-    distro: z.array(pkgName).optional(),
-    pipx: z.array(packagesPipxItemSchema).optional(),
-    http: z.array(packagesHttpItemSchema).optional(),
-  })
-  .strict()
+export const packagesManifestSchema = z.strictObject({
+  distro: z.array(pkgName).optional(),
+  pipx: z.array(packagesPipxItemSchema).optional(),
+  http: z.array(packagesHttpItemSchema).optional(),
+})
 
 /** Empty normalized manifest. */
 export function emptyPackages() {

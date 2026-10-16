@@ -15,8 +15,8 @@ const {
   extractItemField,
   parseInitVwArgKeys,
   parseInitVwArgs,
-  parseVwArgs,
   pickAttachment,
+  vwArgsSchema,
   resolveVwAccountId,
   valueCacheKey,
 } = require('./vw/index.js')
@@ -651,9 +651,9 @@ describe('resolveVwAccountId', () => {
   })
 })
 
-describe('parseVwArgs', () => {
+describe('vwArgsSchema', () => {
   test('defaults field to password and account to DEFAULT_VW_ACCOUNT', () => {
-    expect(parseVwArgs({ item: 'rocky' })).toEqual({
+    expect(vwArgsSchema.parse({ item: 'rocky' })).toEqual({
       kind: 'field',
       item: 'rocky',
       field: 'password',
@@ -663,7 +663,11 @@ describe('parseVwArgs', () => {
 
   test('named field= + accountId', () => {
     expect(
-      parseVwArgs({ accountId: 'work', item: 'rocky-caddy', field: 'dns_digitalocean_token' }),
+      vwArgsSchema.parse({
+        accountId: 'work',
+        item: 'rocky-caddy',
+        field: 'dns_digitalocean_token',
+      }),
     ).toEqual({
       kind: 'field',
       item: 'rocky-caddy',
@@ -673,7 +677,7 @@ describe('parseVwArgs', () => {
   })
 
   test('attachment defaults encoding utf8', () => {
-    expect(parseVwArgs({ item: 'rocky', attachment: 'key.pem' })).toEqual({
+    expect(vwArgsSchema.parse({ item: 'rocky', attachment: 'key.pem' })).toEqual({
       kind: 'attachment',
       item: 'rocky',
       file: 'key.pem',
@@ -683,7 +687,9 @@ describe('parseVwArgs', () => {
   })
 
   test('attachment with encoding=base64', () => {
-    expect(parseVwArgs({ item: 'rocky', attachment: 'keys.tgz', encoding: 'base64' })).toEqual({
+    expect(
+      vwArgsSchema.parse({ item: 'rocky', attachment: 'keys.tgz', encoding: 'base64' }),
+    ).toEqual({
       kind: 'attachment',
       item: 'rocky',
       file: 'keys.tgz',
@@ -693,32 +699,30 @@ describe('parseVwArgs', () => {
   })
 
   test('rejects field= with attachment=', () => {
-    expect(() => parseVwArgs({ item: 'x', field: 'password', attachment: 'a' })).toThrow(/not both/)
+    expect(() => vwArgsSchema.parse({ item: 'x', field: 'password', attachment: 'a' })).toThrow()
   })
 
   test('rejects encoding without attachment', () => {
-    expect(() => parseVwArgs({ item: 'x', encoding: 'base64' })).toThrow(/requires attachment/)
+    expect(() => vwArgsSchema.parse({ item: 'x', encoding: 'base64' })).toThrow()
   })
 
   test('rejects bad encoding', () => {
-    expect(() => parseVwArgs({ item: 'x', attachment: 'a', encoding: 'hex' })).toThrow(
-      /utf8 or base64/,
-    )
+    expect(() => vwArgsSchema.parse({ item: 'x', attachment: 'a', encoding: 'hex' })).toThrow()
   })
 
   test('rejects empty item', () => {
-    expect(() => parseVwArgs({ item: '' })).toThrow(/item name/)
+    expect(() => vwArgsSchema.parse({ item: '' })).toThrow()
   })
 })
 
 describe('parseInitVwArgs', () => {
-  test('allows empty / partial options; coerces empty sessionToken', () => {
+  test('allows empty / partial options; rejects blank strings', () => {
     expect(parseInitVwArgs({})).toEqual({})
     expect(parseInitVwArgs({ appDataDir: '/vw', sessionToken: 'TOK' })).toEqual({
       appDataDir: '/vw',
       sessionToken: 'TOK',
     })
-    expect(parseInitVwArgs({ sessionToken: '' })).toEqual({})
+    expect(() => parseInitVwArgs({ sessionToken: '' })).toThrow(/non-empty string/)
     expect(parseInitVwArgs({ id: 'work', appDataDir: '/vw' })).toEqual({
       id: 'work',
       appDataDir: '/vw',
@@ -747,7 +751,7 @@ describe('parseInitVwArgs', () => {
         appDataDir: '/home/u/.config/Bitwarden CLI',
       }),
     ).toMatchObject({ id: 'perso' })
-    expect(parseInitVwArgKeys({ id: '' })).toEqual({}) // empty → omit → default account
+    expect(() => parseInitVwArgKeys({ id: '' })).toThrow(/non-empty string literal/)
     expect(() => parseInitVwArgKeys({ id: { resolve: async () => 'work' } })).toThrow(/id=/)
   })
 
@@ -761,8 +765,8 @@ describe('parseInitVwArgs', () => {
     })
   })
 
-  test('rejects blank-only after coerce for other fields stays optional', () => {
-    expect(parseInitVwArgs({ bin: '' })).toEqual({})
+  test('rejects blank bin; other fields stay optional', () => {
+    expect(() => parseInitVwArgs({ bin: '' })).toThrow(/non-empty string/)
     expect(parseInitVwArgs({ masterPassword: 'x' })).toEqual({ masterPassword: 'x' })
   })
 

@@ -14,7 +14,6 @@ export async function sshInfo(argv) {
     connect: argv.connect,
     name: argv.name,
     ports: portsFromArgv(argv),
-    argv,
     network: argv.network === 'auto' ? 'user' : argv.network,
   })
 }

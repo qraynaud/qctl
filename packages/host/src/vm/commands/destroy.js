@@ -1,13 +1,16 @@
 import { chalk } from 'zx'
 
 import { sharedDryRun, sharedLibvirt } from '../../lib/options.js'
+import { die } from '../../lib/util.js'
 import { loadDriver } from '../drivers/index.js'
+import { confirmProdFullDestroy } from '../libs/confirm-destroy.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'destroy'
-export const describe = 'Undefine / delete VM; delete disks unless --keep-data'
+export const describe =
+  'Undefine / delete VM; delete disks unless --keep-persistent (data + tank members)'
 
 /**
  * @param {Argv} yargs
@@ -15,10 +18,16 @@ export const describe = 'Undefine / delete VM; delete disks unless --keep-data'
  */
 export function builder(yargs) {
   return sharedDryRun(sharedLibvirt(yargs))
-    .option('keep-data', {
+    .option('keep-persistent', {
       type: 'boolean',
       default: false,
-      describe: 'Remove OS only; keep /vw + data + special disks',
+      describe: 'Remove OS only; keep data volumes + tank members',
+    })
+    .option('yes', {
+      alias: 'y',
+      type: 'boolean',
+      default: false,
+      describe: 'Skip prompts (only valid with --keep-persistent)',
     })
     .strict()
 }
@@ -33,5 +42,16 @@ export async function handler(argv) {
     chalk.cyan('vm destroy'),
     chalk.dim(`target=${argv.target} env=${argv.env} name=${argv.name}`),
   )
+
+  if (argv.yes && !argv.keepPersistent) {
+    die('destroy: -y/--yes is only valid with --keep-persistent')
+  }
+
+  const fullWipe = !argv.keepPersistent
+  if (fullWipe && argv.env === 'prod' && !argv.dryRun) {
+    // Always interactive on prod full wipe (-y cannot skip).
+    await confirmProdFullDestroy(argv.name)
+  }
+
   await driver.destroy(argv)
 }

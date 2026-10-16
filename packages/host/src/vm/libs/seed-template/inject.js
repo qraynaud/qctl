@@ -1,12 +1,13 @@
 /**
  * Post-render cloud-config write_files injectors (Tier-0, packages, provision files).
  */
-import { isEmptyCredential } from '@qctl/shared'
+import { disksJsonSchema, isEmptyCredential, portsSchema } from '@qctl/shared'
 
 import { isCloudInitYamlSafe, withTrailingNewline } from './util.js'
 
-/** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-/** @import { NormalizedPackages } from '../../../provision/secrets-schema/packages.js' */
+/** @import { DisksJson, YamlMapping, YamlValue } from '@qctl/shared' */
+/** @import { NormalizedPackages } from '../../../provision/schema/packages.js' */
+/** @import { ResolvedDisks } from '../../../provision/schema/resolve-disks.js' */
 
 /** @typedef {YamlMapping} CloudConfig */
 /**
@@ -89,10 +90,85 @@ export function injectGuestCredentialFiles(userData, guest) {
 }
 
 const PACKAGES_JSON_PATH = '/usr/local/lib/rocky/packages.json'
+export const DISKS_JSON_PATH = '/usr/local/lib/rocky/disks.json'
+export const PORTS_JSON_PATH = '/usr/local/lib/rocky/ports.json'
 
 /**
- * Embed normalized `packages` (distro / pipx / http) for cloud-init
- * `install-packages.sh`.
+ * Canonical disks for the guest (passphrases stripped — those are Tier-0 only).
+ * Validated via {@link disksJsonSchema}.
+ * @param {ResolvedDisks} resolved
+ * @returns {DisksJson}
+ */
+export function disksJsonPayload(resolved) {
+  /** @type {DisksJson['tanks']} */
+  const tanks = {}
+  for (const [key, tank] of Object.entries(resolved.tanks || {})) {
+    tanks[key] = {
+      id: tank.id,
+      mount: tank.mount,
+      options: tank.options,
+      vdevs: tank.vdevs,
+    }
+  }
+  return disksJsonSchema.parse({
+    os: resolved.os,
+    data: resolved.data,
+    tanks,
+    members: resolved.members,
+    encryptedTankIds: [...(resolved.encryptedTankIds || [])],
+  })
+}
+
+/**
+ * Embed resolved disk topology for guest stages (`disks.json`).
+ * @param {CloudConfig} userData
+ * @param {ResolvedDisks | null | undefined} resolved
+ */
+export function injectResolvedDisks(userData, resolved) {
+  if (!userData || typeof userData !== 'object' || !resolved) return userData
+  /** @type {CloudWriteFile[]} */
+  const writeFiles = Array.isArray(userData.write_files)
+    ? /** @type {CloudWriteFile[]} */ ([...userData.write_files])
+    : []
+  const kept = writeFiles.filter((w) => !(w && typeof w === 'object' && w.path === DISKS_JSON_PATH))
+  kept.push({
+    path: DISKS_JSON_PATH,
+    owner: 'root:root',
+    permissions: '0644',
+    content: `${JSON.stringify(disksJsonPayload(resolved), null, 2)}\n`,
+  })
+  userData.write_files = kept
+  return userData
+}
+
+/**
+ * Embed provision ports map for guest DNAT (`ports.json`).
+ * Guest platform applies firewalld forwards from entries with `dnat`.
+ *
+ * @param {CloudConfig} userData
+ * @param {unknown} ports raw provision ports map (validated by portsSchema)
+ */
+export function injectPorts(userData, ports) {
+  if (!userData || typeof userData !== 'object') return userData
+  const body = portsSchema.parse(ports ?? {})
+  /** @type {CloudWriteFile[]} */
+  const writeFiles = Array.isArray(userData.write_files)
+    ? /** @type {CloudWriteFile[]} */ ([...userData.write_files])
+    : []
+  const kept = writeFiles.filter((w) => !(w && typeof w === 'object' && w.path === PORTS_JSON_PATH))
+  kept.push({
+    path: PORTS_JSON_PATH,
+    owner: 'root:root',
+    permissions: '0644',
+    content: `${JSON.stringify(body, null, 2)}\n`,
+  })
+  userData.write_files = kept
+  return userData
+}
+
+/**
+ * Embed normalized `packages` (distro / pipx / http) for guest init
+ * (`/usr/local/lib/rocky/packages.json`).
  *
  * @param {CloudConfig} userData
  * @param {NormalizedPackages | undefined} packages

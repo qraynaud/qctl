@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { chalk, fs, path } from 'zx'
 
 import { loadCloudImageFromPlugin, tryLoadCloudImageFromEnv } from '../cloud-image.js'
-import { loadEnvSecretsOrThrow } from '../lib/load-config.js'
+import { loadEnvProvisionOrThrow } from '../lib/load-config.js'
 import { getTooling, isSeedKitRoot, setSeedKitRoot } from '../lib/paths.js'
 import { die } from '../lib/util.js'
 import { tryGetLocalGuestDist } from '../qctl-source.js'
@@ -77,7 +77,7 @@ export async function resolvePlatformRef(opts = {}) {
     return parsePlatformRef(opts.platform)
   }
   try {
-    const sec = await loadEnvSecretsOrThrow({
+    const sec = await loadEnvProvisionOrThrow({
       env: opts.env || 'dev',
       target: opts.target || 'local',
     })

@@ -1,16 +1,47 @@
-import { DATA_COUNT, SPECIAL_COUNT } from '../../lib/paths.js'
+import * as paths from '../../lib/paths.js'
+import { resolveDisks } from '../../provision/schema/resolve-disks.js'
+import { vmPaths } from './disks.js'
 import { buildVirtInstallArgs } from './virt-install.js'
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+
+afterEach(() => {
+  // @ts-expect-error restore
+  paths.getVms.mockRestore?.()
+})
 
 describe('buildVirtInstallArgs', () => {
   test('builds virt-install argv with disks and serial tcp', () => {
-    const disks = {
-      dir: '/vms/rocky',
-      os: '/vms/rocky/os.qcow2',
-      vw: '/vms/rocky/vw.qcow2',
-      data: Array.from({ length: DATA_COUNT }, (_, i) => `/vms/rocky/data${i}.qcow2`),
-      special: Array.from({ length: SPECIAL_COUNT }, (_, i) => `/vms/rocky/special${i}.qcow2`),
-    }
+    spyOn(paths, 'getVms').mockReturnValue('/vms')
+    const resolved = resolveDisks(
+      {
+        os: { id: 'os', size: '20G' },
+        data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs', size: '2G' } },
+        tanks: {
+          tank: {
+            id: 'tank',
+            mount: '/tank',
+            options: {
+              pool: { ashift: 12, autotrim: 'off', autoexpand: 'on', failmode: 'continue' },
+              dataset: { compression: 'lz4', atime: 'off', xattr: 'sa', special_small_blocks: 0 },
+              acl: { acltype: 'posix', aclmode: 'passthrough', aclinherit: 'passthrough' },
+            },
+            vdevs: {
+              data0: {
+                role: 'data',
+                type: 'single',
+                members: { 'rocky-data0': { id: 'rocky-data0', size: '2G' } },
+              },
+            },
+          },
+        },
+      },
+      {
+        filesystems: ['xfs', 'ext4'],
+        defaultFs: 'xfs',
+        osDisk: { id: 'os', size: '20G' },
+      },
+    )
+    const disks = vmPaths('rocky', resolved)
     const args = buildVirtInstallArgs({
       connect: 'qemu:///system',
       name: 'rocky',
@@ -18,7 +49,10 @@ describe('buildVirtInstallArgs', () => {
       vcpus: 2,
       disks,
       seed: { device: 'cdrom', path: '/seed.iso' },
-      ports: [{ name: 'ssh', port: 22, forward: 2222, dnat: null }],
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+      },
       network: 'default',
       osinfo: 'rocky9',
       serialTcpPort: 5555,
@@ -30,6 +64,8 @@ describe('buildVirtInstallArgs', () => {
     expect(args).toContain('network=default,model=virtio')
     expect(args.join(' ')).toMatch(/tcp,host=127\.0\.0\.1:5555/)
     expect(args.join(' ')).toMatch(/device=cdrom/)
+    expect(args.join(' ')).toMatch(/serial=vw/)
+    expect(args.join(' ')).toMatch(/serial=rocky-data0/)
     expect(args).toContain('--tpm')
     expect(args).toContain('backend.type=emulator,backend.version=2.0,model=tpm-crb')
   })

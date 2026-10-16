@@ -1,95 +1,146 @@
 /**
- * init-tank profile: create encrypted tank, export, write stamp.
- * Reseeds key file from bootstrap `TANK_PASSPHRASE` when missing.
+ * init-tank profile: create tanks from disks.json topology, export, write stamp.
+ * Encrypted pools: Tier-0 `tank_passphrase_<poolId>` → credstore key file.
  */
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import { buildZpoolCreateArgv } from '@qctl/shared'
+
+import { loadDisksJson } from '../disks-json.js'
 import { StageError } from '../errors.js'
 import { detectQctlEnv } from './lib/credentials.js'
+import { diskBySerial } from './lib/disk-by-serial.js'
 import {
   ensureTankPassphraseFromBootstrap,
   mustExec,
   tankCredFile,
   tankEnableBootUnlock,
   tankKeyLocation,
-  tankMount,
-  tankPool,
   tankPoolImportable,
   tankPoolImported,
   writeTankCanary,
 } from './lib/tank.js'
 
+/** @import { DisksJson } from '@qctl/shared' */
 /** @import { StageContext } from '../context.js' */
 
 /**
- * @param {StageContext} ctx
- * @param {string} serial
- * @returns {Promise<string>}
+ * @typedef {{ role: string, type: string, devices: string[] }} ResolvedTankVdev
  */
-async function diskBySerial(ctx, serial) {
-  const byId = await ctx.exec([
-    'bash',
-    '-c',
-    `serial="$1"
-     for c in /dev/disk/by-id/*"$serial"*; do
-       [[ -e "$c" && ! "$c" =~ -part[0-9]+$ ]] || continue
-       readlink -f "$c"
-       exit 0
-     done
-     exit 1`,
-    'disk-by-serial',
-    serial,
-  ])
-  if (byId.code === 0 && byId.stdout.trim()) return byId.stdout.trim()
 
-  const lsblk = await ctx.exec(['lsblk', '-ndo', 'NAME,SERIAL,TYPE'])
-  for (const line of (lsblk.stdout || '').split('\n')) {
-    const parts = line.trim().split(/\s+/)
-    if (parts.length < 3) continue
-    const [name, ser, type] = parts
-    if (ser === serial && type === 'disk') return `/dev/${name}`
+/**
+ * @param {StageContext} ctx
+ * @param {DisksJson['tanks'][string]} tank
+ * @returns {Promise<ResolvedTankVdev[]>}
+ */
+async function resolveTankVdevs(ctx, tank) {
+  /** @type {ResolvedTankVdev[]} */
+  const out = []
+  for (const [vdevId, vdev] of Object.entries(tank.vdevs)) {
+    /** @type {string[]} */
+    const devices = []
+    for (const member of Object.values(vdev.members)) {
+      const dev = await diskBySerial(ctx, member.id)
+      devices.push(dev)
+      ctx.log(`tank-create: ${tank.id}/${vdevId}/${member.id} → ${dev}`)
+    }
+    out.push({ role: vdev.role, type: vdev.type, devices })
   }
-  throw new Error(`missing disk serial ${serial}`)
+  return out
 }
 
 /**
  * @param {StageContext} ctx
+ * @param {DisksJson} disks
+ * @returns {string[]}
  */
-async function requireVdevDisks(ctx) {
-  const dataPrefix = ctx.env.ROCKY_DATA_SERIAL_PREFIX?.trim() || 'rocky-data'
-  const specialPrefix = ctx.env.ROCKY_SPECIAL_SERIAL_PREFIX?.trim() || 'rocky-special'
-  const dataCount = Number(ctx.env.ROCKY_DATA_COUNT || 5)
-  const specialCount = Number(ctx.env.ROCKY_SPECIAL_COUNT || 2)
-  /** @type {string[]} */
-  const dataDisks = []
-  /** @type {string[]} */
-  const specialDisks = []
-  for (let i = 0; i < dataCount; i++) {
-    const dev = await diskBySerial(ctx, `${dataPrefix}${i}`)
-    dataDisks.push(dev)
-    ctx.log(`tank-create: data${i} → ${dev}`)
+function poolsToCreate(ctx, disks) {
+  const poolsEnv = ctx.env.ROCKY_INIT_TANK_POOLS?.trim()
+  if (poolsEnv) {
+    return poolsEnv
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
   }
-  for (let i = 0; i < specialCount; i++) {
-    const dev = await diskBySerial(ctx, `${specialPrefix}${i}`)
-    specialDisks.push(dev)
-    ctx.log(`tank-create: special${i} → ${dev}`)
+  return Object.keys(disks.tanks)
+}
+
+/**
+ * @param {StageContext} ctx
+ * @param {DisksJson} disks
+ * @param {string} poolId
+ */
+async function createOneTank(ctx, disks, poolId) {
+  const tank = disks.tanks[poolId]
+  if (!tank) {
+    throw new Error(`disks.json has no tank ${JSON.stringify(poolId)}`)
   }
-  return { dataDisks, specialDisks }
+  const encrypted = disks.encryptedTankIds.includes(poolId)
+  if (encrypted) {
+    await ensureTankPassphraseFromBootstrap(ctx, 'tank-create', poolId)
+  }
+
+  if (await tankPoolImported(ctx, poolId)) {
+    throw new Error(
+      `pool ${poolId} already imported — aborting`
+        + (ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
+          ? ' (host -f should have wiped members)'
+          : ' (pass host init-tank -f to recreate)'),
+    )
+  }
+  if (await tankPoolImportable(ctx, poolId)) {
+    throw new Error(
+      `pool ${poolId} is importable on these disks — aborting`
+        + (ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
+          ? ' (host -f should have wiped members)'
+          : ' (pass host init-tank -f to recreate)'),
+    )
+  }
+
+  const vdevs = await resolveTankVdevs(ctx, tank)
+  await ctx.exec(['udevadm', 'settle'])
+
+  const encryption = encrypted ? { keylocation: tankKeyLocation(ctx, poolId) } : null
+  const argv = buildZpoolCreateArgv({
+    pool: tank.id,
+    mount: tank.mount,
+    options: tank.options,
+    vdevs,
+    encryption,
+  })
+  ctx.log(
+    `tank-create: creating ${tank.id} at ${tank.mount}`
+      + (encryption ? ` (encrypted keylocation=${encryption.keylocation})` : ' (unencrypted)'),
+  )
+  await mustExec(ctx, argv, `zpool create ${tank.id}`)
+
+  await writeTankCanary(ctx, `${tank.mount}/.rocky-canary`, tank.mount)
+  await tankEnableBootUnlock(ctx, tank.id, tank.mount)
+
+  const status = await ctx.exec(['zpool', 'status', tank.id])
+  for (const line of (status.stdout || '').split('\n').slice(0, 25)) {
+    if (line) ctx.log(`tank-create: ${line}`)
+  }
+
+  ctx.log(`tank-create: exporting ${tank.id}…`)
+  await mustExec(ctx, ['zpool', 'export', tank.id], `zpool export ${tank.id}`)
 }
 
 export default {
   name: 'tank-create',
-  describe: 'init-tank: create encrypted tank, export, write init-tank stamp',
+  describe: 'init-tank: create tanks from disks.json, export, write stamp',
   /**
    * @param {StageContext} ctx
    */
   plan(ctx) {
     return [
       'require ROCKY_TANK_CREATE_I_UNDERSTAND=yes',
-      `ensure ${tankCredFile(ctx)} from Tier-0 TANK_PASSPHRASE (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
-      `create encrypted ${tankPool(ctx)} (raidz2 + special mirror), export, stamp`,
+      'read disks.json tanks (+ ROCKY_INIT_TANK_POOLS filter)',
+      `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      'zpool create from vdev role registry (options.pool / dataset / acl; no child datasets)',
+      'export + stamp',
     ]
   },
   /**
@@ -106,85 +157,37 @@ export default {
 
     const stamp = ctx.env.ROCKY_INIT_TANK_STAMP?.trim() || '/var/lib/rocky/init-tank-done'
     const okMarker = ctx.env.ROCKY_INIT_TANK_OK?.trim() || '/vw/.rocky-init-tank-ok'
-    const pool = tankPool(ctx)
-    const mount = tankMount(ctx)
+    const force = ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
 
-    if (existsSync(stamp)) {
+    if (existsSync(stamp) && !force) {
       ctx.log(`tank-create: already done (${stamp}) — skipping create`)
       return
     }
 
     try {
-      await ensureTankPassphraseFromBootstrap(ctx, 'tank-create')
+      const disks = await loadDisksJson(ctx.env)
+      if (!disks) throw new Error('disks.json missing — cannot create tanks')
+      const poolIds = poolsToCreate(ctx, disks)
+      if (!poolIds.length) {
+        ctx.log('tank-create: no tanks in disks.json / ROCKY_INIT_TANK_POOLS — nothing to create')
+        return
+      }
+
       await mustExec(ctx, ['modprobe', 'zfs'], 'modprobe zfs')
       const zpoolBin = await ctx.exec(['bash', '-c', 'command -v zpool'])
       if (zpoolBin.code !== 0 || !zpoolBin.stdout.trim()) {
         throw new Error('zpool not installed')
       }
 
-      if (await tankPoolImported(ctx)) {
-        throw new Error(`pool ${pool} already imported — aborting (will not recreate)`)
-      }
-      if (await tankPoolImportable(ctx)) {
-        throw new Error(`pool ${pool} is importable on these disks — aborting (will not wipe)`)
-      }
-
-      const { dataDisks, specialDisks } = await requireVdevDisks(ctx)
-      await ctx.exec(['udevadm', 'settle'])
       ctx.log('tank-create: block devices (serials):')
       const lsblk = await ctx.exec(['lsblk', '-ndo', 'NAME,SIZE,SERIAL,TYPE'])
       for (const line of (lsblk.stdout || '').split('\n').filter(Boolean)) {
         ctx.log(`tank-create: ${line}`)
       }
 
-      const keyLoc = tankKeyLocation(ctx)
-      ctx.log(`tank-create: creating encrypted ${pool} (keylocation=${keyLoc})`)
-      await mustExec(
-        ctx,
-        [
-          'zpool',
-          'create',
-          '-f',
-          '-O',
-          `mountpoint=${mount}`,
-          '-O',
-          'compression=lz4',
-          '-O',
-          'atime=off',
-          '-O',
-          'xattr=sa',
-          '-O',
-          'acltype=posixacl',
-          '-O',
-          'dnodesize=auto',
-          '-O',
-          'encryption=aes-256-gcm',
-          '-O',
-          'keyformat=passphrase',
-          '-O',
-          `keylocation=${keyLoc}`,
-          pool,
-          'raidz2',
-          ...dataDisks,
-        ],
-        'zpool create',
-      )
-      await mustExec(
-        ctx,
-        ['zpool', 'add', '-f', pool, 'special', 'mirror', ...specialDisks],
-        'zpool add special mirror',
-      )
-      await ctx.exec(['zfs', 'create', '-o', 'mountpoint=none', `${pool}/apps`])
-      await writeTankCanary(ctx, `${mount}/.rocky-canary`)
-      await tankEnableBootUnlock(ctx)
-
-      const status = await ctx.exec(['zpool', 'status', pool])
-      for (const line of (status.stdout || '').split('\n').slice(0, 25)) {
-        if (line) ctx.log(`tank-create: ${line}`)
+      for (const poolId of poolIds) {
+        await createOneTank(ctx, disks, poolId)
       }
-
-      ctx.log(`tank-create: exporting ${pool}…`)
-      await mustExec(ctx, ['zpool', 'export', pool], `zpool export ${pool}`)
 
       const when = new Date().toISOString()
       await mkdir(dirname(stamp), { recursive: true })
@@ -192,7 +195,8 @@ export default {
       await mkdir(dirname(okMarker), { recursive: true })
       await writeFile(okMarker, `${when}\n`, { mode: 0o644 })
       ctx.log(
-        `tank-create: created + exported OK; later boots re-seed ${tankCredFile(ctx)} from bootstrap`,
+        `tank-create: created + exported OK (${poolIds.join(', ')}); `
+          + `later boots re-seed ${tankCredFile(ctx, poolIds[0])} from bootstrap`,
       )
     } catch (err) {
       if (err instanceof StageError) throw err

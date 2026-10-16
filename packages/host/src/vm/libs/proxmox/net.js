@@ -60,7 +60,7 @@ export function formatNet(iface = {}) {
   const mac = iface.mac ? normalizeMac(iface.mac) : null
   let net = mac ? `virtio=${mac},bridge=${bridge}` : `virtio,bridge=${bridge}`
   if (iface.trunks?.length) net += `,trunks=${iface.trunks.join(';')}`
-  else if (iface.vlan != null) net += `,tag=${iface.vlan}`
+  else if (iface.vlan) net += `,tag=${iface.vlan}`
   return net
 }
 
@@ -71,7 +71,7 @@ export function formatNet(iface = {}) {
  * @returns {number}
  */
 export function applyNetsToForm(form, nets) {
-  const list = nets?.length ? nets : [{ bridge: 'vmbr0', vlan: null, trunks: null, mac: null }]
+  const list = nets?.length ? nets : [{ bridge: 'vmbr0' }]
   for (let i = 0; i < list.length; i++) {
     form[`net${i}`] = formatNet(list[i])
   }
@@ -88,7 +88,7 @@ export function formatNetLabel(iface = {}) {
   let base
   if (iface.trunks?.length) {
     base = `bridge ${bridge} trunk [${summarizeVlans(iface.trunks)}]`
-  } else if (iface.vlan != null) {
+  } else if (iface.vlan) {
     base = `bridge ${bridge} vlan ${iface.vlan}`
   } else {
     base = `bridge ${bridge} (untagged)`

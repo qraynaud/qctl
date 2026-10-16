@@ -1,6 +1,6 @@
 # Provision YAML
 
-Committable topology for an instance: networking, users, tank, repo, packages, and
+Committable topology for an instance: `disks`, networking, users, repo, packages, and
 hypervisor sizing. Secrets stay out of the YAML — use `!env NAME` and resolve values
 from `provision/.env.<QCTL_ENV>` (see [secrets.md](./secrets.md)).
 
@@ -25,7 +25,7 @@ Load algorithm (`qctl vm …`, `qctl local …`, seed):
 3. Drop the opposite hypervisor block (`local` vs `proxmox`).
 4. Resolve every `!env` from process env + `provision/.env.*` graph to a
    `Buffer` (empty process values do not win; missing keys error).
-5. Validate against the secrets schema (below). The `qctl:` block is host metadata
+5. Validate against the provision schema (below). The `qctl:` block is host metadata
    and is stripped before that validation.
 
 ```text
@@ -41,8 +41,10 @@ IPs, API tokens) in the overlay.
 ## `!env` tag
 
 ```yaml
-tank:
-  passphrase: !env TANK_PASSPHRASE
+disks:
+  tanks:
+    tank:
+      passphrase: !env TANK_PASSPHRASE   # → Tier-0 tank_passphrase_tank
 
 repo:
   # CI / process env cannot hold newlines — store base64, decode at resolve:
@@ -56,7 +58,7 @@ repo:
   `Buffer | string` and encode Tier-0 `write_files` appropriately.
 - `NAME` must exist in the merged host env (graph and/or process).
 - Empty string is allowed (optional slots); **unset** is an error.
-- Name the host keys however you like; Tier-0 guest names (`TANK_PASSPHRASE`,
+- Name the host keys however you like; Tier-0 guest names (`tank_passphrase_<poolId>`,
   `ADMIN_USERNAME`, …) are assigned from the **resolved YAML**, not from your
   `.env` key spelling.
 
@@ -66,7 +68,7 @@ Every supported top-level key and nested field. Omit anything optional — defau
 are noted in comments. Copy and trim for real instances.
 
 ```yaml
-# --- Host metadata (not part of the guest secrets schema) ---
+# --- Host metadata (not part of the guest provision schema) ---
 qctl:
   # Platform adapter for guest tooling. Short name or github:owner/repo[@x.y.z]
   # Default when omitted at resolve time: rocky
@@ -74,9 +76,42 @@ qctl:
   # platform: github:qraynaud/platform-ubuntu
   # platform: github:qraynaud/platform-rocky@1.2.3
 
-# --- ZFS tank passphrase (Tier-0). Omit block only if you never create/reseed the tank. ---
-tank:
-  passphrase: !env TANK_PASSPHRASE
+# --- Disk topology (optional; omit → platform OS default only, no data/tanks yet) ---
+# Member map keys become disk serials. size → virtual disk; omit size → physical bind.
+# Create ZFS pools only via `qctl vm init-tank` (appliance boots import+unlock only).
+# ≥1 data volume or tank required when disks: is present. Mounts and ids must be unique.
+disks:
+  os:
+    # id: os                 # optional; default "os"
+    size: 20G                # optional; platform default when omitted
+  data:
+    vw:
+      # id: vw               # optional; default = map key
+      mount: /vw
+      size: 2G
+      # fs: xfs              # optional; default = platform DEFAULT_FS
+  tanks:
+    tank:
+      # id: tank             # optional; default = map key (also the zpool name)
+      mount: /tank
+      passphrase: !env TANK_PASSPHRASE   # → Tier-0 tank_passphrase_tank
+      # options: {}          # pool/dataset/acl defaults applied at resolve
+      vdevs:
+        data:                # ≥1 vdev with role: data required per tank
+          role: data         # data | special (registry)
+          type: raidz2       # single | mirror | raidz | raidz2 | raidz3
+          members:           # geometry mins enforced (raidz2 ≥ 3, …)
+            data1: { size: 2G }
+            data2: { size: 2G }
+            data3: { size: 2G }
+            data4: { size: 2G }
+            data5: { size: 2G }
+        special:
+          role: special
+          type: mirror
+          members:
+            special1: { size: 1G }
+            special2: { size: 1G }
 
 # --- SSH seed material ---
 ssh:
@@ -256,14 +291,12 @@ packages:
 
 ## Minimal valid base
 
-`networking.ports` is the only required topology. Everything else can be omitted:
+`networking.ports` is the only required topology. Everything else can be omitted
+(including `disks:` — resolve then uses the platform OS default only):
 
 ```yaml
 qctl:
   platform: rocky
-
-tank:
-  passphrase: !env TANK_PASSPHRASE
 
 networking:
   ports:
@@ -276,13 +309,23 @@ repo:
   deploy_key: !env DEPLOY_KEY
 ```
 
-That yields default `admin` / `apps`, default `eth0` uplink, and key-only admin
+Add a `disks:` block (see full sample) before `qctl vm init-tank` / appliance up with
+persistent volumes. Default `admin` / `apps`, default `eth0` uplink, and key-only admin
 (SSH via `ssh.authorized_keys` or the host pubkey fallback). Set
 `users.admin.password` (or SSH in and `passwd`) before Cockpit password login.
+
+## Lifecycle (disks)
+
+| Command | Role |
+|---------|------|
+| `qctl vm init-tank [poolId…]` | Only path that `zpool create`s. Bare = all `disks.tanks`; `-f` recreates. |
+| `qctl vm up` | Appliance: import + unlock + mount from topology (never create). |
+| `qctl vm up --wipe-os` | Recreate OS disk only; keep `disks.data` + tank members. |
+| `qctl vm destroy --keep-persistent` | Drop OS; keep data volumes + tank members. Full wipe needs confirm in prod. |
 
 ## Related
 
 - [secrets.md](./secrets.md) — host `!env` graph vs guest Tier-0 vs Podman `@sensitive`
 - [instance.md](./instance.md) — repo layout
 - [packages/host/docs/cloud-init.md](../packages/host/docs/cloud-init.md) — seed / cloud-init bake
-- Schema sources: `packages/host/src/vm/libs/secrets-schema/`
+- Schema sources: `packages/host/src/provision/schema/`

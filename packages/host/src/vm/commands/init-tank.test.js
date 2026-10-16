@@ -13,8 +13,9 @@ afterEach(() => {
 
 describe('vm init-tank command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('init-tank')
-    expect(mod.describe).toContain('tank')
+    expect(mod.command).toBe('init-tank [poolIds..]')
+    expect(mod.describe).toMatch(/tank|pool/i)
+    expect(typeof mod.builder).toBe('function')
   })
 
   test('handler loads driver and calls initTank', async () => {

@@ -1,4 +1,3 @@
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { reconcileRockyAppliance } from './vm-reconcile.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
@@ -18,13 +17,8 @@ describe('reconcileRockyAppliance', () => {
     /** @type {Record<string, string>} */
     const cfg = {
       scsi0: 'local-lvm:vm-101-disk-0',
-      scsi1: 'local-lvm:vm-101-disk-1,serial=rocky-vw',
-    }
-    for (let i = 0; i < DATA_COUNT; i++) {
-      cfg[`scsi${2 + i}`] = `local-lvm:vm-101-data-${i},serial=rocky-data${i}`
-    }
-    for (let i = 0; i < SPECIAL_COUNT; i++) {
-      cfg[`scsi${2 + DATA_COUNT + i}`] = `local-lvm:vm-101-special-${i},serial=rocky-special${i}`
+      scsi1: 'local-lvm:vm-101-disk-1,serial=vw',
+      scsi2: 'local-lvm:vm-101-data-0,serial=rocky-data0',
     }
     /** @type {{ path: string, form: Record<string, string> }[]} */
     const puts = []
@@ -32,7 +26,7 @@ describe('reconcileRockyAppliance', () => {
       config: {
         node: 'pve',
         storage: 'local-lvm',
-        nets: [{ bridge: 'vmbr0', vlan: null, trunks: null, mac: null }],
+        nets: [{ bridge: 'vmbr0' }],
         bridge: 'vmbr0',
       },
       qemuStatus: async () => ({ status: 'stopped' }),
@@ -54,9 +48,10 @@ describe('reconcileRockyAppliance', () => {
         name: 'rocky-dev',
         memory: 4096,
         vcpus: 2,
-        vwSize: '10G',
-        dataSize: '1G',
-        specialSize: '1G',
+        disks: [
+          { id: 'vw', mode: 'virtual', kind: 'data', size: '10G' },
+          { id: 'rocky-data0', mode: 'virtual', kind: 'tank', size: '1G' },
+        ],
       },
     )
     expect(r).toEqual({ vmid: 101 })
@@ -73,14 +68,9 @@ describe('reconcileRockyAppliance', () => {
     /** @type {Record<string, string>} */
     const cfg = {
       scsi0: 'local-lvm:vm-101-disk-0',
-      scsi1: 'local-lvm:vm-101-disk-1,serial=rocky-vw',
+      scsi1: 'local-lvm:vm-101-disk-1,serial=vw',
+      scsi2: 'local-lvm:vm-101-data-0,serial=rocky-data0',
       tpmstate0: 'local-lvm:vm-101-disk-9,size=4M,version=v2.0',
-    }
-    for (let i = 0; i < DATA_COUNT; i++) {
-      cfg[`scsi${2 + i}`] = `local-lvm:vm-101-data-${i},serial=rocky-data${i}`
-    }
-    for (let i = 0; i < SPECIAL_COUNT; i++) {
-      cfg[`scsi${2 + DATA_COUNT + i}`] = `local-lvm:vm-101-special-${i},serial=rocky-special${i}`
     }
     /** @type {{ path: string, form: Record<string, string> }[]} */
     const puts = []
@@ -88,7 +78,7 @@ describe('reconcileRockyAppliance', () => {
       config: {
         node: 'pve',
         storage: 'local-lvm',
-        nets: [{ bridge: 'vmbr0', vlan: null, trunks: null, mac: null }],
+        nets: [{ bridge: 'vmbr0' }],
         bridge: 'vmbr0',
       },
       qemuStatus: async () => ({ status: 'stopped' }),
@@ -108,9 +98,10 @@ describe('reconcileRockyAppliance', () => {
       name: 'rocky-dev',
       memory: 4096,
       vcpus: 2,
-      vwSize: '10G',
-      dataSize: '1G',
-      specialSize: '1G',
+      disks: [
+        { id: 'vw', mode: 'virtual', kind: 'data', size: '10G' },
+        { id: 'rocky-data0', mode: 'virtual', kind: 'tank', size: '1G' },
+      ],
     })
     expect(puts.some((p) => p.form.delete && String(p.form.delete).includes('tpmstate0'))).toBe(
       false,

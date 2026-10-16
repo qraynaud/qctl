@@ -1,7 +1,7 @@
 /**
  * Dynamically import the staged platform ESM module (not a package dependency).
  */
-import { definePlatform } from '@qctl/shared'
+import { parsePlatformModule } from '@qctl/shared'
 
 import { platformModuleImportUrl, resolvePlatformModule } from './platform.js'
 
@@ -15,5 +15,5 @@ export async function loadPlatformModule(env = process.env) {
   const abs = resolvePlatformModule({ env })
   const mod = await import(platformModuleImportUrl(abs))
   const raw = mod.platform ?? mod.default ?? mod
-  return definePlatform(raw)
+  return parsePlatformModule(raw)
 }

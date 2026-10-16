@@ -1,6 +1,6 @@
 import { chalk } from 'zx'
 
-import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
+import { assertProxmoxAttachModes, withAttachModes } from '../attach-mode.js'
 import { applyNetsToForm, mergeNetPreserveMac } from './config.js'
 import { diskStateFromConfig } from './disk-holder.js'
 import { rockyTpmstate } from './tpm.js'
@@ -8,7 +8,7 @@ import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue } from './vm-parse.js'
 
 /** @import { ProxmoxClient } from './client.js' */
-/** @import { QemuConfig } from './types.js' */
+/** @import { AttachDiskSpec, QemuConfig } from './types.js' */
 
 /** @typedef {QemuConfig[string]} QemuValue */
 
@@ -24,44 +24,34 @@ function net0WithPreservedMac(existingNet0, desiredNet0) {
 /**
  * @param {string} key
  * @param {QemuValue} val
+ * @param {Set<string>} expectedIds
  * @returns {boolean}
  */
-function isRockyDiskKey(key, val) {
+function isManagedDiskKey(key, val, expectedIds) {
   if (!/^(scsi|virtio|sata)\d+$/.test(key)) return false
   if (/media=cdrom/.test(String(val))) return false
+  if (key === 'scsi0' && !diskSerialFromValue(val)) return true
   const serial = diskSerialFromValue(val)
-  return Boolean(serial?.startsWith('rocky-'))
+  return Boolean(serial && expectedIds.has(serial))
 }
 
 /**
  * @param {string} key
  * @param {QemuValue} val
+ * @param {{ netCount?: number, expectedIds: Set<string> }} opts
  * @returns {boolean}
  */
-function isOsBootDiskKey(key, val) {
-  // scsi0 is the rocky OS disk (no rocky-* serial)
-  return key === 'scsi0' && Boolean(val) && !/media=cdrom/.test(String(val))
-}
-
-/**
- * Keys that are never part of the rocky appliance shape.
- * @param {string} key
- * @param {QemuValue} val
- * @param {{ netCount?: number }} [opts]
- * @returns {boolean}
- */
-function isCruftHardwareKey(key, val, { netCount = 1 } = {}) {
+function isCruftHardwareKey(key, val, { netCount = 1, expectedIds }) {
   const netM = /^net(\d+)$/.exec(key)
   if (netM) return Number(netM[1]) >= netCount
-  if (/^ide\d+$/.test(key)) return true // leftover NoCloud / UI CDROMs
+  if (/^ide\d+$/.test(key)) return true
   if (/^unused\d+$/.test(key)) return true
   // tpmstate0 is part of the rocky appliance profile (always-on vTPM 2.0)
   if (/^(audio|usb|parallel|efidisk|hostpci|rng|balloon)\d*$/.test(key)) return true
   if (/^tpmstate[1-9]\d*$/.test(key)) return true
   if (/^serial[1-9]\d*$/.test(key)) return true
   if (/^(scsi|virtio|sata)\d+$/.test(key)) {
-    if (isOsBootDiskKey(key, val) || isRockyDiskKey(key, val)) return false
-    // Extra non-rocky disk on unexpected bus/slot
+    if (isManagedDiskKey(key, val, expectedIds)) return false
     if (key === 'scsi0') return false
     return true
   }
@@ -105,7 +95,7 @@ function allocScsi(taken, prefer) {
 
 /**
  * Align an existing appliance VM to the rocky hardware profile:
- * machine q35, serial console, net0 from secrets, rocky disks present;
+ * machine q35, serial console, net0 from provision, topology disks present;
  * remove leftover NICs/CDROMs/UI cruft. Does not recreate the OS disk.
  * Leaves the VM stopped.
  * @param {ProxmoxClient} client
@@ -114,16 +104,23 @@ function allocScsi(taken, prefer) {
  *   name: string,
  *   memory: number,
  *   vcpus: number,
- *   vwSize: string,
- *   dataSize: string,
- *   specialSize: string,
+ *   disks: AttachDiskSpec[],
  * }} opts
  * @returns {Promise<{ vmid: number }>}
  */
 export async function reconcileRockyAppliance(client, opts) {
-  const { vmid, name, memory, vcpus, vwSize, dataSize, specialSize } = opts
+  const { vmid, name, memory, vcpus, disks } = opts
   const node = client.config.node
   const storage = client.config.storage
+  const expectedIds = new Set(disks.map((d) => d.id))
+
+  const classified = withAttachModes(
+    disks.map((d) => ({
+      id: d.id,
+      kind: d.kind,
+      ...(d.size ? { size: d.size } : {}),
+    })),
+  )
 
   const st = await client.qemuStatus(vmid)
   if (st?.status === 'running' || st?.status === 'paused') {
@@ -137,6 +134,8 @@ export async function reconcileRockyAppliance(client, opts) {
 
   const cfg = await client.qemuConfig(vmid)
   const state = diskStateFromConfig(cfg, vmid)
+  assertProxmoxAttachModes(classified, state.volids)
+
   const nets = client.config.nets?.length
     ? client.config.nets
     : [
@@ -151,7 +150,7 @@ export async function reconcileRockyAppliance(client, opts) {
   /** @type {string[]} */
   const deleteKeys = []
   for (const [key, val] of Object.entries(cfg)) {
-    if (isCruftHardwareKey(key, val, { netCount })) deleteKeys.push(key)
+    if (isCruftHardwareKey(key, val, { netCount, expectedIds })) deleteKeys.push(key)
   }
 
   /** @type {QemuConfig} */
@@ -175,34 +174,27 @@ export async function reconcileRockyAppliance(client, opts) {
   }
 
   const taken = takenScsiIndexes(cfg, deleteKeys)
-  // After deletes, those scsi indexes become free — remove them from taken
   for (const k of deleteKeys) {
     const m = /^scsi(\d+)$/.exec(k)
     if (m) taken.delete(Number(m[1]))
   }
 
-  const vwGiB = sizeToGiB(vwSize)
-  const dataGiB = sizeToGiB(dataSize)
-  const specialGiB = sizeToGiB(specialSize)
   /** @type {string[]} */
   const added = []
-
-  if (!state.vw) {
-    const slot = allocScsi(taken, 1)
-    form[`scsi${slot}`] = `${storage}:${vwGiB},serial=rocky-vw`
-    added.push(`scsi${slot}=rocky-vw`)
-  }
-  for (let i = 0; i < DATA_COUNT; i++) {
-    if (state.data[i]) continue
-    const slot = allocScsi(taken, 2 + i)
-    form[`scsi${slot}`] = `${storage}:${dataGiB},serial=rocky-data${i}`
-    added.push(`scsi${slot}=rocky-data${i}`)
-  }
-  for (let i = 0; i < SPECIAL_COUNT; i++) {
-    if (state.special[i]) continue
-    const slot = allocScsi(taken, 2 + DATA_COUNT + i)
-    form[`scsi${slot}`] = `${storage}:${specialGiB},serial=rocky-special${i}`
-    added.push(`scsi${slot}=rocky-special${i}`)
+  let prefer = 1
+  for (const d of disks) {
+    if (state.volids[d.id]) {
+      prefer += 1
+      continue
+    }
+    if (d.mode === 'physical' || !d.size) {
+      // assertProxmoxAttachModes already failed if missing
+      prefer += 1
+      continue
+    }
+    const slot = allocScsi(taken, prefer++)
+    form[`scsi${slot}`] = `${storage}:${sizeToGiB(d.size)},serial=${d.id}`
+    added.push(`scsi${slot}=${d.id}`)
   }
 
   if (!cfg.scsi0 || /media=cdrom/.test(String(cfg.scsi0))) {

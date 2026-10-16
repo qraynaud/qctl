@@ -1,6 +1,6 @@
 import { chalk } from 'zx'
 
-import { addPasstPortOptions, portsFromArgv, sharedLibvirt } from '../../lib/options.js'
+import { sharedLibvirt } from '../../lib/options.js'
 import { loadDriver } from '../drivers/index.js'
 
 /** @import { Argv } from 'yargs' */
@@ -14,20 +14,13 @@ export const describe = 'Show VM status + SSH hints'
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return addPasstPortOptions(
-    sharedLibvirt(yargs).option('network', {
+  return sharedLibvirt(yargs)
+    .option('network', {
       choices: ['auto', 'default', 'user'],
       default: 'user',
       describe: 'Network mode used when the VM was created',
-    }),
-    (() => {
-      try {
-        return portsFromArgv({})
-      } catch {
-        return []
-      }
-    })(),
-  ).strict()
+    })
+    .strict()
 }
 
 /**
