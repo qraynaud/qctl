@@ -69,4 +69,41 @@ describe('buildVirtInstallArgs', () => {
     expect(args).toContain('--tpm')
     expect(args).toContain('backend.type=emulator,backend.version=2.0,model=tpm-crb')
   })
+
+  test('bootDiskPath is first disk with boot.order=1 (init-tank)', () => {
+    spyOn(paths, 'getVms').mockReturnValue('/vms')
+    const resolved = resolveDisks(
+      {
+        os: { id: 'os', size: '20G' },
+        data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs', size: '2G' } },
+        tanks: {},
+      },
+      {
+        filesystems: ['xfs', 'ext4'],
+        defaultFs: 'xfs',
+        osDisk: { id: 'os', size: '20G' },
+      },
+    )
+    const disks = vmPaths('rocky', resolved)
+    const args = buildVirtInstallArgs({
+      connect: 'qemu:///system',
+      name: 'rocky',
+      memory: 2048,
+      vcpus: 2,
+      disks,
+      seed: { device: 'cdrom', path: '/seed.iso' },
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+      },
+      network: 'default',
+      osinfo: 'rocky9',
+      bootDiskPath: '/vms/rocky/init-tank-boot.qcow2',
+    })
+    const joined = args.join(' ')
+    expect(joined).toContain('path=/vms/rocky/init-tank-boot.qcow2')
+    expect(joined).toContain('boot.order=1')
+    expect(joined).not.toContain('path=/vms/rocky/os.qcow2')
+    expect(joined).toMatch(/serial=vw/)
+  })
 })

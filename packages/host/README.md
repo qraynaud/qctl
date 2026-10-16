@@ -163,7 +163,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | `qctl vm up` | Start existing VM, or create if missing; stream console until ready |
 | `qctl vm down` | ACPI shutdown; wait until shut off (VM stays defined) |
 | `qctl vm destroy` | Undefine / delete VM; delete disks unless `--keep-persistent` |
-| `qctl vm init-tank [poolId…]` | One-shot tank prep (minimal seed → create/export → poweroff); bare = all tanks |
+| `qctl vm init-tank [poolId…]` | One-shot tank prep on a disposable boot disk (keeps `disks.os`); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ssh-info` | Print SSH connection hints |
 | `qctl vm target-check` | Verify host tools (incl. `swtpm` on local) / provision / hypervisor |

@@ -1,4 +1,4 @@
-import { $, chalk } from 'zx'
+import { $, chalk, fs } from 'zx'
 
 import { portsFromArgv } from '../../../lib/options.js'
 import { HOST_DEPS, die, errMessage, requireBins } from '../../../lib/util.js'
@@ -12,6 +12,7 @@ import {
   reportGuestFatalLeaveRunning,
   waitForSuccessOrGuestFatal,
 } from '../../libs/guest-fatal.js'
+import { ensureInitTankBootDisk, removeInitTankBootDisk } from '../../libs/init-tank-boot.js'
 import { resolveInitTankPools } from '../../libs/init-tank-pools.js'
 import {
   domainExists,
@@ -24,7 +25,6 @@ import { ensureSeed } from '../../libs/seed/iso.js'
 import { runSeed } from '../../libs/seed/run.js'
 import { buildVirtInstallArgs } from '../../libs/virt-install.js'
 import { isAbortError, sleep } from '../../libs/wait.js'
-import { destroyVm } from './destroy.js'
 
 /** @import { VmArgv } from '../../types.js' */
 
@@ -69,6 +69,18 @@ async function waitForDomainShutOff(connect, name, timeoutSec, signal) {
 }
 
 /**
+ * Undefine domain and drop disposable init-tank boot qcow only (never disks.os).
+ * @param {string} connect
+ * @param {string} name
+ */
+async function teardownInitTankDomain(connect, name) {
+  if (await domainExists(connect, name)) {
+    await removeDomain(connect, name)
+  }
+  await removeInitTankBootDisk(name)
+}
+
+/**
  * @param {VmArgv} argv
  * @returns {Promise<void>}
  */
@@ -104,7 +116,8 @@ export async function initTank(argv) {
   logInitTankPools(selection.poolIds)
   console.log(
     chalk.dim(
-      `  wipe OS + selected tank members${force ? ' (-f)' : ''}; keep data; guest: create→export→poweroff`,
+      `  disposable boot disk (keep disks.os)`
+        + `${force ? `; wipe tank members` : ''}; keep data; guest: create→export→poweroff`,
     ),
   )
   console.log(chalk.dim(`  disks: ${summarizeAttachModes(withAttachModes(resolved.members))}`))
@@ -113,16 +126,16 @@ export async function initTank(argv) {
     console.log(chalk.green('vm: dry-run init-tank steps:'))
     console.log(`  1. seed --profile init-tank (pools=${selection.poolIds.join(',')})`)
     console.log(
-      `  2. remove domain; wipe OS`
+      `  2. remove domain; create disposable boot overlay (leave disks.os)`
         + (force
-          ? ` + tank members ${selection.memberIds.join(',')}`
+          ? `; wipe tank members ${selection.memberIds.join(',')}`
           : ' (tank members must be absent unless -f)'),
     )
-    console.log('  3. virt-install minimal seed (no sshd)')
+    console.log('  3. virt-install boot=init-tank-boot + persistent disks')
     console.log(
       `  4. wait for guest poweroff (≤${timeoutSec}s)${noConsole ? '' : '; stream serial console'}`,
     )
-    console.log('  5. destroy --keep-persistent')
+    console.log('  5. undefine domain; delete disposable boot only')
     return
   }
 
@@ -162,13 +175,19 @@ export async function initTank(argv) {
     isoPath: seedResult.isoPath,
     imgPath: seedResult.imgPath,
   })
+  // Never wipe disks.os — only ensure persistent data/tank members.
   const disks = await ensureDisks({
     name,
     baseImage,
     resolved,
-    wipeOs: true,
+    wipeOs: false,
     wipeTankIds: force ? selection.memberIds : [],
     dryRun: false,
+  })
+  const bootDiskPath = await ensureInitTankBootDisk({
+    name,
+    baseImage,
+    size: resolved.os.size,
   })
 
   const ac = new AbortController()
@@ -180,22 +199,16 @@ export async function initTank(argv) {
   const cleanupOnAbort = async () => {
     if (cleaning) return
     cleaning = true
-    console.log(chalk.yellow('\nvm: interrupted — stopping console and destroying domain…'))
+    console.log(chalk.yellow('\nvm: interrupted — stopping console and dropping init-tank boot…'))
     try {
       if (consoleFollow) {
         await consoleFollow.stop()
         consoleFollow = null
       }
       if (domainStarted || (await domainExists(connect, name))) {
-        // Full wipe of this attempt (OS + /vw + tank); re-run init-tank from scratch.
-        await destroyVm({
-          connect,
-          name,
-          keepPersistent: false,
-          dryRun: false,
-          env,
-          target: argv.target || 'local',
-        })
+        await teardownInitTankDomain(connect, name)
+      } else {
+        await removeInitTankBootDisk(name)
       }
     } catch (err) {
       console.error(chalk.red(`vm: cleanup after interrupt failed: ${errMessage(err)}`))
@@ -232,9 +245,10 @@ export async function initTank(argv) {
       network: net,
       osinfo,
       serialTcpPort,
+      bootDiskPath,
     })
     await ensureDefaultNetwork(connect)
-    console.log(chalk.cyan('vm: virt-install …'))
+    console.log(chalk.cyan('vm: virt-install (init-tank boot disk)…'))
     const inst = await $`${args}`.nothrow()
     if (inst.exitCode !== 0) {
       console.error(String(inst.stderr || inst.stdout))
@@ -253,24 +267,23 @@ export async function initTank(argv) {
       consoleFollow = null
     }
 
-    await destroyVm({
-      connect,
-      name,
-      keepPersistent: true,
-      dryRun: false,
-      env,
-      target: argv.target || 'local',
-    })
+    await teardownInitTankDomain(connect, name)
 
+    const hasOs = fs.existsSync(disks.os.path)
     console.log(chalk.green('vm: init-tank done'))
-    console.log(chalk.dim(`  kept ${disks.attached.length} persistent disk(s); OS removed`))
-    console.log(chalk.dim('  next: qctl vm up --wipe-os'))
-    console.log(chalk.dim('  (appliance first-boot 30 will import tank)'))
+    console.log(
+      chalk.dim(
+        `  kept ${disks.attached.length} persistent disk(s)`
+          + (hasOs ? `; left disks.os ${disks.os.path}` : '; no disks.os yet'),
+      ),
+    )
+    console.log(chalk.dim(hasOs ? '  next: qctl vm up' : '  next: qctl vm up --wipe-os'))
+    console.log(chalk.dim('  (appliance first-boot will import tank)'))
   } catch (err) {
     if (err instanceof Error && isGuestFatalError(err)) {
       await reportGuestFatalLeaveRunning(consoleFollow, err, {
         leaveHint: `vm: domain ${name} left running for diagnosis (serial/journal); destroy when done:`,
-        destroyHint: '  qctl vm destroy',
+        destroyHint: '  qctl vm destroy --keep-persistent',
       })
       consoleFollow = null
       return

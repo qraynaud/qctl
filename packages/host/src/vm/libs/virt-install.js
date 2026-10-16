@@ -15,7 +15,10 @@ import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
  *   network: string,
  *   osinfo: string,
  *   serialTcpPort?: number,
+ *   bootDiskPath?: string,
  * }} opts
+ * When `bootDiskPath` is set, that file is the first disk (init-tank disposable root);
+ * `disks.os` is not attached — only `disks.attached` persistent members.
  * @returns {string[]}
  */
 export function buildVirtInstallArgs({
@@ -30,7 +33,10 @@ export function buildVirtInstallArgs({
   osinfo,
   /** @type {number | undefined} TCP port we listen on; qemu connects (no PTY). */
   serialTcpPort,
+  bootDiskPath,
 }) {
+  const rootPath = bootDiskPath || disks.os.path
+  const rootDisk = `path=${rootPath},format=qcow2,bus=virtio${bootDiskPath ? ',boot.order=1' : ''}`
   /** @type {string[]} */
   const args = [
     'virt-install',
@@ -51,7 +57,7 @@ export function buildVirtInstallArgs({
     '--wait',
     '0',
     '--disk',
-    `path=${disks.os.path},format=qcow2,bus=virtio`,
+    rootDisk,
   ]
 
   for (const d of disks.attached) {
