@@ -45,7 +45,7 @@ describe('plugins ensure command', () => {
     spyOn(shared, 'ensurePackageDependencies').mockResolvedValue({
       root: dir,
       installed: true,
-      frozen: false,
+      frozen: true,
     })
     /** @type {string[]} */
     const lines = []
@@ -55,8 +55,8 @@ describe('plugins ensure command', () => {
     await mod.handler({ dir })
     expect(shared.ensurePackageDependencies).toHaveBeenCalledWith(
       dir,
-      expect.objectContaining({ env: process.env }),
+      expect.objectContaining({ env: process.env, frozen: true }),
     )
-    expect(lines.some((l) => l.includes('installed deps'))).toBe(true)
+    expect(lines.some((l) => l.includes('installed deps') && l.includes('frozen'))).toBe(true)
   })
 })

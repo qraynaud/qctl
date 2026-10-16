@@ -23,10 +23,11 @@ Host commands set `QCTL_ENV` from the selected provision **profile**’s `env`
    `qctl _internal_plugins ensure`.
 
 Do **not** rely on varlock’s plugins-cache. Commit `package-lock.json` after a
-local non-production (`production: false`) install. Installs are **frozen**
-(lockfile required, not rewritten) when `CI=true` **or** the active env is marked
-`production: true` in `qctl.environments` (see [provision.md](./provision.md)).
-Non-production custom envs (e.g. `staging`) stay mutable unless CI.
+local host non-production (`production: false`) install. On the **guest**, installs
+are always **frozen** (lockfile required, not rewritten). On the **host**, installs
+are frozen when `CI=true` **or** the active env is marked `production: true` in
+`qctl.environments` (see [provision.md](./provision.md)); non-production custom
+envs (e.g. `staging`) stay mutable unless CI.
 
 CLI: [packages/guest/README.md](../packages/guest/README.md)
 ([INTERNAL.md](../packages/guest/INTERNAL.md) for `_internal_plugins`).  

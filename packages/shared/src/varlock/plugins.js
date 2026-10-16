@@ -106,7 +106,8 @@ export function shouldUseFrozenPackageInstall(opts = {}) {
 }
 
 /**
- * Install `package.json` deps into `node_modules` via Arborist (no npm CLI).
+ * Install `package.json` production deps into `node_modules` via Arborist (no npm CLI).
+ * Always omits `devDependencies` (`omit: ['dev']`, like `npm i --omit=dev`).
  * Frozen mode requires `package-lock.json` and does not rewrite it (`save: false`).
  *
  * @param {string} pkgRoot
@@ -124,8 +125,9 @@ export async function installPackageDependencies(pkgRoot, opts = {}) {
   }
 
   const { Arborist } = await import('@npmcli/arborist')
-  /** @type {{ path: string, save?: boolean, packageLock?: boolean }} */
-  const arbOpts = { path: pkgRoot }
+  /** @typedef {'dev' | 'optional' | 'prod' | 'peerOptional' | 'peer'} ArboristOmit */
+  /** @type {{ path: string, omit: ArboristOmit[], save?: boolean, packageLock?: boolean }} */
+  const arbOpts = { path: pkgRoot, omit: ['dev'] }
   if (frozen) {
     arbOpts.save = false
     arbOpts.packageLock = true
