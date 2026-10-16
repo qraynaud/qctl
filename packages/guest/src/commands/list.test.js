@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe('list command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('list')
+    expect(mod.command).toBe('_internal_list')
     expect(mod.describe).toContain('init stages')
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')

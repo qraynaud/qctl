@@ -13,7 +13,7 @@ afterEach(() => {
 
 describe('stage command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('stage <name>')
+    expect(mod.command).toBe('_internal_stage <name>')
     expect(mod.describe).toContain('init stage')
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')

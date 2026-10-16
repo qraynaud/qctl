@@ -12,57 +12,17 @@ with packages + networking hooks. The Rocky seed kit lives in
 qctl --help
 qctl quadlet --help
 qctl secret --help
-# first-boot / debug / plugin tooling (also still runnable):
-qctl --help-with-internals
 ```
 
 Default `qctl -h` / `--help` lists day-2 commands (`quadlet`, `secret`) and
 mentions `--help-with-internals` in the epilogue. Bare `qctl` (no args) shows the
-same public command list without that hint. Internal commands (`init`, `list`,
-`stage`, `plugins`) stay runnable; `qctl --help-with-internals` lists them.
+same public command list without that hint.
+
+First-boot / debug / plugin tooling (`_internal_init`, `_internal_list`,
+`_internal_stage`, `_internal_plugins`) is documented in
+[INTERNAL.md](./INTERNAL.md) — `qctl --help-with-internals` lists those commands.
 
 ## Commands
-
-### `qctl init` (internal)
-
-Run ordered first-boot stages until the ready stamp. Invoked by systemd on first boot
-(before the instance repo may exist). Dynamically `import()`s the staged platform module
-to install capability packages, then runs stages in-process.
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--profile` | `default` | `default` = appliance first boot; `init-tank` = tank prep VM |
-| `--dry-run` | `false` | Run every stage with `--dry-run` (print only) |
-| `--from` | — | Resume at this stage (inclusive) after a failure |
-
-Platform module: `$QCTL_PLATFORM_MODULE` → sole `qctl-platform-*.mjs` under
-`/usr/local/lib/qctl` → beside this binary.
-
-### `qctl list` / `qctl stage` (internal)
-
-List or run a single init stage (debugging / resume).
-
-### `qctl plugins ensure` (internal)
-
-Install the instance `package.json` dependencies into `node_modules` (in-process
-Arborist — no npm CLI). Varlock resolves `# @plugin` packages from `node_modules`
-(not plugins-cache). Graph loads reify once on varlock’s unresolved-plugin error.
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--dir` | instance root / cwd | Directory used to locate `package.json` |
-
-Install mode:
-
-- **Mutable** when `QCTL_ENV=dev` and `CI` is not `true` — may create/update
-  `package-lock.json`.
-- **Frozen** when `CI=true` or `QCTL_ENV` is not `dev` — requires a committed
-  `package-lock.json` and does not rewrite it.
-
-```bash
-qctl plugins ensure
-qctl plugins ensure --dir /tank/rocky
-```
 
 ### `qctl quadlet …`
 
@@ -136,6 +96,6 @@ See [docs/secrets.md](../../docs/secrets.md).
 ## Develop
 
 ```bash
-bun run --filter @qctl/guest start -- list
+bun run --filter @qctl/guest start -- quadlet --help
 bun test packages/guest
 ```

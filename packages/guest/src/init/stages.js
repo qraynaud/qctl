@@ -1,7 +1,7 @@
 /** @import { PlatformStage } from '@qctl/shared' */
 
 /**
- * Appliance first boot (`rocky-first-boot.service` → `qctl init`).
+ * Appliance first boot (`rocky-first-boot.service` → `qctl _internal_init`).
  * @type {ReadonlyArray<PlatformStage>} */
 export const DEFAULT_STAGES = [
   'network-up',
@@ -20,8 +20,8 @@ export const DEFAULT_STAGES = [
 
 /**
  * `qctl vm init-tank` one-shot VM
- * (`rocky-init-tank-prep.service` → `qctl init --profile init-tank`).
- * Same Tier-0 seal path as appliance (`qctl stage tier0-seal` / in-process stage).
+ * (`rocky-init-tank-prep.service` → `qctl _internal_init --profile init-tank`).
+ * Same Tier-0 seal path as appliance (`qctl _internal_stage tier0-seal` / in-process stage).
  * @type {ReadonlyArray<PlatformStage>}
  */
 export const INIT_TANK_STAGES = ['tier0-seal', 'data-mounts', 'tank-create', 'poweroff']

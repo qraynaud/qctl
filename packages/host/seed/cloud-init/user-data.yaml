@@ -8,7 +8,7 @@
 # `profile` is `appliance` (default) or `init-tank`. Tier-0 pending files
 # (tank_passphrase_<poolId> from disks.tanks.*.passphrase) are injected by
 # `qctl vm seed` into /var/lib/rocky/tier0-pending/<KEY>, sealed by
-# rocky-tier0-seal / `qctl stage tier0-seal`, then LoadCredentialEncrypted into
+# rocky-tier0-seal / `qctl _internal_stage tier0-seal`, then LoadCredentialEncrypted into
 # the init unit.
 
 hostname: rocky
@@ -236,7 +236,7 @@ final_message: !template |
   {% if is_init_tank %}
   Rocky init-tank: prep will create tank, export, and power off. No SSH.
   {% else %}
-  Rocky cloud-init OK — qctl init stamped (/var/lib/rocky/first-boot.done).
+  Rocky cloud-init OK — qctl _internal_init stamped (/var/lib/rocky/first-boot.done).
   Tank unlock: keylocation=file:///etc/credstore/rocky/tank_passphrase_<poolId>
   Expect disks: OS + /vw + 5 data (raidz2) + 2 special (mirror).
   {% endif %}

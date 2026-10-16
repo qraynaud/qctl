@@ -1,5 +1,5 @@
 /**
- * Run `qctl init`: install platform packages, then ordered stages in-process.
+ * Run `qctl _internal_init`: install platform packages, then ordered stages in-process.
  */
 
 import { createContext } from './context.js'
@@ -46,7 +46,7 @@ export async function runInit(opts, deps = {}) {
   try {
     stages = [...stagesForProfile(opts.profile)]
   } catch (err) {
-    logError(`qctl init: ${err instanceof Error ? err.message : String(err)}`)
+    logError(`qctl _internal_init: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 
@@ -54,21 +54,21 @@ export async function runInit(opts, deps = {}) {
     const idx = stages.indexOf(/** @type {PlatformStage} */ (opts.from))
     if (idx < 0) {
       logError(
-        `qctl init: --from ${opts.from}: not a stage of profile ${opts.profile} (${stages.join(', ')})`,
+        `qctl _internal_init: --from ${opts.from}: not a stage of profile ${opts.profile} (${stages.join(', ')})`,
       )
       return 1
     }
     stages = stages.slice(idx)
   }
 
-  log(`qctl init: profile=${opts.profile}${opts.dryRun ? ' (dry-run)' : ''}`)
+  log(`qctl _internal_init: profile=${opts.profile}${opts.dryRun ? ' (dry-run)' : ''}`)
 
   /** @type {PlatformModule | undefined} */
   let platform
   try {
     platform = await loadPlatform()
   } catch (err) {
-    logError(`qctl init: platform: ${err instanceof Error ? err.message : String(err)}`)
+    logError(`qctl _internal_init: platform: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 
@@ -82,7 +82,7 @@ export async function runInit(opts, deps = {}) {
         loadPlatform: async () => /** @type {PlatformModule} */ (platform),
       })
     } catch (err) {
-      logError(`qctl init: packages: ${err instanceof Error ? err.message : String(err)}`)
+      logError(`qctl _internal_init: packages: ${err instanceof Error ? err.message : String(err)}`)
       return 1
     }
   }
@@ -102,15 +102,15 @@ export async function runInit(opts, deps = {}) {
       await runOne(stage, ctx)
     } catch (err) {
       if (err instanceof UnknownStageError || err instanceof StageError) {
-        logError(`qctl init: ${err.message}`)
+        logError(`qctl _internal_init: ${err.message}`)
       } else {
         logError(
-          `qctl init: stage ${stage} failed: ${err instanceof Error ? err.message : String(err)}`,
+          `qctl _internal_init: stage ${stage} failed: ${err instanceof Error ? err.message : String(err)}`,
         )
       }
       return 1
     }
   }
-  log(`qctl init: done (${stages.length} stages)`)
+  log(`qctl _internal_init: done (${stages.length} stages)`)
   return 0
 }

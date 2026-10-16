@@ -1,6 +1,6 @@
 # Validation checklist (Rocky auto-install)
 
-Use this after changing cloud-init, `qctl init` stages, or ZFS helpers. Lab default:
+Use this after changing cloud-init, `qctl _internal_init` stages, or ZFS helpers. Lab default:
 workstation libvirt via `qctl vm`. Same gates apply on Proxmox
 (Gate 8).
 
@@ -56,7 +56,7 @@ qctl vm seed
 - [ ] `cloud-init status --wait` → done; no fatal errors in `/var/log/cloud-init.log`
 - [ ] `systemctl is-active rocky-first-boot.service` → `active` (or succeeded oneshot)
 - [ ] Stamp present: `test -f /var/lib/rocky/first-boot.done`
-- [ ] cloud-init waited on qctl init: `cloud-init status` is `done` only with the stamp (error if `rocky-first-boot` failed)
+- [ ] cloud-init waited on qctl _internal_init: `cloud-init status` is `done` only with the stamp (error if `rocky-first-boot` failed)
 - [ ] SSH host keys match VW Login `rocky` attachment `ssh-host-keys.tar.gz` across OS reinstall (optional Path A check)
 
 ```bash
@@ -125,7 +125,7 @@ findmnt /vw
 ## Gate 4 — Tank present
 
 Pool must already exist (`qctl vm init-tank` or dedicated
-`qctl init --profile init-tank`). Appliance first-boot **never** creates the pool.
+`qctl _internal_init --profile init-tank`). Appliance first-boot **never** creates the pool.
 
 - [ ] `zpool list` shows `tank`; health ONLINE
 - [ ] Encryption on; `zfs get encryption,keystatus,keylocation tank`
@@ -146,7 +146,7 @@ cat /tank/.rocky-canary
 
 ## Gate 5 — ZFS export → import → unlock (required)
 
-- [ ] `zfs-drill` stage (`qctl stage zfs-drill`) completed successfully
+- [ ] `zfs-drill` stage (`qctl _internal_stage zfs-drill`) completed successfully
 - [ ] After drill: pool online, key loaded, canary intact
 - [ ] Skip only for debug: `ROCKY_SKIP_ZFS_DRILL=1`
 - [ ] Mental map to prod: export on old host → attach disks → Rocky import+unlock
@@ -154,7 +154,7 @@ cat /tank/.rocky-canary
 ```bash
 journalctl -u rocky-first-boot.service -b --no-pager | grep -E 'drill|== zfs-drill'
 # Manual re-run (pool must be imported):
-# qctl stage zfs-drill
+# qctl _internal_stage zfs-drill
 ```
 
 ---

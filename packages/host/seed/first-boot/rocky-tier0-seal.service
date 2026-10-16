@@ -5,14 +5,14 @@ After=local-fs.target
 Before=rocky-first-boot.service rocky-init-tank-prep.service
 # Run when plaintext pending still exists (first boot after seed). Skipped later.
 # Must run BEFORE the init unit: LoadCredentialEncrypted= needs the sealed files.
-# `qctl init` also runs the same (idempotent) stage as a re-check.
+# `qctl _internal_init` also runs the same (idempotent) stage as a re-check.
 ConditionPathExists=/var/lib/rocky/tier0-pending
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 # Same CLI as appliance first-boot stages (not the platform .mjs module).
-ExecStart=/usr/local/bin/qctl stage tier0-seal
+ExecStart=/usr/local/bin/qctl _internal_stage tier0-seal
 
 [Install]
 WantedBy=multi-user.target

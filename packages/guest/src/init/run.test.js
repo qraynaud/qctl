@@ -214,7 +214,7 @@ describe('runInit', () => {
   })
 })
 
-describe('qctl init (CLI)', () => {
+describe('qctl _internal_init (CLI)', () => {
   /**
    * @param {string[]} args
    * @param {Record<string, string>} env
@@ -241,7 +241,7 @@ describe('qctl init (CLI)', () => {
     const dir = makeTempDir()
     try {
       writeFakePlatformModule(dir)
-      const r = await runGuest(['init', '--profile', 'init-tank', '--dry-run'], {
+      const r = await runGuest(['_internal_init', '--profile', 'init-tank', '--dry-run'], {
         QCTL_PLATFORM_MODULE: join(dir, PLATFORM_MODULE_NAME),
       })
       expect(r.code).toBe(0)
@@ -254,7 +254,7 @@ describe('qctl init (CLI)', () => {
   })
 
   test('missing platform module → exit 1', async () => {
-    const r = await runGuest(['init', '--dry-run'], {
+    const r = await runGuest(['_internal_init', '--dry-run'], {
       QCTL_PLATFORM_MODULE: '/nonexistent/qctl-platform-rocky.mjs',
       QCTL_LIB_DIR: '/nonexistent-lib',
     })
@@ -262,16 +262,16 @@ describe('qctl init (CLI)', () => {
     expect(r.stderr).toMatch(/QCTL_PLATFORM_MODULE|qctl-platform-rocky\.mjs/)
   })
 
-  test('init --help documents profile / dry-run / from / module', async () => {
-    const r = await runGuest(['init', '--help'], {})
+  test('_internal_init --help documents profile / dry-run / from / module', async () => {
+    const r = await runGuest(['_internal_init', '--help'], {})
     expect(r.code).toBe(0)
     for (const f of ['--profile', '--dry-run', '--from', 'init-tank', 'QCTL_PLATFORM_MODULE']) {
       expect(r.stdout).toContain(f)
     }
   })
 
-  test('list --profile init-tank', async () => {
-    const r = await runGuest(['list', '--profile', 'init-tank'], {})
+  test('_internal_list --profile init-tank', async () => {
+    const r = await runGuest(['_internal_list', '--profile', 'init-tank'], {})
     expect(r.code).toBe(0)
     expect(r.stdout.trim().split('\n')).toEqual(INIT_TANK)
   })

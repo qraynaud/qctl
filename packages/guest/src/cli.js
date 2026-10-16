@@ -37,8 +37,8 @@ let cli = registerCommands(yargs(parseArgv), commands, { withInternals })
 if (showInternalsHint) {
   cli = cli.epilogue(
     withInternals
-      ? 'Internal commands are listed above (first-boot / debug / plugin tooling).'
-      : `Internal first-boot / debug commands: qctl ${HELP_WITH_INTERNALS}`,
+      ? 'Internal commands (_internal_*) are listed above (first-boot / debug / plugin tooling).'
+      : `Internal first-boot / debug commands (_internal_*): qctl ${HELP_WITH_INTERNALS}`,
   )
 }
 
