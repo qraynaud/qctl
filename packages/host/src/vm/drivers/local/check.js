@@ -15,12 +15,16 @@ import { virsh } from '../../libs/libvirt/index.js'
 /**
  * @param {CheckReport} report
  * @param {string} name
+ * @param {string} [hint]
  * @returns {Promise<void>}
  */
-async function checkBin(report, name) {
+async function checkBin(report, name, hint) {
   const p = await which(name)
   if (p) report.ok(`${name} → ${p}`)
-  else report.fail(`${name} not found on PATH`)
+  else {
+    report.fail(`${name} not found on PATH`)
+    if (hint) report.warn(hint)
+  }
 }
 
 /**
@@ -36,6 +40,12 @@ export async function check(argv) {
   for (const bin of ['virsh', 'virt-install', 'qemu-img']) {
     await checkBin(report, bin)
   }
+  // Emulated TPM 2.0 on every local VM (virt-install `--tpm` / libvirt reconcile).
+  await checkBin(
+    report,
+    'swtpm',
+    'swtpm provides the emulated TPM 2.0 used by local VMs — install it (e.g. `sudo pacman -S swtpm`)',
+  )
   report.ok('NoCloud ISO writer bundled (@gcu/iso9660)')
 
   report.section(`Libvirt (${connect})`)

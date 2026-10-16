@@ -49,6 +49,7 @@ qctl vm seed
 
 ## Gate 1 — Boot (workstation)
 
+- [ ] `qctl vm target-check --target local` OK (incl. **`swtpm`** for emulated TPM 2.0)
 - [ ] VM gets connectivity (`--network user` → `ssh -p 2222 <admin>@127.0.0.1`, or lease on `default`)
 - [ ] SSH as `rocky` (default if Login incomplete) or VW Login `rocky` username with injected admin key (`root` denied; `apps` has no SSH)
 - [ ] Cockpit admin: VW Login user (password sudo); or key-only `admin` + NOPASSWD (no password until `passwd` over SSH); `https://<guest>:9090`

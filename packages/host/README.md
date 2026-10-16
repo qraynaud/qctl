@@ -141,6 +141,21 @@ Boot-oriented commands (`up`, `init-tank`) also accept `--memory` / `--vcpus`.
 `vm up` (and `status` / `ssh-info`) expose passt `--*-port` overrides from provision
 networking; `init-tank` does not (no guest SSH/cockpit).
 
+#### Local (`--target local`) host deps
+
+Libvirt VMs always get an **emulated TPM 2.0** (`virt-install --tpm` on create;
+reconcile adds it to existing domains). That needs **`swtpm`** on the host PATH
+alongside `virsh`, `virt-install`, and `qemu-img`.
+
+```bash
+# CachyOS / Arch example
+sudo pacman -S qemu-base virt-install libvirt dnsmasq swtpm
+qctl vm target-check --target local   # fails if swtpm (or other tools) missing
+```
+
+`qctl vm up` / `init-tank` also refuse to start when `swtpm` is missing.
+Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
+
 | Subcommand | Description |
 |------------|-------------|
 | `qctl vm seed` | Build NoCloud ISO in-process (embeds guest binaries; no host ISO tools) |
@@ -151,7 +166,7 @@ networking; `init-tank` does not (no guest SSH/cockpit).
 | `qctl vm init-tank` | One-shot tank prep VM (minimal seed → create/export → poweroff) |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ssh-info` | Print SSH connection hints |
-| `qctl vm target-check` | Verify host tools / secrets / hypervisor for `--target` |
+| `qctl vm target-check` | Verify host tools (incl. `swtpm` on local) / secrets / hypervisor |
 
 #### `qctl vm seed`
 

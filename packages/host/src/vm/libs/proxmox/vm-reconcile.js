@@ -3,6 +3,7 @@ import { chalk } from 'zx'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { applyNetsToForm, mergeNetPreserveMac } from './config.js'
 import { diskStateFromConfig } from './disk-holder.js'
+import { rockyTpmstate } from './tpm.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue } from './vm-parse.js'
 
@@ -54,7 +55,9 @@ function isCruftHardwareKey(key, val, { netCount = 1 } = {}) {
   if (netM) return Number(netM[1]) >= netCount
   if (/^ide\d+$/.test(key)) return true // leftover NoCloud / UI CDROMs
   if (/^unused\d+$/.test(key)) return true
-  if (/^(audio|usb|parallel|efidisk|tpmstate|hostpci|rng|balloon)\d*$/.test(key)) return true
+  // tpmstate0 is part of the rocky appliance profile (always-on vTPM 2.0)
+  if (/^(audio|usb|parallel|efidisk|hostpci|rng|balloon)\d*$/.test(key)) return true
+  if (/^tpmstate[1-9]\d*$/.test(key)) return true
   if (/^serial[1-9]\d*$/.test(key)) return true
   if (/^(scsi|virtio|sata)\d+$/.test(key)) {
     if (isOsBootDiskKey(key, val) || isRockyDiskKey(key, val)) return false
@@ -210,6 +213,11 @@ export async function reconcileRockyAppliance(client, opts) {
     )
   }
 
+  if (!cfg.tpmstate0) {
+    form.tpmstate0 = rockyTpmstate(storage)
+    added.push('tpmstate0')
+  }
+
   if (deleteKeys.length || added.length) {
     console.log(
       chalk.cyan(
@@ -224,7 +232,7 @@ export async function reconcileRockyAppliance(client, opts) {
       ),
     )
   } else {
-    console.log(chalk.dim(`vm: reconcile ${name}: baseline q35/net/serial/agent`))
+    console.log(chalk.dim(`vm: reconcile ${name}: baseline q35/net/serial/agent/tpm`))
   }
 
   if (deleteKeys.length) {

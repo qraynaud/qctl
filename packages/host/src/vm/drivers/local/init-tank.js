@@ -109,7 +109,7 @@ export async function initTank(argv) {
     return
   }
 
-  await requireBins(['virt-install', 'virsh', 'qemu-img'])
+  await requireBins(['virt-install', 'virsh', 'qemu-img', 'swtpm'])
 
   // Seed first so provision !env / host vw() resolve while secrets backends may still be up.
   console.log(chalk.cyan('vm: building init-tank seed…'))

@@ -17,6 +17,7 @@ import {
   domainState,
   ensureDefaultNetwork,
   reconcileDomainResources,
+  reconcileDomainTpm,
   reconcilePasstPortForwards,
   removeDomain,
   restartWithSerialNull,
@@ -167,7 +168,7 @@ async function prepareLocalUp(argv) {
     dryRun: false,
   })
 
-  await requireBins(['virt-install', 'virsh', 'qemu-img'])
+  await requireBins(['virt-install', 'virsh', 'qemu-img', 'swtpm'])
   await ensureDefaultNetwork(connect)
 
   return {
@@ -292,6 +293,10 @@ function localBackend(state) {
           memory: existing.memory,
           vcpus: existing.vcpus,
         })
+        if (changed) state = await waitUntilNotShuttingDown(existing.connect, existing.name)
+      }
+      {
+        const changed = await reconcileDomainTpm(existing.connect, existing.name)
         if (changed) state = await waitUntilNotShuttingDown(existing.connect, existing.name)
       }
 

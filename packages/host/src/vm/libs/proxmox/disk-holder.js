@@ -11,6 +11,7 @@ import { chalk } from 'zx'
 import { DATA_COUNT, SPECIAL_COUNT } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
 import { applyNetsToForm } from './config.js'
+import { rockyTpmstate } from './tpm.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
 
 /**
@@ -257,6 +258,7 @@ export async function promoteHolderToAppliance(client, opts) {
     scsi0: `${storage}:0,import-from=${importVolid},size=20G`,
     ide2: `${isoVolid},media=cdrom`,
   }
+  if (!cfg.tpmstate0) form.tpmstate0 = rockyTpmstate(storage)
   applyNetsToForm(form, client.config.nets)
   await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
 

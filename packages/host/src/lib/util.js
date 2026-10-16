@@ -1,7 +1,7 @@
 import { $, chalk } from 'zx'
 
 export const HOST_DEPS = `Host packages (CachyOS / Arch example):
-  sudo pacman -S qemu-base virt-install libvirt dnsmasq
+  sudo pacman -S qemu-base virt-install libvirt dnsmasq swtpm
   sudo systemctl enable --now libvirtd
   sudo usermod -aG libvirt "$USER"   # re-login afterward
   virsh -c qemu:///system net-start default

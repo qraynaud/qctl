@@ -130,6 +130,8 @@ describe('removeDomain', () => {
     )
     expect(await removeDomain('qemu:///session', 'demo')).toBe(true)
     expect(calls.some((c) => c[0] === 'destroy')).toBe(true)
-    expect(calls.some((c) => c[0] === 'undefine' && c.includes('--nvram'))).toBe(true)
+    expect(
+      calls.some((c) => c[0] === 'undefine' && c.includes('--nvram') && c.includes('--tpm')),
+    ).toBe(true)
   })
 })

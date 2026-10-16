@@ -93,5 +93,8 @@ export function buildVirtInstallArgs({
     )
   }
 
+  // Always-on emulated TPM 2.0 (needs host `swtpm`).
+  args.push('--tpm', 'backend.type=emulator,backend.version=2.0,model=tpm-crb')
+
   return args
 }
