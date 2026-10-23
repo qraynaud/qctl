@@ -10,8 +10,19 @@ from the VM seed.
 ## Getting started
 
 You need [mise](https://mise.jdx.dev/) and a published [qctl release](https://github.com/qraynaud/qctl/releases).
+Instance repos work with **Git or Mercurial (hg)** — qctl detects whichever VCS is present.
 
-1. Create an empty repository and `cd` into it.
+1. **Get a working tree** (prefer cloning an existing remote; empty repo is fine too):
+
+```bash
+# Preferred: clone (git or hg)
+git clone git@example.com:you/my-instance.git && cd my-instance
+# or:  hg clone ssh://hg@example.com/you/my-instance && cd my-instance
+
+# Alternative: start empty, then init a VCS when you like
+mkdir my-instance && cd my-instance
+# git init   # or: hg init
+```
 
 2. Add this `mise.toml`:
 
@@ -28,32 +39,40 @@ mise install
 qctl --help
 ```
 
-4. Scaffold the instance:
+4. **Quickstart (local lab VM)** — same path as `qctl --help`:
 
 ```bash
-qctl init .
+qctl init .                 # checks host deps; offers init-tank
+qctl vm up
+qctl new app demo --engine rootless && qctl sync
+qctl vm up demo && qctl vm ps
 ```
 
-That writes schemas, root `package.json` (varlock plugin deps → `node_modules`),
-`provision/`, `applications/` / `networks/` stubs, and a matching `mise.toml`
-(existing `mise.toml` is left alone unless you pass `--force`).
+`qctl init` defaults to an interactive Quickstart (profile `lab` → workstation / `dev`).
+Pass `--yes` for the same files with no prompts. Prefer that over hand-editing YAML for
+a first lab. If the tree is already a git/hg checkout, Quickstart can prefill guest clone
+settings from the host remote when you opt in.
 
-Edit `provision/` for networking, disks, users, and hypervisor sizing
-(`common.yaml`, `target-*.yaml`, `env-*.yaml`, `profile-*.yaml` — see
-[docs/provision.md](docs/provision.md)).
+**Later (Proxmox)** — keep the lab; do **not** `qctl init --force`:
 
+```bash
+qctl new profile pve
+qctl vm up --profile pve
+qctl sync --profile pve && qctl vm up demo --profile pve
+```
+
+On an existing instance, `qctl init` (TTY, no `--force`) also offers **Add Proxmox profile**.
+
+Provision details, secrets, and layout: [docs/provision.md](docs/provision.md),
+[docs/secrets.md](docs/secrets.md), [docs/instance.md](docs/instance.md).
 List varlock `# @plugin` packages in the instance `package.json` `dependencies`.
-In schemas write `# @plugin(@scope/name)` with no version. qctl installs them
-into `node_modules`. Commit `package-lock.json` after a local non-production
-install; CI and `production: true` envs use a frozen lockfile. More:
-[docs/secrets.md](docs/secrets.md), [docs/provision.md](docs/provision.md),
-[packages/guest/README.md](packages/guest/README.md).
+Commit `package-lock.json` after a local non-production install.
 
 ## CLI reference
 
 | Role | Binary | Docs |
 |------|--------|------|
-| Workstation | `qctl-host` → `qctl` | [packages/host/README.md](packages/host/README.md) — `init`, `new`, `sync`, `local …`, `vm …`, `seed-kit` |
+| Workstation | `qctl-host` → `qctl` | [packages/host/README.md](packages/host/README.md) — `init`, `vm`, `new`, `sync` (happy path); `local` / `seed-kit` advanced |
 | Appliance | `qctl-guest` → `/usr/local/bin/qctl` | [packages/guest/README.md](packages/guest/README.md) — `quadlet …`, `secret check\|sync` ([INTERNAL.md](packages/guest/INTERNAL.md) for first-boot) |
 
 ## Docs

@@ -5,34 +5,59 @@ Workstation **host** CLI — shipped as the `qctl-host` release asset and instal
 
 Scaffold an instance repo, then drive the appliance VM from `provision/*.yaml`.
 
+## Getting started
+
+Prefer **cloning** an existing instance remote (**git** or **hg**), then `cd` into it.
+Starting from an empty directory (optional `git init` / `hg init`) works too.
+
+Same path as `qctl --help` after that (do **not** start with `qctl local` — that is
+Podman without a VM):
+
+```bash
+qctl init .                 # Quickstart lab (or Custom); checks host deps; offers init-tank
+qctl vm up
+qctl new app demo --engine rootless && qctl sync
+qctl vm up demo && qctl vm ps
+```
+
+**Later (Proxmox)** — keep the lab; do not `--force` init:
+
+```bash
+qctl new profile pve
+qctl vm up --profile pve
+qctl sync --profile pve && qctl vm up demo --profile pve
+```
+
 ```bash
 qctl --help
-qctl local --help
 qctl vm --help
-qctl seed-kit path
+qctl new --help
 ```
 
 ## Commands
 
-### `qctl seed-kit path|export`
-
-Expose the Rocky seed kit ([`seed/`](./seed/) — cloud-init / first-boot / lib)
-owned by this package and embedded into `qctl-host` for `qctl vm seed`. `path`
-prints a host-readable root; `export` copies the kit to a directory.
-
 ### `qctl init [dir]`
 
-Scaffold a new instance repository (default: `.`).
+Create an instance (default: `.`). TTY default is **Quickstart** (profile `lab` →
+workstation / `dev`). Choose Custom for the full interview, or pass `--yes` for the
+lab preset with no prompts.
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `[dir]` | `.` | Target directory |
+| `-y` / `--yes` | `false` | Non-interactive Quickstart preset |
 | `--force` | `false` | Overwrite existing scaffold files |
+| `--fix` | `false` | Ensure missing layout only |
+| `--check` | `false` | Validate only |
+| `--dry-run` | `false` | Print plan without writing |
+
+On an **existing** instance (TTY, no `--force`), init offers additive choices
+(Add Proxmox profile / Add env / Fix layout) instead of refusing.
 
 Writes `mise.toml`, root `package.json` (plugin deps for varlock `# @plugin`;
 qctl installs `node_modules`), root `.env.schema` / `.env.dev` / `.env.prod`,
 `provision/.env.schema` + `.env.dev` / `.env.prod` (Tier-0 / provision `!env`
-bindings), `provision/` YAML stubs, and empty `applications/` / `common/` /
+bindings), `provision/` YAML, and empty `applications/` / `common/` /
 `networks/` trees. An existing `mise.toml` is left alone unless `--force`.
 Generate and commit `package-lock.json` with a local non-production ensure/load
 before CI or production (frozen installs require the lockfile).
@@ -69,11 +94,11 @@ qctl sync --include-tooling
 qctl sync -p prod --host 10.0.0.50   # proxmox-target profile needs --host
 ```
 
-### `qctl local …`
+### `qctl local …` (advanced)
 
-Run Quadlets in a nested systemd+Podman appliance on the workstation (no VM).
-Requires host **Podman**. Resolves the instance root from the current directory.
-Profile must have `target: workstation`.
+Podman lab **without** a VM (not the Quickstart path). Requires host **Podman**.
+Resolves the instance root from the current directory. Profile must have
+`target: workstation`.
 
 The outer container uses explicit `--uidmap`/`--gidmap` that split the rootless
 host id budget: a dense low range for systemd/tooling (provision `users.apps.uid`/`gid`,
@@ -116,15 +141,19 @@ qctl local down
 
 ### `qctl new …`
 
-Add package stubs under the instance root.
+Grow the instance (apps, units, env, profile). Bare `qctl new` on a TTY opens a
+kind picker. Positionals are optional on TTY (prompted / selected).
 
 | Subcommand | Description |
 |------------|-------------|
-| `qctl new app <name>` | `applications/<name>/` |
-| `qctl new common <name>` | `common/<name>/` |
-| `qctl new network <name>` | `networks/<name>/` |
+| `qctl new app [name]` | `applications/<name>/` (+ optional `app.yaml` / units) |
+| `qctl new unit [app] [name]` | Unit under an existing app |
+| `qctl new env [name]` | Provision environment (`env-*.yaml` + `.env.<name>`) |
+| `qctl new profile [name]` | VM profile (e.g. Proxmox; keep lab, do not `--force` init) |
+| `qctl new common [name]` | `common/<name>/` |
+| `qctl new network [name]` | `networks/<name>/` (+ Quadlet stub) |
 
-Each accepts `--force` to overwrite existing schema/README files.
+Most accept `--force` / `--yes`.
 
 ### `qctl vm …`
 
@@ -202,6 +231,12 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 |--------|---------|-------------|
 | `--keep-persistent` | `false` | Remove OS only; keep `disks.data` + tank members |
 | `-y` / `--yes` | `false` | Skip prompts (only valid with `--keep-persistent`) |
+
+### `qctl seed-kit path|export` (advanced)
+
+Expose the Rocky seed kit ([`seed/`](./seed/) — cloud-init / first-boot / lib)
+owned by this package and embedded into `qctl-host` for `qctl vm seed`. `path`
+prints a host-readable root; `export` copies the kit to a directory.
 
 ## Provision
 

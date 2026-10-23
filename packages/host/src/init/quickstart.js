@@ -298,6 +298,25 @@ export function applyQuickstartSecrets(root, answers) {
 }
 
 /**
+ * Shared Getting-started / `--help` path (local lab + Later Proxmox).
+ * Keep in sync with root README and init Quickstart outro intent.
+ * @returns {string}
+ */
+export function formatGettingStartedEpilog() {
+  return `Quickstart (local lab VM):
+  # Prefer: git clone … || hg clone …  (or mkdir + git/hg init)
+  qctl init .                 # checks host deps; offers init-tank
+  qctl vm up
+  qctl new app demo --engine rootless && qctl sync
+  qctl vm up demo && qctl vm ps
+
+Later (Proxmox):
+  qctl new profile pve
+  qctl vm up --profile pve
+  qctl sync --profile pve && qctl vm up demo --profile pve`
+}
+
+/**
  * @param {QuickstartAnswers} [_answers]
  * @param {{ profile?: string, needsInitTank?: boolean }} [opts]
  * @returns {string}

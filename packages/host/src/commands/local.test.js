@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 describe('local command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('local')
-    expect(mod.describe).toContain('Nested')
+    expect(mod.describe).toMatch(/Podman|advanced|without a VM/i)
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')
   })

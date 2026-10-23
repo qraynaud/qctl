@@ -5,6 +5,7 @@ import { hideBin } from 'yargs/helpers'
 import { QCTL_VERSION, exitZeroOnMissingCommand, registerCommands } from '@qctl/shared'
 
 import { commands } from './commands/index.js'
+import { formatGettingStartedEpilog } from './init/quickstart.js'
 import { ensureHostNativeHelper } from './native-helper.js'
 
 await ensureHostNativeHelper()
@@ -17,5 +18,6 @@ await exitZeroOnMissingCommand(
     .demandCommand(1)
     .strictCommands()
     .help()
-    .alias('h', 'help'),
+    .alias('h', 'help')
+    .epilog(formatGettingStartedEpilog()),
 ).parse()

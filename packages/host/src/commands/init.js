@@ -9,6 +9,7 @@ import { checkInstance } from '../init/check-instance.js'
 import { ensureInstance } from '../init/ensure-instance.js'
 import {
   answersFromFlags,
+  formatGettingStartedEpilog,
   formatQuickstartOutro,
   isInteractiveTty,
   offerInitTank,
@@ -28,7 +29,7 @@ import { runNewProfile } from './new/profile.js'
 
 export const command = 'init [dir]'
 export const describe =
-  'Scaffold or ensure an instance (Quickstart lab by default; --check / --fix / --dry-run)'
+  'Create an instance (interactive Quickstart for a local lab VM, or Custom; --check / --fix)'
 
 /**
  * @param {Argv} yargs
@@ -100,9 +101,10 @@ export function builder(yargs) {
     })
     .epilog(
       'Modes: greenfield write | --fix ensure missing | --force rewrite scaffold | --check validate | --dry-run plan.\n'
-        + 'Quickstart (--yes / TTY default): profile lab → workstation/dev.\n'
+        + 'Quickstart (--yes / TTY default): profile lab → workstation/dev; target-check + optional init-tank.\n'
         + 'Non-TTY: pass --yes (or --check / --fix on an existing instance).\n'
-        + 'Later Proxmox: qctl new profile <name> (do not --force init).',
+        + 'Do not --force init to add Proxmox — use qctl new profile.\n\n'
+        + formatGettingStartedEpilog(),
     )
 }
 
