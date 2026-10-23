@@ -6,8 +6,8 @@ describe('vmCommands registry', () => {
     expect(vmCommands.map((c) => c.command)).toEqual([
       'seed',
       'download',
-      'up',
-      'down',
+      'up [apps..]',
+      'down [apps..]',
       'destroy',
       'init-tank [poolIds..]',
       'status',
