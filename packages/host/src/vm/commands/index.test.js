@@ -11,6 +11,7 @@ describe('vmCommands registry', () => {
       'destroy',
       'init-tank [poolIds..]',
       'status',
+      'ps [apps..]',
       'ssh-info',
       'shell',
       'target-check',
