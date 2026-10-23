@@ -171,3 +171,44 @@ export function packageReadme(kind, name) {
   if (!subcommand) throw new Error(`unknown package tree kind: ${kind}`)
   return loadScaffoldTemplate('new/README.md', { name, subcommand })
 }
+
+/**
+ * @param {'rootless' | 'rootful'} engine
+ */
+export function appYaml(engine) {
+  return loadScaffoldTemplate('new/app.yaml', { engine })
+}
+
+/** Unit `.env.schema` under `applications/<app>/<unit>/`. */
+export function unitEnvSchema() {
+  return loadScaffoldTemplate('new/unit.env.schema', {})
+}
+
+/** Empty `.env.dev` stub beside a unit schema. */
+export function unitEnvDevStub() {
+  return loadScaffoldTemplate('new/unit.env.dev', {})
+}
+
+/**
+ * Minimal demo Quadlet `.container` (httpd alpine).
+ * @param {string} unit
+ */
+export function demoContainer(unit) {
+  return loadScaffoldTemplate('new/demo.container', { unit })
+}
+
+/**
+ * Commented Quadlet `.container` stub (standalone `new unit`).
+ * @param {string} unit
+ */
+export function stubContainer(unit) {
+  return loadScaffoldTemplate('new/stub.container', { unit })
+}
+
+/**
+ * Commented Quadlet `.network` stub for `networks/<name>/<name>.network`.
+ * @param {string} name
+ */
+export function networkQuadletStub(name) {
+  return loadScaffoldTemplate('new/name.network', { name })
+}
