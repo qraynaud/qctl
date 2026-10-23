@@ -125,6 +125,7 @@ async function prepareLocalUp(argv) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
     target: argv.target || 'workstation',
+    profile: argv.profile,
   })
 
   console.log(
@@ -209,6 +210,7 @@ async function localDryRun(argv) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
     target: argv.target || 'workstation',
+    profile: argv.profile,
   })
 
   console.log(

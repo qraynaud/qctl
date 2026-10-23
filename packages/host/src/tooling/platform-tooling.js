@@ -77,10 +77,13 @@ export async function resolvePlatformRef(opts = {}) {
     return parsePlatformRef(opts.platform)
   }
   try {
+    if (opts.profile == null || String(opts.profile).trim() === '') {
+      return parsePlatformRef('rocky')
+    }
     const sec = await loadEnvProvisionOrThrow({
       env: opts.env || 'dev',
       target: opts.target || 'workstation',
-      profile: opts.profile || 'lab',
+      profile: opts.profile,
     })
     return parsePlatformRef(sec.platform)
   } catch {

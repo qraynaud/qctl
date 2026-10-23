@@ -66,6 +66,7 @@ async function proxmoxDryRun(argv) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
     target: argv.target || 'proxmox',
+    profile: argv.profile,
   })
   console.log(
     chalk.green(
@@ -129,6 +130,7 @@ function proxmoxBackend() {
       const resolved = await resolveProvisionDisks({
         env: env || 'dev',
         target: argv.target || 'proxmox',
+        profile: argv.profile,
       })
       await reconcileRockyAppliance(existing.client, {
         vmid: existing.vmid,
@@ -172,6 +174,7 @@ function proxmoxBackend() {
       const resolved = await resolveProvisionDisks({
         env: env || 'dev',
         target: argv.target || 'proxmox',
+        profile: argv.profile,
       })
       const expectedIds = persistentDiskIds(resolved.members)
       const osSize = resolved.os.size || '20G'

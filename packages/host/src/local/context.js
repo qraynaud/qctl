@@ -59,7 +59,7 @@ export async function createLocalContext(argv, opts = {}) {
     root,
     env,
     target: 'workstation',
-    profile: String(argv.profile || 'lab'),
+    profile: /** @type {string} */ (argv.profile),
     processEnv: { ...process.env, QCTL_ENV: env },
   })
   const sourceLabel =
@@ -87,7 +87,7 @@ export async function createLocalContext(argv, opts = {}) {
     die('failed to resolve qctl-guest / platform module')
   }
 
-  const ports = portsFromArgv({ env, target: 'workstation' })
+  const ports = portsFromArgv(argv)
   const image = process.env.QCTL_LOCAL_IMAGE?.trim() || 'quay.io/podman/stable:latest'
 
   return {

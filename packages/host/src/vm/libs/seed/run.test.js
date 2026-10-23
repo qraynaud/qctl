@@ -98,6 +98,7 @@ describe('seed ISO (@gcu/iso9660)', () => {
 
     const result = await runSeed({
       seedProfile: 'appliance',
+      profile: 'lab',
       env: 'dev',
       target: 'workstation',
       allowMissingTier0: true,

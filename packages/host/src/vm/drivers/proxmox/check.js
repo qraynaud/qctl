@@ -52,7 +52,7 @@ export async function check(argv) {
   report.section('Provision / API config')
   const { config, errors, usable } = await tryLoadProxmoxConfig({
     env: envName,
-    profile: String(argv.profile || 'lab'),
+    profile: /** @type {string} */ (argv.profile),
   })
   for (const e of errors) report.fail(e)
   if (config) {
@@ -70,7 +70,7 @@ export async function check(argv) {
   const loaded = await loadEnvProvisionSafe({
     env: envName,
     target: 'proxmox',
-    profile: String(argv.profile || 'lab'),
+    profile: /** @type {string} */ (argv.profile),
   })
   if (!loaded.ok) {
     report.fail(loaded.error)

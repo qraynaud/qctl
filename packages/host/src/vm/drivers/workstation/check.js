@@ -100,7 +100,7 @@ export async function check(argv) {
   const loaded = await loadEnvProvisionSafe({
     env: envName,
     target,
-    profile: String(argv.profile || 'lab'),
+    profile: /** @type {string} */ (argv.profile),
   })
   if (!loaded.ok) {
     report.fail(loaded.error)

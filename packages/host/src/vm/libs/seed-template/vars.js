@@ -37,13 +37,18 @@ export async function buildVars({
   allowMissingTier0,
   env = 'dev',
   target = 'workstation',
-  provisionProfile = 'lab',
+  provisionProfile,
   provision = null,
   profile = 'appliance',
   initTankPools,
   initTankForce = false,
 }) {
-  const sec = provision || (await loadEnvProvision({ env, target, profile: provisionProfile }))
+  if (!provision && (provisionProfile == null || String(provisionProfile).trim() === '')) {
+    die('buildVars: provisionProfile is required when provision is not passed')
+  }
+  const sec =
+    provision
+    || (await loadEnvProvision({ env, target, profile: /** @type {string} */ (provisionProfile) }))
 
   if (!sec.sshAuthorizedKeys) {
     die(
@@ -57,7 +62,7 @@ export async function buildVars({
   const resolvedDisks = await resolveProvisionDisks({
     env,
     target,
-    profile: provisionProfile,
+    profile: provisionProfile || sec.profile,
     provision: sec,
   })
 

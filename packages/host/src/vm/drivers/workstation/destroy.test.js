@@ -45,6 +45,7 @@ describe('workstation destroy', () => {
       dryRun: true,
       env: 'dev',
       target: 'workstation',
+      profile: 'lab',
     })
     expect(log).toHaveBeenCalled()
     expect(String(log.mock.calls[0]?.[0])).toMatch(/would destroy/)
@@ -65,6 +66,7 @@ describe('workstation destroy', () => {
         dryRun: false,
         env: 'dev',
         target: 'workstation',
+        profile: 'lab',
       }),
     )
     expect(remove).toHaveBeenCalledWith('qemu:///system', 'rocky')

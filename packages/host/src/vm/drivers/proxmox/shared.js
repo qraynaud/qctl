@@ -10,15 +10,20 @@ import { loadProxmoxConfig } from '../../libs/proxmox/config.js'
 /** @import { VmArgv } from '../../types.js' */
 
 /**
- * @param {Pick<VmArgv, 'env'>} argv
+ * @param {Pick<VmArgv, 'env' | 'profile'>} argv
  * @returns {Promise<ProxmoxClient>}
  */
 export async function clientFrom(argv) {
-  return createProxmoxClient(await loadProxmoxConfig({ env: argv.env || 'dev' }))
+  return createProxmoxClient(
+    await loadProxmoxConfig({
+      env: argv.env || 'dev',
+      profile: /** @type {string} */ (argv.profile),
+    }),
+  )
 }
 
 /**
- * @param {Pick<VmArgv, 'env'>} argv
+ * @param {Pick<VmArgv, 'env' | 'profile'>} argv
  * @returns {Promise<ProxmoxClient>}
  */
 export async function ping(argv) {
