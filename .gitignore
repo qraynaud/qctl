@@ -25,6 +25,8 @@ logs
 .env.*
 !.env.schema
 !.env.schema.*
+# Host scaffold Nunjucks (packages/host/templates) — not secret value files
+!.env.*.njk
 
 # caches
 .eslintcache
