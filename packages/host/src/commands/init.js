@@ -87,6 +87,11 @@ export function builder(yargs) {
       default: false,
       describe: 'Skip offering / running vm init-tank after Quickstart',
     })
+    .option('no-ai-skills', {
+      type: 'boolean',
+      default: false,
+      describe: 'Skip writing AGENTS.md and .cursor/skills/qctl-provision (default: write)',
+    })
     .option('tank-passphrase', {
       type: 'string',
       describe: 'Lab tank binding: static:<v> | secret:<NAME> | secret:<NAME>:<encoding>',
@@ -120,6 +125,7 @@ export function builder(yargs) {
  * @property {boolean} [syncEnvFromYaml]
  * @property {string} [name]
  * @property {boolean} [noInitTank]
+ * @property {boolean} [noAiSkills]
  * @property {string} [tankPassphrase]
  * @property {number} [cpu]
  * @property {number} [memory]
@@ -145,12 +151,13 @@ function printWriteReport(report, opts = {}) {
  * Ensure / rewrite Quickstart scaffold without prompts.
  * @param {string} root
  * @param {QuickstartAnswers} answers
- * @param {{ force?: boolean, dryRun?: boolean }} opts
+ * @param {{ force?: boolean, dryRun?: boolean, aiSkills?: boolean }} opts
  */
 function writeLab(root, answers, opts) {
   return writeQuickstartLab(root, answers, {
     force: opts.force,
     dryRun: opts.dryRun,
+    aiSkills: opts.aiSkills,
   })
 }
 
@@ -166,6 +173,7 @@ export async function handler(argv) {
   const check = Boolean(argv.check)
   const dryRun = Boolean(argv.dryRun)
   const syncEnv = Boolean(argv.syncEnvFromYaml)
+  const aiSkills = !argv.noAiSkills
   const existing = isInstanceRoot(root)
 
   try {
@@ -249,7 +257,7 @@ export async function handler(argv) {
         // fall through to ensure
       }
 
-      const result = ensureInstance(root, { dryRun, name: argv.name })
+      const result = ensureInstance(root, { dryRun, name: argv.name, aiSkills })
       printWriteReport(result, { dryRun })
       if (syncEnv) {
         const { added } = syncSchemaFromProvisionYaml(root, { dryRun })
@@ -333,7 +341,7 @@ export async function handler(argv) {
           process.exitCode = 1
           return
         }
-        const custom = writeProject(project, { force, dryRun })
+        const custom = writeProject(project, { force, dryRun, aiSkills })
         printWriteReport(custom, { dryRun })
         if (syncEnv && !dryRun) syncSchemaFromProvisionYaml(root)
         if (dryRun) {
@@ -381,7 +389,7 @@ export async function handler(argv) {
       }
     }
 
-    const result = writeLab(root, answers, { force, dryRun })
+    const result = writeLab(root, answers, { force, dryRun, aiSkills })
     printWriteReport(result, { dryRun })
 
     if (syncEnv) {

@@ -449,7 +449,7 @@ export async function offerInitTank(root, opts = {}) {
  * Write Quickstart lab files (layout + Nunjucks provision + secret schema).
  * @param {string} dir
  * @param {QuickstartAnswers} answers
- * @param {{ force?: boolean, dryRun?: boolean, extraProxmoxOverlay?: boolean }} [opts]
+ * @param {{ force?: boolean, dryRun?: boolean, extraProxmoxOverlay?: boolean, aiSkills?: boolean }} [opts]
  * @returns {{ root: string } & LayoutReport}
  */
 export function writeQuickstartLab(dir, answers, opts = {}) {
@@ -458,6 +458,7 @@ export function writeQuickstartLab(dir, answers, opts = {}) {
     force: opts.force,
     dryRun: opts.dryRun,
     name: answers.name,
+    aiSkills: opts.aiSkills,
   })
   const provision = writeProvision(root, {
     force: opts.force,
