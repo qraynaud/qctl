@@ -12,6 +12,7 @@ import { logEndpoint, resolveSyncEndpoint } from './endpoint.js'
 import { SYNC_TAR_EXCLUDES, syncRepo } from './repo.js'
 import { withSsh } from './ssh.js'
 import { resolveGuestToolingForSync, syncTooling } from './tooling.js'
+import { waitForSsh } from './wait-ssh.js'
 
 /** @import { VmArgv } from '../vm/types.js' */
 
@@ -24,6 +25,7 @@ import { resolveGuestToolingForSync, syncTooling } from './tooling.js'
  *   identity?: string
  *   includeTooling?: boolean
  *   delete?: boolean
+ *   sshTimeout?: number
  * }} argv
  */
 export async function runSync(argv) {
@@ -41,7 +43,9 @@ export async function runSync(argv) {
     const doDelete = argv.delete !== false
 
     if (argv.dryRun) {
-      console.log(chalk.dim(`  [dry-run] archive ${root} → ${ep.remoteDir}`))
+      console.log(
+        chalk.dim(`  [dry-run] would wait for SSH then archive ${root} → ${ep.remoteDir}`),
+      )
       console.log(chalk.dim(`  [dry-run] excludes: ${SYNC_TAR_EXCLUDES.join(', ')}`))
       console.log(chalk.dim(`  [dry-run] delete: ${doDelete ? 'yes' : 'no'}`))
       if (argv.includeTooling) {
@@ -78,6 +82,16 @@ export async function runSync(argv) {
       console.log(chalk.green('sync: dry-run done'))
       return
     }
+
+    await waitForSsh({
+      host: ep.host,
+      port: ep.port,
+      username: ep.username,
+      identity: ep.identity,
+      timeoutSec: argv.sshTimeout ?? 180,
+      label: ep.label,
+      prefix: 'sync',
+    })
 
     await withSsh(
       {

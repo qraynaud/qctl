@@ -123,6 +123,8 @@ describe('host CLI', () => {
     expect(stdout).toContain('--include-tooling')
     expect(stdout).toContain('--remote-dir')
     expect(stdout).toContain('--delete')
+    expect(stdout).toContain('--ssh-timeout')
+    expect(stdout).toMatch(/Wait for SSH/i)
   })
 
   test('profile CLI help matrix: --profile/-p, no --env/--target', async () => {
