@@ -124,7 +124,7 @@ async function prepareLocalUp(argv) {
   const ports = portsFromArgv(argv)
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
-    target: argv.target || 'local',
+    target: argv.target || 'workstation',
   })
 
   console.log(
@@ -136,7 +136,7 @@ async function prepareLocalUp(argv) {
   const baseImage = await downloadImage({
     force: forceDownload,
     env: env || 'dev',
-    target: 'local',
+    target: 'workstation',
   })
 
   console.log(chalk.cyan('vm: building appliance seed…'))
@@ -147,7 +147,7 @@ async function prepareLocalUp(argv) {
     allowMissingTier0: false,
     allowMissingFiles: false,
     env: env || 'dev',
-    target: argv.target || 'local',
+    target: argv.target || 'workstation',
   })
   const seed = await ensureSeed({
     isoPath: seedResult.isoPath,
@@ -208,7 +208,7 @@ async function localDryRun(argv) {
   const ports = portsFromArgv(argv)
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
-    target: argv.target || 'local',
+    target: argv.target || 'workstation',
   })
 
   console.log(
@@ -216,7 +216,7 @@ async function localDryRun(argv) {
       `  connect=${connect}; disks: ${summarizeAttachModes(withAttachModes(resolved.members))}`,
     ),
   )
-  const pin = await ensureCloudImage({ env: env || 'dev', target: 'local' })
+  const pin = await ensureCloudImage({ env: env || 'dev', target: 'workstation' })
   const baseImage = path.join(getImages(), pin.file)
   console.log(chalk.dim(`vm: dry-run skip download (expect ${baseImage})`))
   const seed = { path: 'seed/<env>/nocloud.iso', format: 'raw', device: 'cdrom' }
@@ -269,7 +269,7 @@ function localBackend(state) {
     },
 
     findRunnableExisting: async () => {
-      if (!state.session) throw new Error('local up: prepare() did not run')
+      if (!state.session) throw new Error('workstation up: prepare() did not run')
       if (!(await domainExists(state.session.connect, state.session.name))) return null
       return state.session
     },
@@ -371,7 +371,7 @@ function localBackend(state) {
     resumeFailHint: (_argv, existing) => `vm: domain ${existing.name} left running for diagnosis`,
 
     createFirstBoot: async (_argv, _signal, { wantSerial }) => {
-      if (!state.session) throw new Error('local up: prepare() did not run')
+      if (!state.session) throw new Error('workstation up: prepare() did not run')
       const { connect, name, memory, vcpus, disks, seed, ports, network, osinfo } = state.session
 
       /** @type {TcpFollow | null} */

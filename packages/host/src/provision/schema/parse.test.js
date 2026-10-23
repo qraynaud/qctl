@@ -13,7 +13,7 @@ describe('qctlSchema', () => {
     const q = qctlSchema.parse({})
     expect(q.platform).toBe('rocky')
     expect(q.environments.prod.production).toBe(true)
-    expect(q.profiles.default).toEqual({ env: 'dev', target: 'local' })
+    expect(q.profiles.default).toEqual({ env: 'dev', target: 'workstation' })
     expect(q.defaultProfile).toBe('default')
   })
 
@@ -25,7 +25,7 @@ describe('qctlSchema', () => {
         prod: { production: true },
       },
       profiles: {
-        lab: { env: 'dev', target: 'local' },
+        lab: { env: 'dev', target: 'workstation' },
         prod: { env: 'prod', target: 'proxmox' },
       },
       'default-profile': 'lab',
@@ -38,7 +38,7 @@ describe('qctlSchema', () => {
     expect(() =>
       qctlSchema.parse({
         environments: { dev: {} },
-        profiles: { lab: { env: 'missing', target: 'local' } },
+        profiles: { lab: { env: 'missing', target: 'workstation' } },
       }),
     ).toThrow(/not in qctl.environments/)
   })
@@ -59,7 +59,7 @@ describe('provisionSchema qctl', () => {
           ...net,
           qctl: {
             environments: { dev: {} },
-            profiles: { lab: { env: 'nope', target: 'local' } },
+            profiles: { lab: { env: 'nope', target: 'workstation' } },
           },
         },
         'dev.yaml',

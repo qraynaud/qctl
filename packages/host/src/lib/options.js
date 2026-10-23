@@ -25,7 +25,7 @@ function loadProvisionUnresolved(argv = {}) {
   const target = /** @type {VmTarget} */ (
     argv.target && /** @type {readonly string[]} */ (TARGETS).includes(argv.target)
       ? argv.target
-      : 'local'
+      : 'workstation'
   )
   try {
     return loadProvisionDocument({ root, env, target })
@@ -35,7 +35,7 @@ function loadProvisionUnresolved(argv = {}) {
 }
 
 /**
- * Ports from provision for the resolved profile env/target (defaults to built-in dev/local).
+ * Ports from provision for the resolved profile env/target (defaults to built-in dev/workstation).
  * @param {Partial<VmArgv>} [argv]
  * @returns {PortsMap}
  */
@@ -86,7 +86,7 @@ export const DEFAULT_CPU = 2
 export const DEFAULT_MEMORY_MIB = 4096
 
 /**
- * Fill argv.memory / argv.vcpus from provision local|proxmox.memory|cpu when CLI omits them.
+ * Fill argv.memory / argv.vcpus from provision workstation|proxmox.memory|cpu when CLI omits them.
  * Mutates argv (same pattern as resolveVmName). Soft-loads config (never exits).
  * @param {VmArgv} argv
  * @returns {VmArgv}
@@ -97,10 +97,10 @@ export function resolveBootResources(argv) {
   if (argv.memory == null || argv.vcpus == null) {
     const doc = loadProvisionUnresolved({
       env: argv.env || 'dev',
-      target: argv.target || 'local',
+      target: argv.target || 'workstation',
     })
     if (doc?.data) {
-      const block = argv.target === 'proxmox' ? doc.data.proxmox : doc.data.local
+      const block = argv.target === 'proxmox' ? doc.data.proxmox : doc.data.workstation
       section =
         block && typeof block === 'object' && !Array.isArray(block)
           ? /** @type {BootResourceSection} */ (block)
@@ -127,19 +127,23 @@ export const sharedBoot = (y) =>
   sharedLibvirt(y)
     .option('memory', {
       type: 'number',
-      describe: 'RAM MiB (default: provision local/proxmox.memory, else 4096)',
+      describe: 'RAM MiB (default: provision workstation/proxmox.memory, else 4096)',
     })
     .option('vcpus', {
       type: 'number',
-      describe: 'vCPU count (default: provision local/proxmox.cpu, else 2)',
+      describe: 'vCPU count (default: provision workstation/proxmox.cpu, else 2)',
     })
     .option('network', {
       choices: ['auto', 'default', 'user'],
       default: 'user',
       describe:
-        'user/auto: passt + hostfwd from provision ports; default: libvirt NAT virbr0 (local)',
+        'user/auto: passt + hostfwd from provision ports; default: libvirt NAT virbr0 (workstation)',
     })
-    .option('osinfo', { type: 'string', default: 'rocky9', describe: 'osinfo short-id (local)' })
+    .option('osinfo', {
+      type: 'string',
+      default: 'rocky9',
+      describe: 'osinfo short-id (workstation)',
+    })
     .option('cidata', {
       type: 'string',
       describe: 'Keep unpacked cidata tree at this path (debug; same as `vm seed --out`)',

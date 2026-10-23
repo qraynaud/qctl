@@ -9,7 +9,7 @@ afterEach(() => {
   pipeline.runVmUp.mockRestore?.()
 })
 
-describe('local up', () => {
+describe('workstation up', () => {
   test('delegates to runVmUp with a backend', async () => {
     const run = spyOn(pipeline, 'runVmUp').mockResolvedValue(undefined)
     const argv = /** @type {VmArgv} */ ({

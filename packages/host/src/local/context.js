@@ -50,7 +50,7 @@ export async function createLocalContext(argv, opts = {}) {
         + '  Run `qctl init <dir>` to scaffold one, or cd into an existing instance.',
     )
   }
-  resolveProfileArgv(argv, { root, requireLocal: true })
+  resolveProfileArgv(argv, { root, requireWorkstation: true })
   const env = String(argv.env || 'dev')
   const disposable = opts.disposable === true
   const name = disposable ? localTestContainerName(root) : localContainerName(root)
@@ -58,7 +58,7 @@ export async function createLocalContext(argv, opts = {}) {
   const loaded = await loadProvision({
     root,
     env,
-    target: 'local',
+    target: 'workstation',
     processEnv: { ...process.env, QCTL_ENV: env },
   })
   const sourceLabel =
@@ -76,7 +76,7 @@ export async function createLocalContext(argv, opts = {}) {
 
   const tooling = await ensureGuestTooling({
     env,
-    target: 'local',
+    target: 'workstation',
     required: true,
     quiet: true,
     // Avoid loadEnvProvision (ssh.authorized_keys warning) — we already have provision.
@@ -86,7 +86,7 @@ export async function createLocalContext(argv, opts = {}) {
     die('failed to resolve qctl-guest / platform module')
   }
 
-  const ports = portsFromArgv({ env, target: 'local' })
+  const ports = portsFromArgv({ env, target: 'workstation' })
   const image = process.env.QCTL_LOCAL_IMAGE?.trim() || 'quay.io/podman/stable:latest'
 
   return {

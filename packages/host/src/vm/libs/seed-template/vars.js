@@ -35,7 +35,7 @@ export async function buildVars({
   instanceId,
   allowMissingTier0,
   env = 'dev',
-  target = 'local',
+  target = 'workstation',
   provision = null,
   profile = 'appliance',
   initTankPools,

@@ -54,7 +54,7 @@ describe('resolveProfileArgv', () => {
     expect(argv).toMatchObject({
       profile: 'default',
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       production: false,
       _qctlProfileResolved: true,
     })
@@ -67,7 +67,7 @@ describe('resolveProfileArgv', () => {
     const argv = {
       profile: 'default',
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       production: false,
       _qctlProfileResolved: true,
     }
@@ -87,7 +87,7 @@ describe('resolveProfileArgv', () => {
         '    lab: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: lab, target: local }',
+        '    lab: { env: lab, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '  default-profile: lab',
       ].join('\n'),
@@ -120,7 +120,7 @@ describe('resolveProfileArgv', () => {
         '    dev: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
       ].join('\n'),
     )
@@ -132,7 +132,7 @@ describe('resolveProfileArgv', () => {
     exit.mockRestore()
   })
 
-  test('requireLocal accepts local profiles and rejects proxmox', () => {
+  test('requireWorkstation accepts workstation profiles and rejects proxmox', () => {
     const root = mkdtempSync(join(tmpdir(), 'qctl-profile-local-'))
     temps.push(root)
     mkdirSync(join(root, 'provision'), { recursive: true })
@@ -144,23 +144,23 @@ describe('resolveProfileArgv', () => {
         '    lab: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: lab, target: local }',
+        '    lab: { env: lab, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '  default-profile: lab',
       ].join('\n'),
     )
     /** @type {Partial<VmArgv>} */
     const ok = { profile: 'lab' }
-    resolveProfileArgv(ok, { root, requireLocal: true })
-    expect(ok.target).toBe('local')
+    resolveProfileArgv(ok, { root, requireWorkstation: true })
+    expect(ok.target).toBe('workstation')
 
     spyOn(console, 'error').mockImplementation(() => {})
     const exit = spyOn(process, 'exit').mockImplementation((code) => {
       throw new Error(`exit ${code}`)
     })
-    expect(() => resolveProfileArgv({ profile: 'prod' }, { root, requireLocal: true })).toThrow(
-      /exit 1/,
-    )
+    expect(() =>
+      resolveProfileArgv({ profile: 'prod' }, { root, requireWorkstation: true }),
+    ).toThrow(/exit 1/)
     exit.mockRestore()
   })
 })

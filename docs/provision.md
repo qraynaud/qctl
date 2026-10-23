@@ -22,7 +22,7 @@ qctl:
     staging: {}
     prod: { production: true }
   profiles:
-    lab:     { env: lab,     target: local }
+    lab:     { env: lab,     target: workstation }
     staging: { env: staging, target: proxmox }
     prod:    { env: prod,    target: proxmox }
   default-profile: lab
@@ -31,11 +31,11 @@ qctl:
 | Field | Role |
 |-------|------|
 | `environments` | Open map of env names. Optional `production: true` (default `false`). |
-| `profiles` | Named `{ env, target }` pairs (`target`: `local` \| `proxmox`). |
+| `profiles` | Named `{ env, target }` pairs (`target`: `workstation` \| `proxmox`). |
 | `default-profile` | Profile key used when `--profile` is omitted. |
 
 **Built-ins when omitted:** environments `{ dev, prod: { production: true } }`,
-profiles `{ default: { env: dev, target: local } }` (so a fresh init works with
+profiles `{ default: { env: dev, target: workstation } }` (so a fresh init works with
 `--profile` omitted).
 
 **Default profile key:** `default-profile` if set; else the sole profile key if
@@ -45,23 +45,23 @@ After resolve, qctl sets internal `env` / `target` / `production` and
 `QCTL_ENV=<profile.env>` for varlock / host-env loads (profile is SoT for the
 command — ambient `$QCTL_ENV` does not pick the profile).
 
-`qctl local …` requires a profile whose `target` is `local`.
+`qctl local …` requires a profile whose `target` is `workstation`.
 
 **Production flag** (`production: true` on an env) drives destroy confirm, disk
 warnings, Proxmox attach tip, default VM name, and frozen plugin installs.
 Frozen `node_modules` installs: `CI=true` **or** `production: true` on the
 active env (non-production custom envs such as `staging` stay mutable unless CI).
 
-Reserved env / profile basenames: `common`, `local`, `proxmox` (layer names).
+Reserved env / profile basenames: `common`, `workstation`, `proxmox` (layer names).
 
 ## Files and load order
 
 | File | Role |
 |------|------|
 | `provision/common.yaml` | Shared foundation + `qctl.environments` / `profiles` / `default-profile` |
-| `provision/<target>.yaml` | Target layer, e.g. `local.yaml` / `proxmox.yaml` |
+| `provision/<target>.yaml` | Target layer, e.g. `workstation.yaml` / `proxmox.yaml` |
 | `provision/<env>.yaml` | Env layer for the profile’s `env`, e.g. `dev.yaml` |
-| `provision/<env>.<target>.yaml` | Most-specific overlay, e.g. `dev.local.yaml` |
+| `provision/<env>.<target>.yaml` | Most-specific overlay, e.g. `dev.workstation.yaml` |
 | `provision/.env.schema` | Host graph schema for keys used by `!env` |
 | `provision/.env.<env>` | Host values (literals / `vw()`); committed lab values OK |
 | `provision/.env.local` | Machine-local host overrides (gitignored) |
@@ -72,16 +72,16 @@ Load algorithm (`qctl vm …`, `qctl local …`, seed) after profile resolve:
    **arrays are replaced** by the later file):
    `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml`.
 2. At least one of those four files must exist (any combination is fine).
-3. Drop the opposite hypervisor block (`local` vs `proxmox`).
+3. Drop the opposite hypervisor block (`workstation` vs `proxmox`).
 4. Resolve every `!env` from process env + `provision/.env.*` graph to a
    `Buffer` (empty process values do not win; missing keys error).
 5. Validate against the provision schema (below).
 
 ```text
 provision/common.yaml           ← foundation + host meta (profiles)
-provision/local.yaml            ← target (before env)
+provision/workstation.yaml            ← target (before env)
 provision/dev.yaml              ← env (wins over target)
-provision/dev.local.yaml        ← env+target (always last)
+provision/dev.workstation.yaml        ← env+target (always last)
 ```
 
 Prefer shared topology and profiles in `common.yaml`, target-wide knobs in
@@ -266,25 +266,25 @@ files:
       key=value
 
 # --- Hypervisor sizing in the *base* file is unusual; prefer overlays (below). ---
-# local: / proxmox: may appear here; the inactive one is stripped for the profile target.
+# workstation: / proxmox: may appear here; the inactive one is stripped for the profile target.
 ```
 
 ## Overlay samples
 
-### `provision/dev.local.yaml` (profile `target: local`)
+### `provision/dev.workstation.yaml` (profile `target: workstation`)
 
 ```yaml
-# Deep-merged onto provision/dev.yaml for libvirt / qctl local.
+# Deep-merged onto provision/dev.yaml for libvirt / qctl local (workstation target).
 # Arrays in this file replace the base array; maps merge by key.
 
-local:
+workstation:
   cpu: 2                     # vCPUs (1–256)
   memory: 4096               # MiB (256–1048576)
 
 networking:
   vlans:
     vlan2:
-      # Override / add host-side IPv4 for this VLAN only on local
+      # Override / add host-side IPv4 for this VLAN only on workstation
       ipv4: 10.42.2.2
 ```
 

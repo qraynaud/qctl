@@ -12,7 +12,7 @@ afterEach(() => {
 describe('createCheckReport', () => {
   test('finish returns true with no fails', () => {
     spyOn(console, 'log').mockImplementation(() => {})
-    const report = createCheckReport('local')
+    const report = createCheckReport('workstation')
     report.section('Tools')
     report.ok('virsh')
     report.warn('optional missing')
@@ -23,7 +23,7 @@ describe('createCheckReport', () => {
   test('finish sets exitCode on failure', () => {
     spyOn(console, 'log').mockImplementation(() => {})
     spyOn(console, 'error').mockImplementation(() => {})
-    const report = createCheckReport('local')
+    const report = createCheckReport('workstation')
     report.fail('missing tool')
     expect(report.finish()).toBe(false)
     expect(process.exitCode).toBe(1)

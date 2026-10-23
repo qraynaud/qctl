@@ -23,7 +23,7 @@ export function hasQctlProvision(dir) {
   }
   for (const name of entries) {
     if (!name.endsWith('.yaml') && !name.endsWith('.yml')) continue
-    if (name.includes('.local.') || name.includes('.proxmox.')) {
+    if (name.includes('.workstation.') || name.includes('.proxmox.')) {
       // overlays may omit qctl:; still count if base has it
     }
     const path = join(provisionDir, name)

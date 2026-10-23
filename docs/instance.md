@@ -38,7 +38,7 @@ networks/
 provision/.env.schema                # host provision graph (!env / @tag(guest))
 provision/.env.<env>                 # host provision values (+ optional .env.local)
 provision/common.yaml                # foundation + qctl.environments / profiles
-provision/<target>.yaml              # target layer (local / proxmox)
+provision/<target>.yaml              # target layer (workstation / proxmox)
 provision/<env>.yaml                 # env layer + !env topology
 provision/<env>.<target>.yaml        # env+target overlay (always last)
 mise.toml                            # host: pin qctl-host (or _.path to sibling bin)

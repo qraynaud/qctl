@@ -111,17 +111,17 @@ function fallbackSshAuthorizedKeys(provisionPaths) {
 
 /**
  * @param {string} target
- * @returns {"local" | "proxmox"}
+ * @returns {"workstation" | "proxmox"}
  */
 function normalizeTarget(target) {
-  return /** @type {"local" | "proxmox"} */ (
-    /** @type {readonly string[]} */ (TARGETS).includes(target) ? target : 'local'
+  return /** @type {"workstation" | "proxmox"} */ (
+    /** @type {readonly string[]} */ (TARGETS).includes(target) ? target : 'workstation'
   )
 }
 
 /**
  * @param {string} e
- * @param {"local" | "proxmox"} t
+ * @param {"workstation" | "proxmox"} t
  * @returns {string}
  */
 function cacheKey(e, t) {
@@ -130,7 +130,7 @@ function cacheKey(e, t) {
 
 /**
  * Uncached load (throws). Used only by {@link loadEnvProvisionSafe}.
- * @param {{ env: string, target: "local" | "proxmox" }} opts
+ * @param {{ env: string, target: "workstation" | "proxmox" }} opts
  * @returns {Promise<LoadedProvision>}
  */
 async function loadEnvProvisionUncached({ env: e, target: t }) {
@@ -208,7 +208,7 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
     platform: data.qctl.platform,
     sshAuthorizedKeys: sshList.length ? `${sshList.join('\n')}\n` : '',
     guest,
-    local: data.local,
+    workstation: data.workstation,
     proxmox: data.proxmox,
     nets,
     networking: data.networking || null,
@@ -230,9 +230,9 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
  * @param {{ env?: string, target?: string }} [opts]
  * @returns {Promise<LoadEnvProvisionResult>}
  */
-export async function loadEnvProvisionSafe({ env = 'dev', target = 'local' } = {}) {
+export async function loadEnvProvisionSafe({ env = 'dev', target = 'workstation' } = {}) {
   const e = env || 'dev'
-  const t = normalizeTarget(target || 'local')
+  const t = normalizeTarget(target || 'workstation')
   const root = tryGetRepoRoot()
   const key = `${root ?? ''}\0${cacheKey(e, t)}`
 

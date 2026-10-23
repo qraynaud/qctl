@@ -79,7 +79,7 @@ export async function resolvePlatformRef(opts = {}) {
   try {
     const sec = await loadEnvProvisionOrThrow({
       env: opts.env || 'dev',
-      target: opts.target || 'local',
+      target: opts.target || 'workstation',
     })
     return parsePlatformRef(sec.platform)
   } catch {

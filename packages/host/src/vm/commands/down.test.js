@@ -25,7 +25,9 @@ describe('vm down command', () => {
     )
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
-      /** @type {VmArgv} */ (/** @type {never} */ ({ target: 'local', env: 'dev', name: 'rocky' })),
+      /** @type {VmArgv} */ (
+        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })
+      ),
     )
     expect(spy).toHaveBeenCalled()
   })

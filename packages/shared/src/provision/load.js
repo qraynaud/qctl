@@ -23,13 +23,13 @@ export const COMMON_PROVISION = 'common'
  * Target-layer basenames (`provision/<target>.yaml`); also reserved as env/profile names.
  * @type {ReadonlySet<string>}
  */
-export const PROVISION_TARGETS = Object.freeze(new Set(['local', 'proxmox']))
+export const PROVISION_TARGETS = Object.freeze(new Set(['workstation', 'proxmox']))
 
 /**
  * @typedef {object} LoadProvisionOptions
  * @property {string} root - instance repo root
  * @property {string} env - e.g. "dev"
- * @property {'local' | 'proxmox'} [target]
+ * @property {'workstation' | 'proxmox'} [target]
  * @property {NodeJS.ProcessEnv} [processEnv]
  * @property {boolean} [resolve] - resolve !env (default true)
  */
@@ -78,7 +78,7 @@ function mergeIfPresent(data, filePath) {
  * }}
  */
 export function loadProvisionDocument(opts) {
-  const { root, env, target = 'local' } = opts
+  const { root, env, target = 'workstation' } = opts
 
   if (env === COMMON_PROVISION || PROVISION_TARGETS.has(env)) {
     throw new Error(
@@ -154,9 +154,9 @@ export async function loadProvision(opts) {
  * True if a parsed (unresolved) provision document uses any `!env`.
  * @param {string} root
  * @param {string} env
- * @param {'local' | 'proxmox'} [target]
+ * @param {'workstation' | 'proxmox'} [target]
  */
-export function provisionNeedsEnv(root, env, target = 'local') {
+export function provisionNeedsEnv(root, env, target = 'workstation') {
   const { envRefs } = loadProvisionDocument({ root, env, target })
   return envRefs.length > 0
 }

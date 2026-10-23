@@ -48,7 +48,7 @@ async function platformDiskDefaultsFromModule(modPath) {
  */
 export async function resolveProvisionDisks(opts = {}) {
   const env = opts.env || opts.provision?.env || 'dev'
-  const target = opts.target || opts.provision?.target || 'local'
+  const target = opts.target || opts.provision?.target || 'workstation'
   const provision = opts.provision || (await loadEnvProvisionOrThrow({ env, target }))
   const modPath = await ensurePlatformModule({
     env,

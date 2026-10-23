@@ -1,5 +1,5 @@
 /**
- * Shared wait / abort helpers for local driver (and serial waits).
+ * Shared wait / abort helpers for workstation driver (and serial waits).
  */
 import net from 'node:net'
 

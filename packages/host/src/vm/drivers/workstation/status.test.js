@@ -18,7 +18,7 @@ afterEach(() => {
   console.log.mockRestore?.()
 })
 
-describe('local status', () => {
+describe('workstation status', () => {
   test('prints not defined when domain missing', async () => {
     spyOn(paths, 'getVms').mockReturnValue('/tmp/qctl-test/vms')
     spyOn(util, 'requireBins').mockResolvedValue(undefined)
@@ -30,7 +30,7 @@ describe('local status', () => {
         name: 'rocky',
         network: 'user',
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
       }),
     )
     expect(String(log.mock.calls[0]?.[0])).toMatch(/not defined/)
@@ -49,7 +49,7 @@ describe('local status', () => {
         name: 'rocky',
         network: 'user',
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
       }),
     )
     expect(String(log.mock.calls[0]?.[0])).toMatch(/Name: rocky/)

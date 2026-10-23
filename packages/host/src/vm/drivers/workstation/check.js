@@ -33,7 +33,7 @@ async function checkBin(report, name, hint) {
  * @returns {Promise<void>}
  */
 export async function check(argv) {
-  const report = createCheckReport('local')
+  const report = createCheckReport('workstation')
   const connect = argv.connect || 'qemu:///system'
   const envName = String(argv.env || 'dev')
 
@@ -41,11 +41,11 @@ export async function check(argv) {
   for (const bin of ['virsh', 'virt-install', 'qemu-img']) {
     await checkBin(report, bin)
   }
-  // Emulated TPM 2.0 on every local VM (virt-install `--tpm` / libvirt reconcile).
+  // Emulated TPM 2.0 on every workstation VM (virt-install `--tpm` / libvirt reconcile).
   await checkBin(
     report,
     'swtpm',
-    'swtpm provides the emulated TPM 2.0 used by local VMs — install it (e.g. `sudo pacman -S swtpm`)',
+    'swtpm provides the emulated TPM 2.0 used by workstation VMs — install it (e.g. `sudo pacman -S swtpm`)',
   )
   report.ok('NoCloud ISO writer bundled (@gcu/iso9660)')
 
@@ -94,7 +94,7 @@ export async function check(argv) {
     }
   }
 
-  const target = argv.target || 'local'
+  const target = argv.target || 'workstation'
   report.section(`Config (provision/, env=${envName}, target=${target})`)
   report.ok('instance provision/ found')
   const loaded = await loadEnvProvisionSafe({ env: envName, target })

@@ -21,7 +21,7 @@ describe('platform-tooling', () => {
   test('resolvePlatformRef falls back to rocky when provision is unavailable', async () => {
     const ref = await resolvePlatformRef({
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       platform: '',
     })
     // empty platform string is treated as unset → try provision, else rocky

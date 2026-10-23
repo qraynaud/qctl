@@ -94,6 +94,6 @@ export async function handler(argv) {
   await downloadImage({
     force: argv.forceDownload,
     env: String(argv.env || 'dev'),
-    target: String(argv.target || 'local'),
+    target: String(argv.target || 'workstation'),
   })
 }

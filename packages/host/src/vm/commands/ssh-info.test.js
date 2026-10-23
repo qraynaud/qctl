@@ -21,7 +21,9 @@ describe('vm ssh-info command', () => {
       /** @type {VmDriver} */ (/** @type {never} */ ({ sshInfo: spy })),
     )
     await mod.handler(
-      /** @type {VmArgv} */ (/** @type {never} */ ({ target: 'local', env: 'dev', name: 'rocky' })),
+      /** @type {VmArgv} */ (
+        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })
+      ),
     )
     expect(spy).toHaveBeenCalled()
   })

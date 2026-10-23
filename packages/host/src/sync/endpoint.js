@@ -49,7 +49,7 @@ export async function resolveSyncEndpoint(argv) {
   const username = (argv.user || 'rocky').trim() || 'rocky'
   const remoteDir = (argv.remoteDir || '/tank/rocky').trim() || '/tank/rocky'
   const identity = argv.identity?.trim() || undefined
-  const target = argv.target || 'local'
+  const target = argv.target || 'workstation'
   const network = argv.network === 'auto' ? 'user' : argv.network || 'user'
 
   if (argv.host?.trim()) {
@@ -74,7 +74,7 @@ export async function resolveSyncEndpoint(argv) {
     )
   }
 
-  // local libvirt
+  // workstation libvirt
   if (network === 'default') {
     const ip = await localLeaseIp(argv.connect || 'qemu:///system', name)
     if (!ip) {
@@ -90,7 +90,7 @@ export async function resolveSyncEndpoint(argv) {
       username,
       remoteDir,
       identity,
-      label: `${username}@${ip}:${port} (local/default) → ${remoteDir}`,
+      label: `${username}@${ip}:${port} (workstation/default) → ${remoteDir}`,
     }
   }
 
@@ -109,7 +109,7 @@ export async function resolveSyncEndpoint(argv) {
     username,
     remoteDir,
     identity,
-    label: `${username}@127.0.0.1:${port} (local/user) → ${remoteDir}`,
+    label: `${username}@127.0.0.1:${port} (workstation/user) → ${remoteDir}`,
   }
 }
 

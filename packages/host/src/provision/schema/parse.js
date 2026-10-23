@@ -11,7 +11,7 @@ import { filesSchema } from './files.js'
 import { registriesSchema } from './first-boot.js'
 import { alignProxmoxNets, networkingSchema } from './networking.js'
 import { packagesFieldSchema } from './packages.js'
-import { localSchema, proxmoxSchema } from './targets.js'
+import { proxmoxSchema, workstationSchema } from './targets.js'
 import { usersSchema } from './users.js'
 import {
   formatProvisionError,
@@ -38,7 +38,7 @@ export const qctlSchema = qctlHostMetaFieldsSchema
 const provisionBodySchema = z.strictObject({
   qctl: qctlSchema,
   networking: networkingSchema,
-  local: localSchema.nullable().default(null),
+  workstation: workstationSchema.nullable().default(null),
   /** Admin SSH pubkeys + optional host-key tarball for seed. */
   ssh: z
     .strictObject({
