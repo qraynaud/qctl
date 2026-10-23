@@ -64,7 +64,10 @@ export async function runSeed(argv) {
 
   const env = argv.env || 'dev'
   const target = argv.target || 'workstation'
-  const provisionProfile = argv.profile || 'lab'
+  const provisionProfile = argv.profile
+  if (provisionProfile == null || String(provisionProfile).trim() === '') {
+    die('vm seed: profile is required (pass --profile or set qctl.default-profile)')
+  }
   const paths = resolveSeedPaths(profileName, env)
   const keepDir =
     argv.out != null && String(argv.out).trim() !== '' ? path.resolve(String(argv.out)) : null

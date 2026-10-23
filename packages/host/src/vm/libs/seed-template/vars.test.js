@@ -80,6 +80,7 @@ describe('buildVars', () => {
       instanceId: 'rocky-dev',
       env: 'dev',
       target: 'workstation',
+      provisionProfile: 'lab',
       profile: 'appliance',
       allowMissingTier0: true,
     })

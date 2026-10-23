@@ -230,17 +230,19 @@ async function loadEnvProvisionUncached({ env: e, target: t, profile: p }) {
  * Failures are not cached — they are often cwd / missing-instance transients
  * (poisoning later loads in the same process, e.g. bun test workers).
  *
- * @param {{ env?: string, target?: string, profile?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile: string }} opts
  * @returns {Promise<LoadEnvProvisionResult>}
  */
-export async function loadEnvProvisionSafe({
-  env = 'dev',
-  target = 'workstation',
-  profile = 'lab',
-} = {}) {
+export async function loadEnvProvisionSafe(opts) {
+  const env = opts?.env
+  const target = opts?.target
+  const profile = opts?.profile
+  if (profile == null || String(profile).trim() === '') {
+    throw new Error('loadEnvProvisionSafe: profile is required')
+  }
   const e = env || 'dev'
   const t = normalizeTarget(target || 'workstation')
-  const p = profile || 'lab'
+  const p = String(profile).trim()
   const root = tryGetRepoRoot()
   const key = `${root ?? ''}\0${cacheKey(p, e, t)}`
 
@@ -269,10 +271,10 @@ export async function loadEnvProvisionSafe({
 
 /**
  * Load config for a profile. Throws on failure.
- * @param {{ env?: string, target?: string, profile?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile: string }} opts
  * @returns {Promise<LoadedProvision>}
  */
-export async function loadEnvProvisionOrThrow(opts = {}) {
+export async function loadEnvProvisionOrThrow(opts) {
   const r = await loadEnvProvisionSafe(opts)
   if (!r.ok) throw new Error(r.error)
   return r.provision
@@ -280,10 +282,10 @@ export async function loadEnvProvisionOrThrow(opts = {}) {
 
 /**
  * Same as {@link loadEnvProvisionOrThrow} but prints the error and exits 1.
- * @param {{ env?: string, target?: string, profile?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile: string }} opts
  * @returns {Promise<LoadedProvision>}
  */
-export async function loadEnvProvision(opts = {}) {
+export async function loadEnvProvision(opts) {
   const r = await loadEnvProvisionSafe(opts)
   if (!r.ok) return die(r.error)
   return r.provision

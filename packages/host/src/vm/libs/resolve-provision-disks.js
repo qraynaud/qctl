@@ -44,13 +44,16 @@ async function platformDiskDefaultsFromModule(modPath) {
  *   target?: string,
  *   profile?: string,
  *   provision?: LoadedProvision,
- * }} [opts]
+ * }} opts
  * @returns {Promise<ResolvedDisks>}
  */
-export async function resolveProvisionDisks(opts = {}) {
+export async function resolveProvisionDisks(opts) {
   const env = opts.env || opts.provision?.env || 'dev'
   const target = opts.target || opts.provision?.target || 'workstation'
-  const profile = opts.profile || opts.provision?.profile || 'lab'
+  const profile = opts.profile || opts.provision?.profile
+  if (profile == null || String(profile).trim() === '') {
+    throw new Error('resolveProvisionDisks: profile is required')
+  }
   const provision = opts.provision || (await loadEnvProvisionOrThrow({ env, target, profile }))
   const modPath = await ensurePlatformModule({
     env,

@@ -12,11 +12,14 @@ export {
 } from './net.js'
 
 /**
- * @param {{ env?: string, profile?: string }} [opts]
+ * @param {{ env?: string, profile: string }} opts
  */
-export async function loadProxmoxConfig(opts = {}) {
+export async function loadProxmoxConfig(opts) {
   const env = opts.env || 'dev'
-  const profile = opts.profile || 'lab'
+  const profile = opts.profile
+  if (profile == null || String(profile).trim() === '') {
+    die('loadProxmoxConfig: profile is required')
+  }
   const sec = await loadEnvProvision({ env, target: 'proxmox', profile })
   const pve = sec.proxmox || {}
 
@@ -61,13 +64,17 @@ export async function loadProxmoxConfig(opts = {}) {
 
 /**
  * Soft load for target-check.
- * @param {{ env?: string, profile?: string }} [opts]
+ * @param {{ env?: string, profile: string }} opts
  */
-export async function tryLoadProxmoxConfig(opts = {}) {
+export async function tryLoadProxmoxConfig(opts) {
   const env = opts.env || 'dev'
-  const profile = opts.profile || 'lab'
+  const profile = opts.profile
   /** @type {string[]} */
   const errors = []
+
+  if (profile == null || String(profile).trim() === '') {
+    return { config: null, errors: ['tryLoadProxmoxConfig: profile is required'], usable: false }
+  }
 
   if (!tryGetRepoRoot()) {
     return {

@@ -22,7 +22,8 @@ function loadProvisionUnresolved(argv = {}) {
   const root = tryGetRepoRoot()
   if (!root) return null
   const env = argv.env || 'dev'
-  const profile = argv.profile || 'lab'
+  const profile = argv.profile
+  if (profile == null || String(profile).trim() === '') return null
   const target = /** @type {VmTarget} */ (
     argv.target && /** @type {readonly string[]} */ (TARGETS).includes(argv.target)
       ? argv.target
@@ -99,7 +100,7 @@ export function resolveBootResources(argv) {
     const doc = loadProvisionUnresolved({
       env: argv.env || 'dev',
       target: argv.target || 'workstation',
-      profile: argv.profile || 'lab',
+      profile: argv.profile,
     })
     if (doc?.data) {
       const block = argv.target === 'proxmox' ? doc.data.proxmox : doc.data.workstation

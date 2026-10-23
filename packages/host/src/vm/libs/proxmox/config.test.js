@@ -21,7 +21,7 @@ afterEach(() => {
 describe('proxmox config', () => {
   test('tryLoadProxmoxConfig fails outside instance repo', async () => {
     spyOn(paths, 'tryGetRepoRoot').mockReturnValue(null)
-    const r = await tryLoadProxmoxConfig({ env: 'dev' })
+    const r = await tryLoadProxmoxConfig({ env: 'dev', profile: 'lab' })
     expect(r.usable).toBe(false)
     expect(r.errors[0]).toMatch(/instance repo/)
   })
@@ -44,7 +44,7 @@ describe('proxmox config', () => {
         })
       ),
     )
-    const cfg = await loadProxmoxConfig({ env: 'dev' })
+    const cfg = await loadProxmoxConfig({ env: 'dev', profile: 'lab' })
     expect(cfg.apiUrl).toBe('https://pve.example')
     expect(cfg.node).toBe('pve')
     expect(cfg.storage).toBe('local-lvm')
@@ -55,7 +55,7 @@ describe('proxmox config', () => {
     spyOn(loadConfig, 'loadEnvProvisionSafe').mockResolvedValue({
       ok: true,
       provision: /** @type {LoadedProvision} */ (
-        /** @type {unknown} */ ({
+        /** @type {never} */ ({
           path: '/tmp/provision/.env.dev',
           provisionDir: '/tmp/provision',
           paths: ['/tmp/provision/.env.dev'],
@@ -68,7 +68,7 @@ describe('proxmox config', () => {
         })
       ),
     })
-    const r = await tryLoadProxmoxConfig({ env: 'dev' })
+    const r = await tryLoadProxmoxConfig({ env: 'dev', profile: 'lab' })
     expect(r.usable).toBe(true)
     expect(r.config?.node).toBe('pve')
   })

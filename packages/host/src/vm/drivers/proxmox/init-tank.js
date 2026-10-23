@@ -211,6 +211,7 @@ export async function initTank(argv) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
     target: argv.target || 'proxmox',
+    profile: argv.profile,
   })
   const selection = resolveInitTankPools(resolved, argv.poolIds)
   if (!selection) {

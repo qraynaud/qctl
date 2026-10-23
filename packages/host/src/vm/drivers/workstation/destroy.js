@@ -8,13 +8,17 @@ import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 /** @import { VmArgv } from '../../types.js' */
 
 /**
- * @param {Pick<VmArgv, 'connect' | 'name' | 'keepPersistent' | 'dryRun' | 'env' | 'target'>} opts
+ * @param {Pick<
+ *   VmArgv,
+ *   'connect' | 'name' | 'keepPersistent' | 'dryRun' | 'env' | 'target' | 'profile'
+ * >} opts
  * @returns {Promise<void>}
  */
-export async function destroyVm({ connect, name, keepPersistent, dryRun, env, target }) {
+export async function destroyVm({ connect, name, keepPersistent, dryRun, env, target, profile }) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
     target: target || 'workstation',
+    profile,
   })
   const p = vmPaths(name, resolved)
   if (dryRun) {
@@ -59,5 +63,6 @@ export async function destroy(argv) {
     dryRun: argv.dryRun,
     env: argv.env,
     target: argv.target,
+    profile: argv.profile,
   })
 }
