@@ -1,7 +1,7 @@
-import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { makeTempDir } from '../test-helpers.js'
 import {
   configureNativeHelperEmbed,
   ensureVarlockLocalEncrypt,
@@ -37,7 +37,7 @@ describe('varlock native-helper', () => {
   })
 
   test('ensureVarlockLocalEncrypt copies override into QCTL_CACHE_HOME', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'qctl-nh-'))
+    const base = makeTempDir('qctl-nh-')
     process.env.QCTL_CACHE_HOME = base
     const fake = join(base, 'fake-helper')
     writeFileSync(fake, '#!/bin/sh\n')

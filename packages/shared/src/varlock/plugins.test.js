@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { makeTempDir } from '../test-helpers.js'
 import {
   VARLOCK_UNRESOLVED_PLUGIN_RE,
   ensurePackageDependencies,
@@ -14,26 +13,13 @@ import {
   readPackageDependencyMap,
   shouldUseFrozenPackageInstall,
 } from './plugins.js'
-import { afterEach, describe, expect, test } from 'bun:test'
-
-/** @type {string[]} */
-const temps = []
-
-afterEach(async () => {
-  const { rmSync } = await import('node:fs')
-  while (temps.length) {
-    const dir = temps.pop()
-    if (dir) rmSync(dir, { recursive: true, force: true })
-  }
-})
+import { describe, expect, test } from 'bun:test'
 
 /**
  * @returns {Promise<string>}
  */
 async function tempDir() {
-  const dir = await mkdtemp(join(tmpdir(), 'qctl-pkg-'))
-  temps.push(dir)
-  return dir
+  return makeTempDir('qctl-pkg-')
 }
 
 describe('isVarlockUnresolvedPluginError', () => {

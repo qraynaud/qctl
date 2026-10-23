@@ -2,8 +2,8 @@
  * Rocky OS networking: NetworkManager egress + firewalld DNAT from ports.json.
  * Guest stages call these via `platform.networking` after dynamic import.
  */
-import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 
 import { dnatEntriesFromPorts, portsSchema } from '@qctl/shared'
 
@@ -77,7 +77,7 @@ export function planApplyDnat(ctx) {
  */
 export async function applyDnat(ctx) {
   const portsJson = ctx.env.QCTL_PORTS_JSON?.trim() || DEFAULT_PORTS_JSON
-  if (!existsSync(portsJson)) {
+  if (!fs.existsSync(portsJson)) {
     ctx.log(`rocky-services: no ${portsJson} — skipping DNAT forwards`)
     return
   }
@@ -85,7 +85,7 @@ export async function applyDnat(ctx) {
   /** @type {PortsMap} */
   let ports
   try {
-    ports = portsSchema.parse(JSON.parse(await readFile(portsJson, 'utf8')))
+    ports = portsSchema.parse(JSON.parse(await fsp.readFile(portsJson, 'utf8')))
   } catch (err) {
     throw new Error(
       `DNAT: failed to read ${portsJson}: ${err instanceof Error ? err.message : err}`,
@@ -101,7 +101,7 @@ export async function applyDnat(ctx) {
   ctx.log(`rocky-services: applying ${dnats.length} DNAT forward(s) from ${portsJson} → 127.0.0.1`)
 
   const routeLocalnet = ctx.env.QCTL_ROUTE_LOCALNET_CONF?.trim() || DEFAULT_ROUTE_LOCALNET_CONF
-  await writeFile(
+  await fsp.writeFile(
     routeLocalnet,
     [
       '# Rocky: firewalld DNAT → 127.0.0.1 (rootless PublishPort); from ports.json',

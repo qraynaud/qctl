@@ -1,7 +1,7 @@
 /**
  * Line-based ensure / replace / inject for scaffold repair (not AST merge).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs'
 import { dirname } from 'node:path'
 
 /**
@@ -141,15 +141,15 @@ export function injectAfter(text, anchor, insert, opts = {}) {
  * @returns {FileLineEditResult}
  */
 export function editFileLines(path, edit, opts = {}) {
-  const exists = existsSync(path)
+  const exists = fs.existsSync(path)
   if (!exists && !opts.create) {
     return { path, text: '', changed: false, action: 'unchanged', dryRun: opts.dryRun }
   }
-  const before = exists ? readFileSync(path, 'utf8') : ''
+  const before = exists ? fs.readFileSync(path, 'utf8') : ''
   const result = edit(before)
   if (result.changed && !opts.dryRun) {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, result.text, 'utf8')
+    fs.mkdirSync(dirname(path), { recursive: true })
+    fs.writeFileSync(path, result.text, 'utf8')
   }
   return { path, ...result, dryRun: opts.dryRun }
 }

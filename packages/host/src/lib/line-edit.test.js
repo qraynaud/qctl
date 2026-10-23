@@ -1,6 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import * as fs from 'node:fs'
 
 import {
   ensureLine,
@@ -11,7 +9,7 @@ import {
   replaceByKey,
   replaceByKeyInFile,
 } from './line-edit.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 
 describe('lineMatchesKey', () => {
   test('env style', () => {
@@ -87,23 +85,42 @@ describe('injectAfter', () => {
   })
 })
 
-describe('file helpers', () => {
+describe('file helpers (mocked fs)', () => {
   test('ensureLineInFile / replaceByKeyInFile / injectAfterInFile + dryRun', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'qctl-line-'))
-    const path = join(dir, 'f.env')
-    writeFileSync(path, 'A=1\n', 'utf8')
+    /** @type {Map<string, string>} */
+    const files = new Map([['/mock/f.env', 'A=1\n']])
+    spyOn(fs, 'existsSync').mockImplementation((p) => files.has(String(p)))
+    // @ts-expect-error test stub returns utf8 string
+    spyOn(fs, 'readFileSync').mockImplementation((/** @type {string} */ p) => {
+      const key = String(p)
+      const body = files.get(key)
+      if (body === undefined) {
+        const err = /** @type {NodeJS.ErrnoException} */ (new Error(`ENOENT: ${key}`))
+        err.code = 'ENOENT'
+        throw err
+      }
+      return body
+    })
+    spyOn(fs, 'writeFileSync').mockImplementation((p, data) => {
+      files.set(String(p), String(data))
+    })
+    spyOn(fs, 'mkdirSync').mockImplementation(() => {})
+
+    const path = '/mock/f.env'
 
     const dry = ensureLineInFile(path, 'B=2', { dryRun: true })
     expect(dry.changed).toBe(true)
-    expect(readFileSync(path, 'utf8')).toBe('A=1\n')
+    expect(files.get(path)).toBe('A=1\n')
+    expect(fs.writeFileSync).not.toHaveBeenCalled()
 
     ensureLineInFile(path, 'B=2')
-    expect(readFileSync(path, 'utf8')).toBe('A=1\nB=2\n')
+    expect(files.get(path)).toBe('A=1\nB=2\n')
+    expect(fs.writeFileSync).toHaveBeenCalled()
 
     replaceByKeyInFile(path, 'A', 'A=9')
-    expect(readFileSync(path, 'utf8')).toBe('A=9\nB=2\n')
+    expect(files.get(path)).toBe('A=9\nB=2\n')
 
     injectAfterInFile(path, 'A=9', 'C=3')
-    expect(readFileSync(path, 'utf8')).toBe('A=9\nC=3\nB=2\n')
+    expect(files.get(path)).toBe('A=9\nC=3\nB=2\n')
   })
 })
