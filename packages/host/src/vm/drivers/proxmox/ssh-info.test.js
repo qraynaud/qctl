@@ -17,7 +17,8 @@ describe('proxmox sshInfo', () => {
       }),
     )
     const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(joined).toMatch(/SSH \(Proxmox\)/)
+    expect(joined).toMatch(/Shell \(Proxmox\)/)
+    expect(joined).toMatch(/qctl vm shell --host/)
     expect(joined).toMatch(/rocky-dev/)
   })
 })

@@ -4,6 +4,7 @@ import * as down from './down.js'
 import * as download from './download.js'
 import * as initTank from './init-tank.js'
 import * as seed from './seed.js'
+import * as shell from './shell.js'
 import * as sshInfo from './ssh-info.js'
 import * as status from './status.js'
 import * as targetCheck from './target-check.js'
@@ -18,5 +19,6 @@ export const vmCommands = [
   initTank,
   status,
   sshInfo,
+  shell,
   targetCheck,
 ]

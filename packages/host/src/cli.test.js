@@ -55,6 +55,7 @@ const VM_COMMANDS = [
   'init-tank',
   'status',
   'ssh-info',
+  'shell',
   'target-check',
 ]
 
