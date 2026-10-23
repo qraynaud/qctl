@@ -33,7 +33,7 @@ Shared option:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--root` | `$QCTL_ROOT` or walk-up | Instance root (`provision/` + `qctl:` block) |
+| `--root` | `$QCTL_ROOT`, else cwd walk-up, else `/tank/rocky` | Instance root |
 
 | Subcommand | Description |
 |------------|-------------|
@@ -61,7 +61,7 @@ Shared options:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--root` | `$QCTL_ROOT` or walk-up | Instance root |
+| `--root` | `$QCTL_ROOT`, else cwd walk-up, else `/tank/rocky` | Instance root |
 | `--env` | (detect) | Override guest `QCTL_ENV` for schema `@import` (host seed sets it from the provision profile) |
 
 | Subcommand | Description |
@@ -89,7 +89,7 @@ qctl secret check && qctl secret sync --restart
 ```
 
 Day-2 after vault changes: `check` then `sync --restart`. Quadlet hook:
-`ExecStartPre=qctl secret sync --root ${REPO_ROOT}`.
+`ExecStartPre=qctl secret sync` (root from `$QCTL_ROOT` / walk-up / `/tank/rocky`).
 
 See [docs/secrets.md](../../docs/secrets.md).
 

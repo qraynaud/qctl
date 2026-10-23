@@ -1,6 +1,11 @@
 import { join } from 'node:path'
 
-import { DEFAULT_SEED_DIR, createContext, resolveInstanceRoot } from './context.js'
+import {
+  DEFAULT_REPO_DIR,
+  DEFAULT_SEED_DIR,
+  createContext,
+  resolveInstanceRoot,
+} from './context.js'
 import { QuadletError } from './errors.js'
 import { cleanupQuadletFixture, makeContext, makeQuadletInstance } from './test/fixture.js'
 import { describe, expect, test } from 'bun:test'
@@ -18,6 +23,21 @@ describe('quadlet context', () => {
       expect(() => resolveInstanceRoot({ root: fx.sysDir })).toThrow(QuadletError)
       expect(() => resolveInstanceRoot({ root: fx.sysDir })).toThrow(/not a qctl instance/)
       expect(() => resolveInstanceRoot({ cwd: fx.sysDir, env: {} })).toThrow(/no qctl instance/)
+    } finally {
+      cleanupQuadletFixture(fx)
+    }
+  })
+
+  test('resolveInstanceRoot: QCTL_ROOT and DEFAULT_REPO_DIR', () => {
+    expect(DEFAULT_REPO_DIR).toBe('/tank/rocky')
+    const fx = makeQuadletInstance()
+    try {
+      expect(
+        resolveInstanceRoot({
+          cwd: fx.sysDir,
+          env: { QCTL_ROOT: fx.root },
+        }),
+      ).toBe(fx.root)
     } finally {
       cleanupQuadletFixture(fx)
     }

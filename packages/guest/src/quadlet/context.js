@@ -23,8 +23,15 @@ import { createSystem } from './system.js'
 
 export const DEFAULT_SEED_DIR = '/usr/local/lib/rocky'
 
+/** Default guest checkout when provision does not set `repo.dir`. */
+export const DEFAULT_REPO_DIR = '/tank/rocky'
+
 /**
- * Resolve the instance root: explicit `--root` / QCTL_ROOT, else walk up from cwd.
+ * Resolve the instance root:
+ * 1. explicit `--root` / `$QCTL_ROOT`
+ * 2. walk up from cwd for `provision/` + `qctl:`
+ * 3. appliance default {@link DEFAULT_REPO_DIR} when it is an instance
+ *
  * @param {{ root?: string, cwd?: string, env?: Record<string, string | undefined> }} [opts]
  * @returns {string}
  */
@@ -38,13 +45,15 @@ export function resolveInstanceRoot(opts = {}) {
     return r
   }
   const found = findInstanceRoot(opts.cwd ?? process.cwd())
-  if (!found) {
-    die(
-      'no qctl instance found (need provision/ with a qctl: block); '
-        + 'run from the repo or pass --root',
-    )
-  }
-  return found
+  if (found) return found
+
+  const fallback = resolve(DEFAULT_REPO_DIR)
+  if (isInstanceRoot(fallback)) return fallback
+
+  die(
+    'no qctl instance found (need provision/ with a qctl: block); '
+      + `run from the repo, pass --root, or sync into ${DEFAULT_REPO_DIR}`,
+  )
 }
 
 /**

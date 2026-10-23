@@ -133,12 +133,15 @@ Install renames `qctl-guest` → `/usr/local/bin/qctl`.
 repo. Appliance install also drops `/usr/local/bin/quadlet` → `qctl quadlet`
 (default `QCTL_ROOT=/tank/rocky`) plus bash-completion.
 
-Instance root is `--root` / `$QCTL_ROOT` (validated), else walk-up from `cwd`.
-Mutating commands re-exec with `sudo -n`. Rootless apps install under the `apps`
-user’s `~/.config/containers/systemd`; rootful under `/etc/containers/systemd`.
+Instance root is `--root` / `$QCTL_ROOT` (validated), else walk-up from `cwd`,
+else `/tank/rocky` when that path is an instance. Same resolution for
+`qctl secret {check,sync}`. Mutating quadlet commands re-exec with `sudo -n`.
+Rootless apps install under the `apps` user’s `~/.config/containers/systemd`;
+rootful under `/etc/containers/systemd`.
 
-Package-root graph → Quadlet `${VAR}` render. Unit graph → `EnvironmentFile=.env`
-and Podman secrets ([secrets.md](./secrets.md)).
+Package-root graph → Quadlet `${VAR}` render. Unit templates also get
+`${__DIRNAME}` (absolute directory of the file being rendered). Unit graph →
+`EnvironmentFile=.env` and Podman secrets ([secrets.md](./secrets.md)).
 
 ## Guest: first boot
 

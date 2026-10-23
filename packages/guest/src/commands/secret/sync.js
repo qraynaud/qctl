@@ -16,7 +16,7 @@ export function builder(yargs) {
   return yargs
     .option('root', {
       type: 'string',
-      describe: 'Instance root (default: $QCTL_ROOT, else walk up from cwd)',
+      describe: 'Instance root ($QCTL_ROOT, else cwd walk-up, else /tank/rocky)',
     })
     .option('dry-run', { type: 'boolean', default: false, describe: 'Print actions only' })
     .option('restart', {
@@ -38,7 +38,7 @@ export function builder(yargs) {
         'Unit schemas: applications/<app>/<unit>/.env.schema and common/<lib>/.env.schema.',
         'Labels each secret qctl.sha256=… so unchanged values are skipped; `secret check` compares them.',
         'Day-2 after vault changes: qctl secret check && qctl secret sync --restart',
-        'Quadlet hook:  ExecStartPre=qctl secret sync --root ${REPO_ROOT}',
+        'Quadlet hook:  ExecStartPre=qctl secret sync',
       ].join('\n'),
     )
 }
