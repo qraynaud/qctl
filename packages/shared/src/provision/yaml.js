@@ -208,14 +208,14 @@ export function resolveEnvRefs(value, env, path = '') {
 }
 
 /**
- * Drop the opposite hypervisor block after merge (local vs proxmox).
+ * Drop the opposite hypervisor block after merge (workstation vs proxmox).
  * @param {YamlMapping | ProvisionMapping} data
- * @param {'local' | 'proxmox'} target
+ * @param {'workstation' | 'proxmox'} target
  */
 export function stripOppositeTarget(data, target) {
-  if (target === 'local') {
+  if (target === 'workstation') {
     delete data.proxmox
   } else {
-    delete data.local
+    delete data.workstation
   }
 }

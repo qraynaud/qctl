@@ -27,7 +27,7 @@ describe('resolveSyncEndpoint', () => {
         port: 2222,
         user: 'rocky',
         remoteDir: '/tank/rocky',
-        target: 'local',
+        target: 'workstation',
         env: 'dev',
       }),
     )

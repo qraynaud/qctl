@@ -30,7 +30,7 @@ export function sharedProfile(y) {
  * @param {Partial<VmArgv> & { profile?: string | null }} argv
  * @param {{
  *   root?: string | null,
- *   requireLocal?: boolean,
+ *   requireWorkstation?: boolean,
  * }} [opts]
  * @returns {typeof argv}
  */
@@ -55,10 +55,10 @@ export function resolveProfileArgv(argv, opts = {}) {
     die(err instanceof Error ? err.message : String(err))
   }
 
-  if (opts.requireLocal && resolved.target !== 'local') {
+  if (opts.requireWorkstation && resolved.target !== 'workstation') {
     die(
       `profile ${JSON.stringify(resolved.key)} has target ${resolved.target}; `
-        + '`qctl local` requires a profile with target: local',
+        + '`qctl local` requires a profile with target: workstation',
     )
   }
 

@@ -79,7 +79,7 @@ describe('buildVars', () => {
     const ctx = await buildVars({
       instanceId: 'rocky-dev',
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       profile: 'appliance',
       allowMissingTier0: true,
     })

@@ -23,7 +23,7 @@ export async function status(argv) {
     try {
       const resolved = await resolveProvisionDisks({
         env: argv.env || 'dev',
-        target: argv.target || 'local',
+        target: argv.target || 'workstation',
       })
       const p = vmPaths(name, resolved)
       console.log(`  os: ${fs.existsSync(p.os.path) ? p.os.path : '(missing)'}`)

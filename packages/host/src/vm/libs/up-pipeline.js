@@ -2,7 +2,7 @@
  * Shared `qctl vm up` orchestration. Drivers supply a {@link VmUpBackend};
  * this module owns dry-run / resume / first-boot sequencing and serial waits.
  *
- * Serial attach order differs by platform (local: before start; Proxmox: after),
+ * Serial attach order differs by platform (workstation: before start; Proxmox: after),
  * so backends expose `startWithSerial` / `createFirstBoot` that return an open
  * follow when they already attached, or `openSerialAfterCreate` when not.
  */

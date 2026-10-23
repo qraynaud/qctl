@@ -84,7 +84,7 @@ Cache downloads under `~/.cache/qctl/images/`.
 1. Fill `provision/.env.<env>` (Tier-0) + topology in `provision/<env>.yaml`.
 2. Run `qctl vm seed` → writes under `~/.cache/qctl/repos/<hash>/seed/<env>/` (ISO labeled `cidata` / `CIDATA` with `user-data`, `meta-data`, `network-config`).
 3. Run `qctl vm up` → OS + **/vw** + **5 data** + **2 special** + seed
-   (see [`../local/README.md`](../local/README.md) for host packages; `--dry-run` needs none).
+   (see [`../workstation/README.md`](../workstation/README.md) for host packages; `--dry-run` needs none).
 4. SSH as the VW Login **`rocky`** username with the injected admin key
    (`PermitRootLogin no`). Impersonate apps: `runuser -u apps -- …`.
 
@@ -100,11 +100,11 @@ path that must work on a laptop libvirt/QEMU VM.
    the same token substitution `vm seed` would do (admin SSH key, embedded scripts).
 4. Set hostname / SSH keys in the Proxmox cloud-init UI **or** snippets — keep them
    consistent with the rendered user-data.
-5. Attach **/vw** (small) and **tank** disks: **5 data + 2 special** (same serials/roles as local).
+5. Attach **/vw** (small) and **tank** disks: **5 data + 2 special** (same serials/roles as workstation).
 
 **Networking:** Proxmox `ipconfig0` / cloud-init network fields usually **override**
 any NoCloud `network-config`. Prefer the Proxmox UI for lab/prod addressing on
-Proxmox VMs; keep [`network-config.yaml`](network-config.yaml) for local NoCloud and
+Proxmox VMs; keep [`network-config.yaml`](network-config.yaml) for workstation NoCloud and
 as documentation of the DHCP default. Do not assume the seed’s network file wins on
 Proxmox.
 

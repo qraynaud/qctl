@@ -22,7 +22,7 @@ afterEach(() => {
 describe('isReservedProvisionName', () => {
   test('reserves layer basenames', () => {
     expect(isReservedProvisionName('common')).toBe(true)
-    expect(isReservedProvisionName('local')).toBe(true)
+    expect(isReservedProvisionName('workstation')).toBe(true)
     expect(isReservedProvisionName('proxmox')).toBe(true)
     expect(isReservedProvisionName('dev')).toBe(false)
   })
@@ -58,7 +58,7 @@ describe('loadQctlHostMeta', () => {
         '  environments:',
         '    lab: {}',
         '  profiles:',
-        '    lab: { env: lab, target: local }',
+        '    lab: { env: lab, target: workstation }',
         '',
       ].join('\n'),
     )
@@ -79,7 +79,7 @@ describe('loadQctlHostMeta', () => {
         '    dev: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '',
       ].join('\n'),
@@ -99,7 +99,7 @@ describe('loadQctlHostMeta', () => {
         '    dev: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '  default-profile: lab',
         '',
@@ -114,11 +114,11 @@ describe('loadQctlHostMeta', () => {
     writeFile(
       root,
       'provision/common.yaml',
-      'qctl:\n  environments:\n    local: {}\n  profiles:\n    x: { env: local, target: local }\n',
+      'qctl:\n  environments:\n    workstation: {}\n  profiles:\n    x: { env: workstation, target: workstation }\n',
     )
     // Zod record keys surface as "Invalid key in record" (path includes the bad name).
     expect(() => loadQctlHostMeta(root)).toThrow(/Invalid key in record/)
-    expect(() => loadQctlHostMeta(root)).toThrow(/environments\.local/)
+    expect(() => loadQctlHostMeta(root)).toThrow(/environments\.workstation/)
   })
 
   test('rejects reserved profile name', () => {
@@ -132,7 +132,7 @@ describe('loadQctlHostMeta', () => {
         '  environments:',
         '    dev: {}',
         '  profiles:',
-        '    common: { env: dev, target: local }',
+        '    common: { env: dev, target: workstation }',
         '',
       ].join('\n'),
     )
@@ -158,7 +158,7 @@ describe('loadQctlHostMeta', () => {
         '  environments:',
         '    dev: {}',
         '  profiles:',
-        '    lab: { env: missing, target: local }',
+        '    lab: { env: missing, target: workstation }',
         '',
       ].join('\n'),
     )
@@ -176,7 +176,7 @@ describe('loadQctlHostMeta', () => {
         '  environments:',
         '    dev: {}',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '  default-profile: nope',
         '',
       ].join('\n'),
@@ -207,7 +207,7 @@ describe('resolveProfile', () => {
     expect(r).toEqual({
       key: 'default',
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       production: false,
     })
   })
@@ -224,7 +224,7 @@ describe('resolveProfile', () => {
         '    dev: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '  default-profile: lab',
         '',
@@ -251,7 +251,7 @@ describe('resolveProfile', () => {
         '    dev: {}',
         '    prod: { production: true }',
         '  profiles:',
-        '    lab: { env: dev, target: local }',
+        '    lab: { env: dev, target: workstation }',
         '    prod: { env: prod, target: proxmox }',
         '',
       ].join('\n'),
@@ -276,14 +276,14 @@ describe('resolveProfile', () => {
         '  environments:',
         '    lab: {}',
         '  profiles:',
-        '    lab: { env: lab, target: local }',
+        '    lab: { env: lab, target: workstation }',
         '',
       ].join('\n'),
     )
     expect(resolveProfile({ root })).toEqual({
       key: 'lab',
       env: 'lab',
-      target: 'local',
+      target: 'workstation',
       production: false,
     })
   })

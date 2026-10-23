@@ -29,7 +29,7 @@ afterEach(() => {
   process.exitCode = 0
 })
 
-describe('local check', () => {
+describe('workstation check', () => {
   test('reports OK when tools, libvirt, and provision is present', async () => {
     /** @type {string[]} */
     const whichBins = []
@@ -67,7 +67,7 @@ describe('local check', () => {
       /** @type {VmArgv} */ ({
         connect: 'qemu:///system',
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
       }),
     )
     expect(process.exitCode || 0).toBe(0)
@@ -114,7 +114,7 @@ describe('local check', () => {
       /** @type {VmArgv} */ ({
         connect: 'qemu:///system',
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
       }),
     )
     expect(process.exitCode).toBe(1)

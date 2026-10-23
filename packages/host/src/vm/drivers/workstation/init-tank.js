@@ -106,7 +106,7 @@ export async function initTank(argv) {
 
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
-    target: argv.target || 'local',
+    target: argv.target || 'workstation',
   })
   const selection = resolveInitTankPools(resolved, argv.poolIds)
   if (!selection) {
@@ -155,7 +155,7 @@ export async function initTank(argv) {
     allowMissingTier0: false,
     allowMissingFiles: false,
     env,
-    target: argv.target || 'local',
+    target: argv.target || 'workstation',
     initTankPools: selection.poolIds,
     initTankForce: force,
   })
@@ -170,7 +170,7 @@ export async function initTank(argv) {
   const baseImage = await downloadImage({
     force: forceDownload,
     env: env || 'dev',
-    target: 'local',
+    target: 'workstation',
   })
   const seed = await ensureSeed({
     isoPath: seedResult.isoPath,

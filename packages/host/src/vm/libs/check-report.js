@@ -4,7 +4,7 @@ import { chalk } from 'zx'
 /** @typedef {ReturnType<typeof createCheckReport>} CheckReport */
 
 /**
- * @param {string} label e.g. "local" or "proxmox"
+ * @param {string} label e.g. "workstation" or "proxmox"
  */
 export function createCheckReport(label) {
   /** @type {string[]} */

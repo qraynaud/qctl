@@ -2,7 +2,7 @@
  * Shared CLI / driver shapes for `qctl vm`.
  */
 
-export type VmTarget = 'local' | 'proxmox'
+export type VmTarget = 'workstation' | 'proxmox'
 /** Provision / QCTL_ENV name (open; declared in `qctl.environments`). */
 export type VmEnv = string
 export type VmNetwork = 'auto' | 'default' | 'user'
@@ -54,7 +54,7 @@ export type VmArgv = {
 export type { PortEntry, PortsMap } from '../provision/schema/types.js'
 
 export type VmDriver = {
-  id: 'local' | 'proxmox'
+  id: 'workstation' | 'proxmox'
   check: (argv: VmArgv) => Promise<void>
   up: (argv: VmArgv) => Promise<void>
   down: (argv: VmArgv) => Promise<void>

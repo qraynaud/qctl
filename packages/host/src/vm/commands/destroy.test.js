@@ -35,7 +35,7 @@ describe('vm destroy command', () => {
     await mod.handler(
       /** @type {VmArgv} */ (
         /** @type {never} */ ({
-          target: 'local',
+          target: 'workstation',
           env: 'dev',
           name: 'rocky',
           keepPersistent: false,
@@ -61,7 +61,7 @@ describe('vm destroy command', () => {
       mod.handler(
         /** @type {VmArgv} */ (
           /** @type {never} */ ({
-            target: 'local',
+            target: 'workstation',
             env: 'dev',
             name: 'rocky',
             keepPersistent: false,
@@ -85,7 +85,7 @@ describe('vm destroy command', () => {
     await mod.handler(
       /** @type {VmArgv} */ (
         /** @type {never} */ ({
-          target: 'local',
+          target: 'workstation',
           env: 'prod',
           production: true,
           name: 'rocky',
@@ -110,7 +110,7 @@ describe('vm destroy command', () => {
     await mod.handler(
       /** @type {VmArgv} */ (
         /** @type {never} */ ({
-          target: 'local',
+          target: 'workstation',
           env: 'prod',
           production: true,
           name: 'rocky',

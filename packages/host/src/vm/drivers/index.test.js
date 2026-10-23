@@ -42,7 +42,7 @@ function instanceRoot(commonYaml) {
 }
 
 describe('loadDriver', () => {
-  test('loads local driver and resolves name', async () => {
+  test('loads workstation driver and resolves name', async () => {
     instanceRoot('qctl:\n  platform: rocky\n')
     const argv = /** @type {VmArgv} */ (
       /** @type {never} */ ({
@@ -51,8 +51,8 @@ describe('loadDriver', () => {
       })
     )
     const driver = await mod.loadDriver(argv)
-    expect(driver.id).toBe('local')
-    expect(argv.target).toBe('local')
+    expect(driver.id).toBe('workstation')
+    expect(argv.target).toBe('workstation')
     expect(argv.env).toBe('dev')
     expect(argv.name).toBe('rocky')
     expect(typeof driver.up).toBe('function')

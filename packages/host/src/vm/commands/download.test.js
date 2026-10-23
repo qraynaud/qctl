@@ -20,13 +20,13 @@ describe('vm download command', () => {
     const downloadImage = spyOn(downloadMod, 'downloadImage').mockResolvedValue('/img.qcow2')
     await downloadMod.handler(
       /** @type {VmArgv} */ (
-        /** @type {never} */ ({ forceDownload: true, env: 'dev', target: 'local' })
+        /** @type {never} */ ({ forceDownload: true, env: 'dev', target: 'workstation' })
       ),
     )
     expect(downloadImage).toHaveBeenCalledWith({
       force: true,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
     })
   })
 })

@@ -112,16 +112,16 @@ describe('isEmptyCredential', () => {
 })
 
 describe('stripOppositeTarget', () => {
-  test('drops proxmox on local target', () => {
+  test('drops proxmox on workstation target', () => {
     /** @type {YamlMapping} */
-    const data = { local: { cpu: 2 }, proxmox: { node: 'pve' } }
-    stripOppositeTarget(data, 'local')
-    expect(data).toEqual({ local: { cpu: 2 } })
+    const data = { workstation: { cpu: 2 }, proxmox: { node: 'pve' } }
+    stripOppositeTarget(data, 'workstation')
+    expect(data).toEqual({ workstation: { cpu: 2 } })
   })
 
-  test('drops local on proxmox target', () => {
+  test('drops workstation on proxmox target', () => {
     /** @type {YamlMapping} */
-    const data = { local: { cpu: 2 }, proxmox: { node: 'pve' } }
+    const data = { workstation: { cpu: 2 }, proxmox: { node: 'pve' } }
     stripOppositeTarget(data, 'proxmox')
     expect(data).toEqual({ proxmox: { node: 'pve' } })
   })

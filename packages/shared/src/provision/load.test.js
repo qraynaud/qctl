@@ -44,51 +44,51 @@ function writeProvisionEnv(root, devBody = 'VW_CLIENT_ID=user.from-env\n') {
 }
 
 describe('loadProvisionDocument', () => {
-  test('loads env + local overlay and strips proxmox', () => {
+  test('loads env + workstation overlay and strips proxmox', () => {
     const root = writeMinimalInstance(makeTempDir())
     temps.push(root)
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
     expect(doc.commonPath).toBeNull()
     expect(doc.targetPath).toBeNull()
     expect(doc.envPath).toContain('dev.yaml')
-    expect(doc.overlayPath).toContain('dev.local.yaml')
+    expect(doc.overlayPath).toContain('dev.workstation.yaml')
     expect(doc.envRefs).toContain('VW_CLIENT_ID')
-    expect(doc.data.local).toEqual({ cpu: 2 })
+    expect(doc.data.workstation).toEqual({ cpu: 2 })
     expect(doc.data.proxmox).toBeUndefined()
   })
 
   test('merges common → target → env → env.target', () => {
     const root = makeTempDir()
     temps.push(root)
-    writeFile(root, 'provision/common.yaml', 'local:\n  memory: 1024\n  cpu: 1\n')
-    writeFile(root, 'provision/local.yaml', 'local:\n  memory: 2048\n')
-    writeFile(root, 'provision/dev.yaml', 'local:\n  cpu: 4\n')
-    writeFile(root, 'provision/dev.local.yaml', 'local:\n  memory: 8192\n')
+    writeFile(root, 'provision/common.yaml', 'workstation:\n  memory: 1024\n  cpu: 1\n')
+    writeFile(root, 'provision/workstation.yaml', 'workstation:\n  memory: 2048\n')
+    writeFile(root, 'provision/dev.yaml', 'workstation:\n  cpu: 4\n')
+    writeFile(root, 'provision/dev.workstation.yaml', 'workstation:\n  memory: 8192\n')
 
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
     expect(doc.commonPath).toContain('common.yaml')
-    expect(doc.targetPath).toContain('local.yaml')
+    expect(doc.targetPath).toContain('workstation.yaml')
     expect(doc.envPath).toContain('dev.yaml')
-    expect(doc.overlayPath).toContain('dev.local.yaml')
+    expect(doc.overlayPath).toContain('dev.workstation.yaml')
     // target before env: env cpu wins over common; overlay memory wins last
-    expect(doc.data.local).toEqual({ cpu: 4, memory: 8192 })
+    expect(doc.data.workstation).toEqual({ cpu: 4, memory: 8192 })
   })
 
   test('target merges before env when both present', () => {
     const root = makeTempDir()
     temps.push(root)
-    writeFile(root, 'provision/local.yaml', 'local:\n  cpu: 2\n  memory: 2048\n')
-    writeFile(root, 'provision/dev.yaml', 'local:\n  cpu: 8\n')
+    writeFile(root, 'provision/workstation.yaml', 'workstation:\n  cpu: 2\n  memory: 2048\n')
+    writeFile(root, 'provision/dev.yaml', 'workstation:\n  cpu: 8\n')
 
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
-    expect(doc.data.local).toEqual({ cpu: 8, memory: 2048 })
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
+    expect(doc.data.workstation).toEqual({ cpu: 8, memory: 2048 })
   })
 
   test('succeeds with only common.yaml', () => {
     const root = makeTempDir()
     temps.push(root)
     writeFile(root, 'provision/common.yaml', 'qctl:\n  platform: rocky\n')
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
     expect(doc.commonPath).toContain('common.yaml')
     expect(doc.envPath).toBeNull()
     expect(doc.data.qctl).toEqual({ platform: 'rocky' })
@@ -97,25 +97,25 @@ describe('loadProvisionDocument', () => {
   test('succeeds with only target.yaml', () => {
     const root = makeTempDir()
     temps.push(root)
-    writeFile(root, 'provision/local.yaml', 'local:\n  cpu: 2\n')
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
-    expect(doc.targetPath).toContain('local.yaml')
-    expect(doc.data.local).toEqual({ cpu: 2 })
+    writeFile(root, 'provision/workstation.yaml', 'workstation:\n  cpu: 2\n')
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
+    expect(doc.targetPath).toContain('workstation.yaml')
+    expect(doc.data.workstation).toEqual({ cpu: 2 })
   })
 
   test('succeeds with only env.target overlay', () => {
     const root = makeTempDir()
     temps.push(root)
-    writeFile(root, 'provision/dev.local.yaml', 'local:\n  cpu: 2\n')
-    const doc = loadProvisionDocument({ root, env: 'dev', target: 'local' })
-    expect(doc.overlayPath).toContain('dev.local.yaml')
-    expect(doc.data.local).toEqual({ cpu: 2 })
+    writeFile(root, 'provision/dev.workstation.yaml', 'workstation:\n  cpu: 2\n')
+    const doc = loadProvisionDocument({ root, env: 'dev', target: 'workstation' })
+    expect(doc.overlayPath).toContain('dev.workstation.yaml')
+    expect(doc.data.workstation).toEqual({ cpu: 2 })
   })
 
   test('throws when no layer is present', () => {
     const root = makeTempDir()
     temps.push(root)
-    expect(() => loadProvisionDocument({ root, env: 'dev', target: 'local' })).toThrow(
+    expect(() => loadProvisionDocument({ root, env: 'dev', target: 'workstation' })).toThrow(
       /no provision YAML found/,
     )
   })
@@ -129,7 +129,7 @@ describe('loadProvisionDocument', () => {
   test('throws when env is reserved target name', () => {
     const root = writeMinimalInstance(makeTempDir())
     temps.push(root)
-    expect(() => loadProvisionDocument({ root, env: 'local' })).toThrow(/reserved/)
+    expect(() => loadProvisionDocument({ root, env: 'workstation' })).toThrow(/reserved/)
     expect(() => loadProvisionDocument({ root, env: 'proxmox' })).toThrow(/reserved/)
   })
 
@@ -149,14 +149,14 @@ describe('loadProvision', () => {
     const { data, overlayPath, envRefs } = await loadProvision({
       root,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       processEnv: { VW_CLIENT_ID: 'user.1' },
     })
 
-    expect(overlayPath).toContain('dev.local.yaml')
+    expect(overlayPath).toContain('dev.workstation.yaml')
     expect(envRefs).toContain('VW_CLIENT_ID')
     expect(data.vaultwarden).toEqual({ client_id: Buffer.from('user.1', 'utf8') })
-    expect(data.local).toEqual({ cpu: 2 })
+    expect(data.workstation).toEqual({ cpu: 2 })
     expect(data.proxmox).toBeUndefined()
   })
 
@@ -189,7 +189,7 @@ describe('loadProvision', () => {
     const { data } = await loadProvision({
       root,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
     })
     expect(data.vaultwarden).toEqual({ client_id: Buffer.from('user.from-env', 'utf8') })
@@ -203,7 +203,7 @@ describe('loadProvision', () => {
     const { data } = await loadProvision({
       root,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       processEnv: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
     })
     expect(data.vaultwarden).toEqual({ client_id: Buffer.from('from-local', 'utf8') })
@@ -215,7 +215,7 @@ describe('provisionNeedsEnv', () => {
     const withRefs = writeMinimalInstance(makeTempDir(), { withEnvRefs: true })
     const plain = writeMinimalInstance(makeTempDir(), { withEnvRefs: false, withOverlay: false })
     temps.push(withRefs, plain)
-    expect(provisionNeedsEnv(withRefs, 'dev', 'local')).toBe(true)
-    expect(provisionNeedsEnv(plain, 'dev', 'local')).toBe(false)
+    expect(provisionNeedsEnv(withRefs, 'dev', 'workstation')).toBe(true)
+    expect(provisionNeedsEnv(plain, 'dev', 'workstation')).toBe(false)
   })
 })

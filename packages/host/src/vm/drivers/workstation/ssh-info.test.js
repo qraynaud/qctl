@@ -15,7 +15,7 @@ afterEach(() => {
   sshHints.printLocalSshInfo.mockRestore?.()
 })
 
-describe('local sshInfo', () => {
+describe('workstation sshInfo', () => {
   test('requires virsh and prints ssh hints', async () => {
     spyOn(util, 'requireBins').mockResolvedValue(undefined)
     spyOn(options, 'portsFromArgv').mockReturnValue({
@@ -28,7 +28,7 @@ describe('local sshInfo', () => {
       name: 'rocky',
       network: 'user',
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
     })
     await sshInfo(argv)
     expect(print).toHaveBeenCalledWith(

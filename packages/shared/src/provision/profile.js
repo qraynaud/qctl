@@ -31,7 +31,7 @@ export const provisionLayerNameSchema = z
   .min(1)
   .regex(/^[^./\\]+$/, 'must not contain "." or "/"')
   .refine((n) => !isReservedProvisionName(n), {
-    message: 'reserved for provision layer basename (common / local / proxmox)',
+    message: 'reserved for provision layer basename (common / workstation / proxmox)',
   })
 
 export const environmentSpecSchema = z.strictObject({
@@ -40,7 +40,7 @@ export const environmentSpecSchema = z.strictObject({
 
 export const profileSpecSchema = z.strictObject({
   env: z.string().trim().min(1),
-  target: z.enum(['local', 'proxmox']),
+  target: z.enum(['workstation', 'proxmox']),
 })
 
 /** Raw `qctl` fields read from common.yaml (before built-ins). */
@@ -72,13 +72,13 @@ export const qctlHostMetaFieldsSchema = z.strictObject({
  * @typedef {object} ResolvedProfile
  * @property {string} key
  * @property {string} env
- * @property {'local' | 'proxmox'} target
+ * @property {'workstation' | 'proxmox'} target
  * @property {boolean} production
  */
 
 /** Built-in when `qctl.profiles` is omitted. */
 export const BUILTIN_PROFILES = Object.freeze({
-  default: Object.freeze({ env: 'dev', target: /** @type {'local'} */ ('local') }),
+  default: Object.freeze({ env: 'dev', target: /** @type {'workstation'} */ ('workstation') }),
 })
 
 /**
@@ -96,7 +96,7 @@ function cloneBuiltinEnvironments() {
  */
 function cloneBuiltinProfiles() {
   return {
-    default: { env: 'dev', target: 'local' },
+    default: { env: 'dev', target: 'workstation' },
   }
 }
 

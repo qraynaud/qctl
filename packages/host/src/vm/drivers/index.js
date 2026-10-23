@@ -1,5 +1,5 @@
 /**
- * Hypervisor drivers: local (libvirt) and proxmox (PVE API).
+ * Hypervisor drivers: workstation (libvirt) and proxmox (PVE API).
  */
 import { resolveBootResources } from '../../lib/options.js'
 import { resolveProfileArgv } from '../../lib/profile-argv.js'
@@ -17,13 +17,13 @@ export async function loadDriver(argv) {
   resolveProfileArgv(argv)
   argv.name = resolveVmName(argv)
   resolveBootResources(argv)
-  const target = argv.target || 'local'
+  const target = argv.target || 'workstation'
   if (target === 'proxmox') {
     const { createDriver } = await import('./proxmox.js')
     return /** @type {VmDriver} */ (createDriver(argv))
   }
-  if (target === 'local') {
-    const { createDriver } = await import('./local.js')
+  if (target === 'workstation') {
+    const { createDriver } = await import('./workstation.js')
     return /** @type {VmDriver} */ (createDriver(argv))
   }
   die(`unknown target ${target}`)

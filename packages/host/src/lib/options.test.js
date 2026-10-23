@@ -32,7 +32,7 @@ describe('host lib options', () => {
       /** @type {VmArgv} */ (
         /** @type {never} */ ({
           env: 'dev',
-          target: 'local',
+          target: 'workstation',
           memory: 2048,
           vcpus: 4,
         })

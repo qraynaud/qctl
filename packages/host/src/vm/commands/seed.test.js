@@ -27,7 +27,7 @@ describe('vm seed command', () => {
     const argv = /** @type {VmArgv} */ (
       /** @type {never} */ ({
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
         profile: 'default',
         seedProfile: 'appliance',
         production: false,

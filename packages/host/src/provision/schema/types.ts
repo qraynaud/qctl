@@ -11,7 +11,7 @@ import type { disksTankSchema } from './disks.js'
 import type { registriesSchema } from './first-boot.js'
 import type { networkingSchema, proxmoxNetEntrySchema, proxmoxNetMapSchema } from './networking.js'
 import type { provisionSchema } from './parse.js'
-import type { localSchema, proxmoxSchema } from './targets.js'
+import type { proxmoxSchema, workstationSchema } from './targets.js'
 import type { optionalCredentialBytes, optionalTrimmedText, trimmedText } from './zod-utils.js'
 
 export type ProvisionFile = z.infer<typeof provisionSchema>
@@ -23,7 +23,7 @@ export type ProxmoxNetEntry = z.infer<typeof proxmoxNetEntrySchema>
 export type ProxmoxNetMap = z.infer<typeof proxmoxNetMapSchema>
 /** `alignProxmoxNets` row: provision net entry + uplink key. */
 export type AlignedProxmoxNet = ProxmoxNetEntry & { name: string }
-export type LocalTarget = z.infer<typeof localSchema>
+export type WorkstationTarget = z.infer<typeof workstationSchema>
 export type ProxmoxTarget = z.infer<typeof proxmoxSchema>
 /** Resolved `!env` leaves are `Buffer`; schema inputs must accept them. */
 type EnvBytes = Buffer

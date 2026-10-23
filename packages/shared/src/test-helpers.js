@@ -37,7 +37,11 @@ export function writeMinimalInstance(root = makeTempDir(), opts = {}) {
   )
 
   if (withOverlay) {
-    writeFileSync(join(root, 'provision', 'dev.local.yaml'), 'local:\n  cpu: 2\n', 'utf8')
+    writeFileSync(
+      join(root, 'provision', 'dev.workstation.yaml'),
+      'workstation:\n  cpu: 2\n',
+      'utf8',
+    )
     writeFileSync(
       join(root, 'provision', 'dev.proxmox.yaml'),
       withEnvRefs

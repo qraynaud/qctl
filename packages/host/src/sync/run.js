@@ -50,7 +50,7 @@ export async function runSync(argv) {
           try {
             const sec = await loadEnvProvisionOrThrow({
               env: argv.env || 'dev',
-              target: argv.target || 'local',
+              target: argv.target || 'workstation',
             })
             platformModule = parsePlatformRef(sec.platform).moduleFile
           } catch {

@@ -60,7 +60,7 @@ afterEach(() => {
   console.log.mockRestore?.()
 })
 
-describe('local initTank', () => {
+describe('workstation initTank', () => {
   test('dry-run prints plan and returns', async () => {
     spyOn(options, 'portsFromArgv').mockReturnValue({
       ssh: { port: 22, forward: 2222 },

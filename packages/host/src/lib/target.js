@@ -1,5 +1,5 @@
 /**
- * Deployment target (local libvirt vs Proxmox). Env names are open (`qctl.environments`).
+ * Deployment target (workstation libvirt vs Proxmox). Env names are open (`qctl.environments`).
  */
 
 import { BUILTIN_ENVIRONMENTS, isProductionEnv } from '@qctl/shared'
@@ -7,7 +7,7 @@ import { BUILTIN_ENVIRONMENTS, isProductionEnv } from '@qctl/shared'
 /** @import { VmArgv, VmEnv, VmTarget } from '../vm/types.js' */
 
 /** Profile / driver target values (not a user CLI flag). */
-export const TARGETS = /** @type {const} */ (['local', 'proxmox'])
+export const TARGETS = /** @type {const} */ (['workstation', 'proxmox'])
 
 /**
  * Default libvirt/Proxmox VM name when --name is omitted.

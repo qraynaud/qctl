@@ -63,7 +63,7 @@ export async function runSeed(argv) {
   if (!SEED_PROFILES[profileName]) die(`unknown seed profile '${profileName}'`)
 
   const env = argv.env || 'dev'
-  const target = argv.target || 'local'
+  const target = argv.target || 'workstation'
   const paths = resolveSeedPaths(profileName, env)
   const keepDir =
     argv.out != null && String(argv.out).trim() !== '' ? path.resolve(String(argv.out)) : null

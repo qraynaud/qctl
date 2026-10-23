@@ -18,7 +18,7 @@ afterEach(() => {
   console.log.mockRestore?.()
 })
 
-describe('local down', () => {
+describe('workstation down', () => {
   test('dry-run logs and returns', async () => {
     const log = spyOn(console, 'log').mockImplementation(() => {})
     await down(

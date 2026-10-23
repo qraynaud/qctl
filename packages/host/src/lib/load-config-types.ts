@@ -5,11 +5,11 @@ import type { NormalizedPackages } from '@qctl/shared'
 
 import type {
   AlignedProxmoxNet,
-  LocalTarget,
   Networking,
   PortsMap,
   ProvisionFile,
   ProxmoxTarget,
+  WorkstationTarget,
 } from '../provision/schema/types.js'
 
 /** Tier-0 / guest credential bag after provision + optional @tag(guest) merge. */
@@ -17,7 +17,7 @@ export type LoadedProvisionGuest = Record<string, string | Buffer | undefined>
 
 export type LoadedProvision = {
   env: string
-  target: 'local' | 'proxmox'
+  target: 'workstation' | 'proxmox'
   provisionDir: string
   path: string
   paths: string[]
@@ -25,7 +25,7 @@ export type LoadedProvision = {
   platform: string
   sshAuthorizedKeys: string
   guest: LoadedProvisionGuest
-  local: LocalTarget | null
+  workstation: WorkstationTarget | null
   proxmox: ProxmoxTarget | null
   nets: AlignedProxmoxNet[]
   networking: Networking | null

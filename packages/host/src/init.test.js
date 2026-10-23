@@ -67,7 +67,7 @@ describe('initInstance', () => {
     const { envRefs } = await loadProvision({
       root: result.root,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       resolve: false,
     })
     expect(envRefs.length).toBeGreaterThan(0)
@@ -85,7 +85,7 @@ describe('initInstance', () => {
     const loaded = await loadProvision({
       root: result.root,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
       processEnv: { ...process.env, QCTL_ENV: 'dev' },
     })
     const data = provisionSchema.parse(loaded.data)

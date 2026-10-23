@@ -51,17 +51,17 @@ function makeInstance() {
 }
 
 describe('loadEnvProvision (provision adapter)', () => {
-  test('local target: resolves !env and keeps the seed/driver shape', async () => {
+  test('workstation target: resolves !env and keeps the seed/driver shape', async () => {
     const root = makeInstance()
     process.chdir(root)
-    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
 
     expect(sec.env).toBe('dev')
-    expect(sec.target).toBe('local')
+    expect(sec.target).toBe('workstation')
     expect(sec.paths.map((p) => p.split('/').pop())).toEqual([
       'common.yaml',
       'dev.yaml',
-      'dev.local.yaml',
+      'dev.workstation.yaml',
     ])
     expect(sec.provisionDir).toBe(join(root, 'provision'))
     expect(sec.guest).toMatchObject({
@@ -77,14 +77,14 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(sec.ports.cockpit).toMatchObject({ port: 9090, forward: 9090 })
     expect(sec.uplinks).toEqual({ eth0: { dhcp4: true } })
     expect(sec.vlans.vlan2).toMatchObject({ id: 2, link: 'eth0', ipv4: '10.42.2.2' })
-    expect(sec.local).toMatchObject({ cpu: 2, memory: 4096 })
+    expect(sec.workstation).toMatchObject({ cpu: 2, memory: 4096 })
     expect(sec.proxmox).toBeNull()
     expect(sec.networking).toBeTruthy()
   })
 
   test('qctl.platform defaults to rocky', async () => {
     process.chdir(makeInstance())
-    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
     expect(sec.data.qctl.platform).toBe('rocky')
     expect(sec.platform).toBe('rocky')
   })
@@ -97,7 +97,7 @@ describe('loadEnvProvision (provision adapter)', () => {
       join(root, 'provision', 'dev.yaml'),
       `${base}\nssh:\n  authorized_keys:\n    - ssh-ed25519 AAAALIST list@test\n`,
     )
-    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
     expect(sec.sshAuthorizedKeys).toBe('ssh-ed25519 AAAALIST list@test\n')
 
     writeFileSync(
@@ -106,7 +106,7 @@ describe('loadEnvProvision (provision adapter)', () => {
     )
     clearEnvProvisionCache()
     diskMounts.clear()
-    const sec2 = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    const sec2 = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
     expect(sec2.sshAuthorizedKeys).toBe('ssh-ed25519 AAAASTR string@test\n')
   })
 
@@ -124,7 +124,7 @@ describe('loadEnvProvision (provision adapter)', () => {
     process.env.HOME = fakeHome
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+      const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
       expect(sec.sshAuthorizedKeys).toBe('ssh-ed25519 AAAAFALLBACK fallback@test\n')
       expect(warn.mock.calls.some((c) => String(c[0]).includes(pub))).toBe(true)
     } finally {
@@ -133,10 +133,10 @@ describe('loadEnvProvision (provision adapter)', () => {
     }
   })
 
-  test('proxmox target merges overlay and drops local block', async () => {
+  test('proxmox target merges overlay and drops workstation block', async () => {
     process.chdir(makeInstance())
     const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'proxmox' })
-    expect(sec.local).toBeNull()
+    expect(sec.workstation).toBeNull()
     expect(sec.proxmox).toMatchObject({
       api_url: 'https://pve.example:8006',
       api_token: 'root@pam!qctl=abc',
@@ -159,14 +159,14 @@ describe('loadEnvProvision (provision adapter)', () => {
     delete process.env.VW_CLIENT_ID
     delete process.env.VW_CLIENT_SECRET
     delete process.env.VW_MASTER_PASSWORD
-    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })
+    const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
     expect(sec.guest.VW_CLIENT_ID).toBeUndefined()
   })
 
   test('env with only common.yaml fails full provision schema', async () => {
     // Scaffold has common + dev overlays; prod has no env layer → common alone lacks networking.
     process.chdir(makeInstance())
-    await expect(loadEnvProvisionOrThrow({ env: 'prod', target: 'local' })).rejects.toThrow(
+    await expect(loadEnvProvisionOrThrow({ env: 'prod', target: 'workstation' })).rejects.toThrow(
       /networking/,
     )
   })
@@ -175,13 +175,13 @@ describe('loadEnvProvision (provision adapter)', () => {
     const root = makeInstance()
     process.chdir(root)
     const provision = join(root, 'provision')
-    for (const name of ['common.yaml', 'dev.yaml', 'dev.local.yaml', 'dev.proxmox.yaml']) {
+    for (const name of ['common.yaml', 'dev.yaml', 'dev.workstation.yaml', 'dev.proxmox.yaml']) {
       unlinkSync(join(provision, name))
     }
     // Keep a non-layer YAML so the tree still counts as an instance root.
     writeFileSync(join(provision, 'marker.yaml'), 'qctl:\n  platform: rocky\n')
     resetRepoRootCache()
-    await expect(loadEnvProvisionOrThrow({ env: 'dev', target: 'local' })).rejects.toThrow(
+    await expect(loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })).rejects.toThrow(
       /no provision YAML found/,
     )
   })
@@ -213,8 +213,8 @@ describe('loadEnvProvision (provision adapter)', () => {
 
   test('loadEnvProvisionSafe caches same env+target and refuses a different key', async () => {
     process.chdir(makeInstance())
-    const a = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
-    const b = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    const a = await loadEnvProvisionSafe({ env: 'dev', target: 'workstation' })
+    const b = await loadEnvProvisionSafe({ env: 'dev', target: 'workstation' })
     expect(a.ok && b.ok).toBe(true)
     if (a.ok && b.ok) expect(a.provision).toBe(b.provision)
 
@@ -236,11 +236,11 @@ describe('loadEnvProvision (provision adapter)', () => {
     const dir = realpathSync(makeTempDir())
     temps.push(dir)
     process.chdir(dir)
-    const miss = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    const miss = await loadEnvProvisionSafe({ env: 'dev', target: 'workstation' })
     expect(miss.ok).toBe(false)
     process.chdir(makeInstance())
     resetRepoRootCache()
-    const hit = await loadEnvProvisionSafe({ env: 'dev', target: 'local' })
+    const hit = await loadEnvProvisionSafe({ env: 'dev', target: 'workstation' })
     expect(hit.ok).toBe(true)
   })
 })

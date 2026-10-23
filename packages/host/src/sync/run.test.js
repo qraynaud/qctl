@@ -24,7 +24,9 @@ describe('runSync', () => {
     spyOn(pathsMod, 'tryGetRepoRoot').mockReturnValue(null)
     spyOn(console, 'error').mockImplementation(() => {})
     await runSync(
-      /** @type {VmArgv} */ (/** @type {never} */ ({ dryRun: true, env: 'dev', target: 'local' })),
+      /** @type {VmArgv} */ (
+        /** @type {never} */ ({ dryRun: true, env: 'dev', target: 'workstation' })
+      ),
     )
     expect(process.exitCode).toBe(1)
     process.exitCode = 0
@@ -50,7 +52,7 @@ describe('runSync', () => {
         /** @type {never} */ ({
           dryRun: true,
           env: 'dev',
-          target: 'local',
+          target: 'workstation',
           delete: true,
         })
       ),

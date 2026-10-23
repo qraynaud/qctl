@@ -1,4 +1,4 @@
-import { cpuSchema, localSchema, memorySchema, proxmoxSchema } from './targets.js'
+import { cpuSchema, memorySchema, proxmoxSchema, workstationSchema } from './targets.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('target schemas', () => {
@@ -10,9 +10,9 @@ describe('target schemas', () => {
     expect(() => memorySchema.parse(128)).toThrow()
   })
 
-  test('localSchema accepts optional resources', () => {
-    expect(localSchema.parse({ cpu: 2, memory: 4096 })).toEqual({ cpu: 2, memory: 4096 })
-    expect(() => localSchema.parse({ cpu: 2, unknown: true })).toThrow()
+  test('workstationSchema accepts optional resources', () => {
+    expect(workstationSchema.parse({ cpu: 2, memory: 4096 })).toEqual({ cpu: 2, memory: 4096 })
+    expect(() => workstationSchema.parse({ cpu: 2, unknown: true })).toThrow()
   })
 
   test('proxmoxSchema accepts api fields', () => {

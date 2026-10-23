@@ -33,7 +33,7 @@ afterEach(() => {
   console.log.mockRestore?.()
 })
 
-describe('local destroy', () => {
+describe('workstation destroy', () => {
   test('destroyVm dry-run logs and returns', async () => {
     spyOn(paths, 'getVms').mockReturnValue('/tmp/qctl-test/vms')
     spyOn(resolveDisks, 'resolveProvisionDisks').mockResolvedValue(sampleResolved)
@@ -44,7 +44,7 @@ describe('local destroy', () => {
       keepPersistent: false,
       dryRun: true,
       env: 'dev',
-      target: 'local',
+      target: 'workstation',
     })
     expect(log).toHaveBeenCalled()
     expect(String(log.mock.calls[0]?.[0])).toMatch(/would destroy/)
@@ -64,7 +64,7 @@ describe('local destroy', () => {
         keepPersistent: true,
         dryRun: false,
         env: 'dev',
-        target: 'local',
+        target: 'workstation',
       }),
     )
     expect(remove).toHaveBeenCalledWith('qemu:///system', 'rocky')

@@ -157,7 +157,7 @@ export function treeEnvSchema(kind, name) {
 export const PROVISION_COMMON_YAML = `# Shared foundation (common → target → env → env.target).
 # qctl.environments / qctl.profiles / qctl.default-profile are read from this file only.
 # Built-ins when omitted: environments {dev, prod: {production: true}},
-# profiles {default: {env: dev, target: local}}.
+# profiles {default: {env: dev, target: workstation}}.
 
 qctl:
   # Platform adapter (guest import). Version follows the running host (mise).
@@ -167,7 +167,7 @@ qctl:
   #   lab: {}
   #   prod: { production: true }
   # profiles:
-  #   lab:  { env: lab,  target: local }
+  #   lab:  { env: lab,  target: workstation }
   #   prod: { env: prod, target: proxmox }
   # default-profile: lab
 `
@@ -175,7 +175,7 @@ qctl:
 export const PROVISION_DEV_YAML = `# Env layer (dev). Secrets: !env → provision/.env.<QCTL_ENV>.
 # Seed injects disks.tanks.*.passphrase → tank_passphrase_<poolId>, plus
 # admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
-# Overlay: provision/dev.local.yaml or provision/dev.proxmox.yaml
+# Overlay: provision/dev.workstation.yaml or provision/dev.proxmox.yaml
 # Platform + profiles: see provision/common.yaml
 
 # OS + persistent data volumes + ZFS tanks. Member map keys become disk serials.
@@ -283,9 +283,9 @@ networking:
 # hg-evolve, and files gets stock /etc/mercurial/hgrc (unless that path is listed).
 `
 
-export const PROVISION_DEV_LOCAL_YAML = `# Overlay for local-target profiles (libvirt). Deep-merged onto provision/dev.yaml.
+export const PROVISION_DEV_WORKSTATION_YAML = `# Overlay for workstation-target profiles (libvirt). Deep-merged onto provision/dev.yaml.
 
-local:
+workstation:
   cpu: 2
   memory: 4096
 

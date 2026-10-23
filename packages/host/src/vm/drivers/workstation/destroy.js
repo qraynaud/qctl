@@ -14,7 +14,7 @@ import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 export async function destroyVm({ connect, name, keepPersistent, dryRun, env, target }) {
   const resolved = await resolveProvisionDisks({
     env: env || 'dev',
-    target: target || 'local',
+    target: target || 'workstation',
   })
   const p = vmPaths(name, resolved)
   if (dryRun) {

@@ -73,7 +73,7 @@ qctl sync -p prod --host 10.0.0.50   # proxmox-target profile needs --host
 
 Run Quadlets in a nested systemd+Podman appliance on the workstation (no VM).
 Requires host **Podman**. Resolves the instance root from the current directory.
-Profile must have `target: local`.
+Profile must have `target: workstation`.
 
 The outer container uses explicit `--uidmap`/`--gidmap` that split the rootless
 host id budget: a dense low range for systemd/tooling (provision `users.apps.uid`/`gid`,
@@ -135,7 +135,7 @@ selected provision **profile**. Most subcommands share:
 |--------|---------|-------------|
 | `-p` / `--profile` | (default profile) | Provision profile key (`qctl.profiles`) |
 | `--name` | (derived) | VM / domain name |
-| `--connect` | `qemu:///system` | libvirt URI (local-target profiles) |
+| `--connect` | `qemu:///system` | libvirt URI (workstation-target profiles) |
 | `--dry-run` | `false` | Print actions without changing the host/guest |
 
 Boot-oriented commands (`up`, `init-tank`) also accept `--memory` / `--vcpus`.
@@ -167,7 +167,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | `qctl vm init-tank [poolId…]` | One-shot tank prep on a disposable boot disk (keeps `disks.os`); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ssh-info` | Print SSH connection hints |
-| `qctl vm target-check` | Verify host tools (incl. `swtpm` on local) / provision / hypervisor |
+| `qctl vm target-check` | Verify host tools (incl. `swtpm` on workstation) / provision / hypervisor |
 
 #### `qctl vm seed`
 

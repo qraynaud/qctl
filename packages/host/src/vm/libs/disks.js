@@ -1,5 +1,5 @@
 /**
- * Local libvirt disk paths + ensure (attach-mode: size → virtual, else physical).
+ * Workstation libvirt disk paths + ensure (attach-mode: size → virtual, else physical).
  */
 import { existsSync } from 'node:fs'
 
