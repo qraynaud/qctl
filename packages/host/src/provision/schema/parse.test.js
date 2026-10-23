@@ -62,8 +62,8 @@ describe('provisionSchema qctl', () => {
             profiles: { lab: { env: 'nope', target: 'workstation' } },
           },
         },
-        'env-dev.yaml',
+        'dev.yaml',
       ),
-    ).toThrow(/env-dev\.yaml/)
+    ).toThrow(/dev\.yaml/)
   })
 })

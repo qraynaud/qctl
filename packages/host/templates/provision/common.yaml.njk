@@ -1,0 +1,10 @@
+{# Vars: qctl (object), shared (object|null) — both via | yaml. #}
+# Shared provision settings for every profile.
+# Environments and profiles are declared here. Select with: qctl … -p <name>
+
+qctl:
+{{ qctl | yaml | indent(2) }}
+{%- if shared %}
+
+{{ shared | yaml }}
+{%- endif %}

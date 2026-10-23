@@ -1,0 +1,7 @@
+# Host qctl on PATH via mise. No varlock CLI — the graph API is bundled into qctl-host.
+# Activate with `mise install` (or direnv / mise activate) in this repo.
+# `qctl vm seed` builds the NoCloud ISO in-process (bundled ISO writer).
+
+[tools]
+# GitHub release asset `qctl-host` → command `qctl` on PATH.
+"github:qraynaud/qctl" = { version = "latest", asset_pattern = "qctl-host", bin = "qctl" }

@@ -1,0 +1,13 @@
+# Local overrides (not committed). Active env is QCTL_ENV from the
+# selected provision profile (--profile / -p) → .env.dev / .env.prod / .env.<env>.
+# VM/seed/image caches live under ~/.cache/qctl and ~/.local/share/qctl (not in-repo).
+.env
+.env.local
+.env.*.local
+# (includes provision/.env.local — machine-local host provision overrides)
+
+# Value files (.env.dev, .env.prod, .env.app, .env.<unit>) and every .env.schema are
+# committed. Secrets are schema items (sensitive by default); use @public for non-secrets
+# and @optional when empty is allowed.
+
+node_modules/

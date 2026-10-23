@@ -1,12 +1,15 @@
-/** Structured target-check reporting (no fancy glyphs). */
+/** Structured check reporting (no fancy glyphs). */
 import { chalk } from 'zx'
 
 /** @typedef {ReturnType<typeof createCheckReport>} CheckReport */
 
 /**
- * @param {string} label e.g. "workstation" or "proxmox"
+ * @param {string} label e.g. "workstation", "proxmox", or "init"
+ * @param {{ headline?: string }} [opts]
+ *   `headline` overrides the finish summary (default: `vm: target-check ${label}`).
  */
-export function createCheckReport(label) {
+export function createCheckReport(label, opts = {}) {
+  const headline = opts.headline ?? `vm: target-check ${label}`
   /** @type {string[]} */
   const fails = []
   /** @type {string[]} */
@@ -37,7 +40,7 @@ export function createCheckReport(label) {
       if (fails.length) {
         console.error(
           chalk.red(
-            `vm: target-check ${label}: ${fails.length} failure(s)`
+            `${headline}: ${fails.length} failure(s)`
               + (warns.length ? `, ${warns.length} warning(s)` : ''),
           ),
         )
@@ -45,9 +48,9 @@ export function createCheckReport(label) {
         return false
       }
       if (warns.length) {
-        console.log(chalk.yellow(`vm: target-check ${label}: OK with ${warns.length} warning(s)`))
+        console.log(chalk.yellow(`${headline}: OK with ${warns.length} warning(s)`))
       } else {
-        console.log(chalk.green(`vm: target-check ${label}: OK`))
+        console.log(chalk.green(`${headline}: OK`))
       }
       return true
     },

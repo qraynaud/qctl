@@ -71,13 +71,22 @@ describe('loadEnvProvision (provision adapter)', () => {
       ADMIN_UID: '1000',
       ADMIN_GID: '1000',
     })
-    expect(sec.guest.DEPLOY_KEY).toEqual(Buffer.from('lab-deploy-key-placeholder', 'utf8'))
+    expect(sec.guest.DEPLOY_KEY).toBeUndefined()
     expect(sec.guest.ADMIN_PASSWORD).toBeUndefined()
     expect(Object.keys(sec.ports).sort()).toEqual(['cockpit', 'http', 'https', 'ssh'])
     expect(sec.ports.ssh).toMatchObject({ port: 22, forward: 2222 })
     expect(sec.ports.cockpit).toMatchObject({ port: 9090, forward: 9090 })
     expect(sec.uplinks).toEqual({ eth0: { dhcp4: true } })
-    expect(sec.vlans.vlan2).toMatchObject({ id: 2, link: 'eth0', ipv4: '10.42.2.2' })
+    expect(sec.vlans).toEqual({})
+    expect(sec.data.disks?.data ?? {}).toEqual({})
+    expect(sec.data.disks?.tanks?.tank?.vdevs?.data).toMatchObject({
+      role: 'data',
+      type: 'raidz',
+    })
+    expect(Object.keys(sec.data.disks?.tanks?.tank?.vdevs?.data?.members ?? {}).sort()).toEqual([
+      'data1',
+      'data2',
+    ])
     expect(sec.workstation).toMatchObject({ cpu: 2, memory: 4096 })
     expect(sec.proxmox).toBeNull()
     expect(sec.networking).toBeTruthy()
@@ -140,18 +149,34 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(sec.workstation).toBeNull()
     expect(sec.proxmox).toMatchObject({
       api_url: 'https://pve.example:8006',
-      api_token: 'root@pam!qctl=abc',
+      api_token: 'SET_PROXMOX_API_TOKEN',
       node: 'pve',
     })
     expect(sec.nets.length).toBeGreaterThan(0)
-    expect(sec.vlans.vlan2?.ipv4).toBe('10.0.2.2')
+    expect(sec.vlans).toEqual({})
   })
 
   test('unresolved !env throws a helpful error', async () => {
-    process.chdir(makeInstance())
-    delete process.env.PROXMOX_API_TOKEN
+    const root = makeInstance()
+    process.chdir(root)
+    writeFileSync(join(root, 'provision', '.env.schema'), 'MISSING_TOKEN=\n', 'utf8')
+    writeFileSync(
+      join(root, 'provision', 'target-proxmox.yaml'),
+      `proxmox:
+  api_url: https://pve.example:8006
+  api_token: !env MISSING_TOKEN
+  node: pve
+  cpu: 2
+  memory: 4096
+  net:
+    eth0:
+      bridge: vmbr0
+`,
+      'utf8',
+    )
+    delete process.env.MISSING_TOKEN
     await expect(loadEnvProvisionOrThrow({ env: 'dev', target: 'proxmox' })).rejects.toThrow(
-      /PROXMOX_API_TOKEN/,
+      /MISSING_TOKEN/,
     )
   })
 

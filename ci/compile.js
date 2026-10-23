@@ -40,7 +40,7 @@ const TARGETS = [
     id: 'host',
     entry: 'src/cli.js',
     cwd: 'packages/host',
-    assets: ['seed', HELPER_NAME],
+    assets: ['seed', 'templates', HELPER_NAME],
     outfile: 'qctl-host',
   },
   {
@@ -100,6 +100,10 @@ async function compileOne(target) {
     const seedRoot = join(ROOT, 'packages/host/seed')
     if (!existsSync(join(seedRoot, 'cloud-init', 'user-data.yaml'))) {
       throw new Error(`host seed missing at ${seedRoot}`)
+    }
+    const templatesRoot = join(ROOT, 'packages/host/templates')
+    if (!existsSync(join(templatesRoot, 'provision', 'common.yaml.njk'))) {
+      throw new Error(`host scaffold templates missing at ${templatesRoot}`)
     }
   }
   const helperAsset = join(cwd, HELPER_NAME)

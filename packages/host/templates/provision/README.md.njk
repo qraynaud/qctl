@@ -1,0 +1,35 @@
+# provision/
+
+Instance topology for `qctl vm` / `qctl local` / seed. Pick a **profile** with
+`-p` / `--profile` (default from `common.yaml`).
+
+## Files
+
+| File | Put here |
+|------|----------|
+| `common.yaml` | Shared settings + `qctl.environments` / `qctl.profiles` / `qctl.default-profile` |
+| `target-<target>.yaml` | Defaults for a hypervisor (`workstation` or `proxmox`) |
+| `env-<env>.yaml` | Settings shared by every profile that uses that env |
+| `profile-<profile>.yaml` | Settings for one profile (wins last) |
+| `.env.schema` + `.env.<env>` | Host secrets for `!env` (optional `.env.local`, gitignored) |
+
+Merge order (later wins; maps merge, arrays replace):
+
+`common.yaml` → `target-*.yaml` → `env-*.yaml` → `profile-*.yaml`
+
+At least one of those four YAML files must exist.
+
+## Common tasks
+
+- **Disks** — `disks:` (`os` / `data` / `tanks`). Encrypted tank passphrase:
+  `disks.tanks.<id>.passphrase: !env NAME`. Create pools with `qctl vm init-tank`
+  (appliance boot only imports/unlocks).
+- **SSH / users / repo** — optional under `ssh:`, `users:`, `repo:` (same `!env`
+  graph). Omit `users:` to get defaults (admin uid 1000, apps uid 900).
+- **Networking** — `networking.ports` / `uplinks` / `vlans` (see
+  [docs/provision.md](../../docs/provision.md) in the qctl repo, or your team docs).
+
+## Not in this folder
+
+VM images, seed ISOs, and disk images live under XDG cache/data
+(`~/.cache/qctl/`, `~/.local/share/qctl/`), not in the instance repo.
