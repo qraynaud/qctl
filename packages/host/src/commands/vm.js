@@ -4,7 +4,7 @@ import { vmCommands } from '../vm/commands/index.js'
 /** @import { Argv } from 'yargs' */
 
 export const command = 'vm'
-export const describe = 'Appliance VM lifecycle (seed, up, init-tank, …) from provision/*.yaml'
+export const describe = 'Create and manage the appliance VM (workstation or Proxmox)'
 
 /**
  * @param {Argv} yargs

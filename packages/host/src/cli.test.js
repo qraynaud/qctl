@@ -70,6 +70,19 @@ describe('host CLI', () => {
     expect(stdout).toContain('local')
   })
 
+  test('--help epilog is Quickstart path + Later Proxmox (not local)', async () => {
+    const { stdout, code } = await runHost(['--help'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('Quickstart (local lab VM)')
+    expect(stdout).toContain('qctl init .')
+    expect(stdout).toContain('Later (Proxmox)')
+    expect(stdout).toContain('qctl new profile pve')
+    // listed as a command, but not in the Getting-started epilog path
+    const epilog = stdout.slice(stdout.indexOf('Quickstart (local lab VM)'))
+    expect(epilog).not.toMatch(/\bqctl local\b/)
+    expect(stdout).toMatch(/Podman lab without a VM \(advanced\)/)
+  })
+
   test('local --help lists up/test/down/shell/ps/logs', async () => {
     const { stdout, code } = await runHost(['local', '--help'])
     expect(code).toBe(0)

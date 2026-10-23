@@ -13,7 +13,7 @@ afterEach(() => {
 describe('new command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('new')
-    expect(mod.describe).toContain('Scaffold')
+    expect(mod.describe).toMatch(/app|profile|picker/i)
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')
   })

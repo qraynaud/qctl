@@ -14,7 +14,7 @@ import * as unit from './new/unit.js'
 
 export const command = 'new'
 export const describe =
-  'Scaffold app / common / network / unit / env / profile (app --engine → app.yaml + units)'
+  'Add app / unit / env / profile / network / common stubs (bare → TTY picker)'
 
 /** @typedef {'profile' | 'env' | 'app' | 'unit' | 'network' | 'common'} NewKind */
 

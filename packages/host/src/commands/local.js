@@ -4,7 +4,7 @@ import { localCommands } from '../local/commands.js'
 /** @import { Argv } from 'yargs' */
 
 export const command = 'local'
-export const describe = 'Nested systemd+Podman lab (Quadlets without a VM)'
+export const describe = 'Podman lab without a VM (advanced)'
 
 /**
  * @param {Argv} yargs

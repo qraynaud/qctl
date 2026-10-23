@@ -7,6 +7,7 @@ import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 import {
   answersFromFlags,
   defaultQuickstartAnswers,
+  formatGettingStartedEpilog,
   formatQuickstartOutro,
   writeQuickstartLab,
 } from './quickstart.js'
@@ -46,6 +47,17 @@ describe('quickstart', () => {
     expect(text).toContain('qctl new profile pve')
     expect(text).toContain('do not --force init')
     expect(text).not.toMatch(/init --force/)
+  })
+
+  test('getting-started epilog is Quickstart + Later Proxmox (no local)', () => {
+    const text = formatGettingStartedEpilog()
+    expect(text).toContain('Quickstart (local lab VM)')
+    expect(text).toMatch(/git clone|hg clone/)
+    expect(text).toContain('qctl init .')
+    expect(text).toContain('qctl vm up')
+    expect(text).toContain('Later (Proxmox)')
+    expect(text).toContain('qctl new profile pve')
+    expect(text).not.toMatch(/\bqctl local\b/)
   })
 
   test('outro leads with init-tank when tanks are not created yet', () => {
