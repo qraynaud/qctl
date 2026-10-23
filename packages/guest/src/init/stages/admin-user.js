@@ -2,7 +2,7 @@
  * Create sudo/SSH admin from seed Tier-0 ADMIN_* (or key-only default "admin").
  * SSH pubkeys from seed `/etc/rocky/admin_ssh_authorized_keys`.
  */
-import { chmod, writeFile } from 'node:fs/promises'
+import * as fsp from 'node:fs/promises'
 
 import { StageError } from '../errors.js'
 import { detectQctlEnv, envString } from './lib/credentials.js'
@@ -65,8 +65,8 @@ async function ensureSudoers(ctx, mode, user, dropin) {
     mode === 'keyonly'
       ? `# Rocky appliance (no ADMIN_USERNAME/PASSWORD): key-only admin, passwordless sudo.\n${user} ALL=(ALL) NOPASSWD: ALL\n`
       : `# Rocky appliance: wheel members may sudo with their password (Cockpit / CLI).\n%wheel ALL=(ALL) ALL\n`
-  await writeFile(dropin, body, { mode: 0o440 })
-  await chmod(dropin, 0o440)
+  await fsp.writeFile(dropin, body, { mode: 0o440 })
+  await fsp.chmod(dropin, 0o440)
   const v = await ctx.exec(['visudo', '-cf', dropin])
   if (v.code !== 0) throw new Error(`invalid ${dropin}`)
 }

@@ -1,16 +1,17 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import * as fsp from 'node:fs/promises'
 
 import { createContext } from '../context.js'
 import adminUser from './admin-user.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 
 describe('admin-user stage', () => {
   test('key-only mode when ADMIN_* incomplete', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'admin-stage-'))
-    const keys = join(dir, 'keys')
-    writeFileSync(keys, 'ssh-ed25519 AAAA test@host\n')
+    /** @type {Map<string, string>} */
+    const files = new Map()
+    spyOn(fsp, 'writeFile').mockImplementation(async (p, data) => {
+      files.set(String(p), String(data))
+    })
+    spyOn(fsp, 'chmod').mockImplementation(async () => undefined)
 
     /** @type {string[]} */
     const logs = []
@@ -20,8 +21,8 @@ describe('admin-user stage', () => {
       env: {
         PATH: process.env.PATH,
         QCTL_ENV: 'dev',
-        ROCKY_ADMIN_SSH_KEYS: keys,
-        ROCKY_SUDOERS_DROPIN: join(dir, 'sudoers'),
+        ROCKY_ADMIN_SSH_KEYS: '/mock/keys',
+        ROCKY_SUDOERS_DROPIN: '/mock/sudoers',
       },
       log: (l) => logs.push(l),
       isRoot: () => true,
@@ -37,5 +38,6 @@ describe('admin-user stage', () => {
     await adminUser.run(ctx)
     expect(logs.some((l) => l.includes('key-only'))).toBe(true)
     expect(calls.some((a) => a.includes('admin-user-ensure') && a.includes('keyonly'))).toBe(true)
+    expect(files.get('/mock/sudoers')).toMatch(/NOPASSWD/)
   })
 })

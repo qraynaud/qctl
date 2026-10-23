@@ -1,6 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 
 import { createContext } from '../../context.js'
 import {
@@ -9,12 +8,38 @@ import {
   tankAssertZfsMounted,
   tankCredFile,
 } from './tank.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
+
+/**
+ * @returns {Map<string, string>}
+ */
+function mockCredFs() {
+  /** @type {Map<string, string>} */
+  const files = new Map()
+  spyOn(fs, 'existsSync').mockImplementation((p) => files.has(String(p)))
+  spyOn(fsp, 'mkdir').mockImplementation(async () => undefined)
+  spyOn(fsp, 'writeFile').mockImplementation(async (p, data) => {
+    files.set(String(p), String(data))
+  })
+  spyOn(fsp, 'chmod').mockImplementation(async () => undefined)
+  // @ts-expect-error test stub returns utf8 string
+  spyOn(fsp, 'readFile').mockImplementation(async (/** @type {string} */ p) => {
+    const key = String(p)
+    const body = files.get(key)
+    if (body === undefined) {
+      const err = /** @type {NodeJS.ErrnoException} */ (new Error(`ENOENT: ${key}`))
+      err.code = 'ENOENT'
+      throw err
+    }
+    return body
+  })
+  return files
+}
 
 describe('ensureTankPassphraseFromBootstrap', () => {
   test('reseeds from Tier-0 env when key file missing', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'tank-pass-'))
-    const cred = join(base, 'tank_passphrase')
+    const files = mockCredFs()
+    const cred = '/mock/tank_passphrase'
 
     const ctx = createContext({
       env: {
@@ -29,20 +54,19 @@ describe('ensureTankPassphraseFromBootstrap', () => {
     })
 
     await ensureTankPassphraseFromBootstrap(ctx, 'tank-import')
-    expect(existsSync(cred)).toBe(true)
-    expect(readFileSync(cred, 'utf8')).toBe('lab-pass')
+    expect(files.get(cred)).toBe('lab-pass')
   })
 
   test('keeps existing key file without loading graph', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'tank-pass-'))
-    const cred = join(base, 'tank_passphrase')
-    writeFileSync(cred, 'keep-me')
+    const files = mockCredFs()
+    const cred = '/mock/tank_passphrase'
+    files.set(cred, 'keep-me')
 
     /** @type {string[]} */
     const logs = []
     const ctx = createContext({
       env: {
-        QCTL_BOOTSTRAP_DIR: join(base, 'missing'),
+        QCTL_BOOTSTRAP_DIR: '/mock/missing',
         ROCKY_TANK_CRED_FILE: cred,
       },
       log: (l) => logs.push(l),
@@ -52,24 +76,26 @@ describe('ensureTankPassphraseFromBootstrap', () => {
 
     expect(tankCredFile(ctx)).toBe(cred)
     await ensureTankPassphraseFromBootstrap(ctx, 'tank-import')
-    expect(readFileSync(cred, 'utf8')).toBe('keep-me')
+    expect(files.get(cred)).toBe('keep-me')
     expect(logs.some((l) => l.includes('already present'))).toBe(true)
   })
 
   test('installTankPassphrase writes 0400 file', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'tank-pass-'))
-    const cred = join(base, 'subdir', 'tank_passphrase')
+    const files = mockCredFs()
+    const cred = '/mock/subdir/tank_passphrase'
     const ctx = createContext({
       env: { ROCKY_TANK_CRED_FILE: cred },
       log: () => {},
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
     })
     await installTankPassphrase(ctx, 'secret')
-    expect(readFileSync(cred, 'utf8')).toBe('secret')
+    expect(files.get(cred)).toBe('secret')
+    expect(fsp.chmod).toHaveBeenCalledWith(cred, 0o400)
   })
 
   test('reseeds per-pool tank_passphrase_<poolId> into credstore', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'tank-pass-'))
+    const files = mockCredFs()
+    const base = '/mock/credstore'
     const ctx = createContext({
       env: {
         ROCKY_CREDSTORE_DIR: base,
@@ -80,8 +106,8 @@ describe('ensureTankPassphraseFromBootstrap', () => {
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
     })
     const cred = await ensureTankPassphraseFromBootstrap(ctx, 'tank-import', 'cold')
-    expect(cred).toBe(join(base, 'tank_passphrase_cold'))
-    expect(readFileSync(cred, 'utf8')).toBe('cold-secret')
+    expect(cred).toBe(`${base}/tank_passphrase_cold`)
+    expect(files.get(cred)).toBe('cold-secret')
   })
 })
 

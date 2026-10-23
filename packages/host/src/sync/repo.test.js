@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { $ } from 'zx'
+
+import { makeTempDir } from '@qctl/shared/test-helpers'
 
 import {
   SYNC_TAR_EXCLUDES,
@@ -11,21 +12,11 @@ import {
   remoteDeleteScript,
 } from './repo.js'
 import { resolveGuestToolingForSync } from './tooling.js'
-import { afterEach, describe, expect, test } from 'bun:test'
-
-/** @type {string[]} */
-const temps = []
-afterEach(async () => {
-  while (temps.length) {
-    const d = temps.pop()
-    if (d) await $`rm -rf ${d}`.nothrow()
-  }
-})
+import { describe, expect, test } from 'bun:test'
 
 describe('sync repo archive', () => {
   test('excludes host secrets and VCS dirs', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'qctl-sync-src-'))
-    temps.push(root)
+    const root = makeTempDir('qctl-sync-src-')
     writeFileSync(join(root, 'README.md'), 'hi\n')
     writeFileSync(join(root, 'build.env'), 'SECRET=1\n')
     writeFileSync(join(root, '.env'), 'STALE=1\n')
@@ -34,8 +25,7 @@ describe('sync repo archive', () => {
     mkdirSync(join(root, 'node_modules'))
     writeFileSync(join(root, 'node_modules', 'x'), 'y\n')
 
-    const out = mkdtempSync(join(tmpdir(), 'qctl-sync-out-'))
-    temps.push(out)
+    const out = makeTempDir('qctl-sync-out-')
     const archive = join(out, 'a.tgz')
     await buildRepoArchive(root, archive)
 
@@ -67,8 +57,7 @@ describe('sync repo archive', () => {
 
 describe('resolveGuestToolingForSync', () => {
   test('finds binaries under QCTL_GUEST_DIST', async () => {
-    const dist = mkdtempSync(join(tmpdir(), 'qctl-dist-'))
-    temps.push(dist)
+    const dist = makeTempDir('qctl-dist-')
     writeFileSync(join(dist, 'qctl-guest'), '#!/bin/sh\n')
     writeFileSync(join(dist, 'qctl-platform-rocky.mjs'), 'export default {}\n')
     const prev = process.env.QCTL_GUEST_DIST

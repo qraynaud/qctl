@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { packagesMapWithRequired } from '@qctl/shared'
+import { makeTempDir } from '@qctl/shared/test-helpers'
 
 import { createContext } from './context.js'
 import { StageError, UnknownStageError } from './errors.js'
@@ -111,7 +111,7 @@ describe('runStage', () => {
 
 describe('ready-stamp', () => {
   test('writes stamp into overridden dir', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-stamp-'))
+    const dir = makeTempDir('qctl-stamp-')
     /** @type {string[][]} */
     const execs = []
     const { ctx, logs } = testCtx({
@@ -135,7 +135,7 @@ describe('ready-stamp', () => {
   })
 
   test('ROCKY_STAMP_* still honoured (cloud-init baked names)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-stamp-'))
+    const dir = makeTempDir('qctl-stamp-')
     const file = join(dir, 'custom.done')
     const { ctx } = testCtx({ env: { ROCKY_STAMP_DIR: dir, ROCKY_STAMP_FILE: file } })
     await runStage('ready-stamp', ctx)
@@ -143,7 +143,7 @@ describe('ready-stamp', () => {
   })
 
   test('fails without writing when hg id fails', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'qctl-stamp-'))
+    const dir = makeTempDir('qctl-stamp-')
     const { ctx } = testCtx({
       env: { QCTL_STAMP_DIR: dir },
       exec: async () => ({ code: 255, stdout: '', stderr: 'abort: no repo' }),

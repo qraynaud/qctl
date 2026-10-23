@@ -1,37 +1,27 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import yargs from 'yargs'
+
+import { makeTempDir } from '@qctl/shared/test-helpers'
 
 import { resolveProfileArgv, sharedProfile } from './profile-argv.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 /** @import { VmArgv } from '../vm/types.js' */
 
-/** @type {string[]} */
-const temps = []
-
 afterEach(() => {
   // @ts-expect-error restore
   process.exit.mockRestore?.()
   // @ts-expect-error restore
   console.error.mockRestore?.()
-  for (const d of temps.splice(0)) {
-    try {
-      rmSync(d, { recursive: true, force: true })
-    } catch {
-      // ignore
-    }
-  }
 })
 
 /**
  * @returns {string}
  */
 function instanceWithBuiltins() {
-  const root = mkdtempSync(join(tmpdir(), 'qctl-profile-argv-'))
-  temps.push(root)
+  const root = makeTempDir('qctl-profile-argv-')
   mkdirSync(join(root, 'provision'), { recursive: true })
   writeFileSync(join(root, 'provision', 'common.yaml'), 'qctl:\n  platform: rocky\n')
   return root
@@ -76,8 +66,7 @@ describe('resolveProfileArgv', () => {
   })
 
   test('-p / --profile selects named profile (env+target+production)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'qctl-profile-p-'))
-    temps.push(root)
+    const root = makeTempDir('qctl-profile-p-')
     mkdirSync(join(root, 'provision'), { recursive: true })
     writeFileSync(
       join(root, 'provision', 'common.yaml'),
@@ -109,8 +98,7 @@ describe('resolveProfileArgv', () => {
   })
 
   test('multi-profile without default dies when --profile omitted', () => {
-    const root = mkdtempSync(join(tmpdir(), 'qctl-profile-multi-'))
-    temps.push(root)
+    const root = makeTempDir('qctl-profile-multi-')
     mkdirSync(join(root, 'provision'), { recursive: true })
     writeFileSync(
       join(root, 'provision', 'common.yaml'),
@@ -133,8 +121,7 @@ describe('resolveProfileArgv', () => {
   })
 
   test('requireWorkstation accepts workstation profiles and rejects proxmox', () => {
-    const root = mkdtempSync(join(tmpdir(), 'qctl-profile-local-'))
-    temps.push(root)
+    const root = makeTempDir('qctl-profile-local-')
     mkdirSync(join(root, 'provision'), { recursive: true })
     writeFileSync(
       join(root, 'provision', 'common.yaml'),

@@ -2,8 +2,8 @@
  * Shared ZFS tank helpers (JS).
  * Encrypted pool keys: Tier-0 `tank_passphrase_<poolId>` → credstore file.
  */
-import { existsSync } from 'node:fs'
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { tankPassphraseCredName } from '@qctl/shared'
@@ -91,9 +91,9 @@ export async function mustExec(ctx, argv, errPrefix) {
 export async function installTankPassphrase(ctx, pass, poolId) {
   const credFile = tankCredFile(ctx, poolId)
   if (!pass) throw new Error('empty tank passphrase')
-  await mkdir(dirname(credFile), { recursive: true })
-  await writeFile(credFile, pass, { mode: 0o400 })
-  await chmod(credFile, 0o400)
+  await fsp.mkdir(dirname(credFile), { recursive: true })
+  await fsp.writeFile(credFile, pass, { mode: 0o400 })
+  await fsp.chmod(credFile, 0o400)
   ctx.log(`tank: installed key file ${credFile} (${tankKeyLocation(ctx, poolId)})`)
   return credFile
 }
@@ -107,7 +107,7 @@ export async function installTankPassphrase(ctx, pass, poolId) {
 export async function ensureTankPassphraseFromBootstrap(ctx, stageName, poolId) {
   const id = poolId?.trim() || tankPool(ctx)
   const credFile = tankCredFile(ctx, id)
-  if (existsSync(credFile) && (await readFile(credFile, 'utf8')).trim()) {
+  if (fs.existsSync(credFile) && (await fsp.readFile(credFile, 'utf8')).trim()) {
     ctx.log(`tank: key already present at ${credFile}`)
     return credFile
   }
@@ -167,7 +167,7 @@ export async function tankEnsureKeyLoaded(ctx, poolId) {
     ctx.log('tank: key already loaded')
     return
   }
-  if (!existsSync(credFile) || !(await readFile(credFile, 'utf8')).trim()) {
+  if (!fs.existsSync(credFile) || !(await fsp.readFile(credFile, 'utf8')).trim()) {
     throw new Error(
       `missing ${credFile} (re-seed from bootstrap ${tankPassphraseCredName(pool)} before load-key)`,
     )
@@ -325,9 +325,9 @@ export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
   const pool = tankPool(ctx, poolId)
   const cacheDir = ctx.env.ROCKY_ZFS_LIST_CACHE_DIR?.trim() || '/etc/zfs/zfs-list.cache'
   const cache = `${cacheDir}/${pool}`
-  await mkdir(cacheDir, { recursive: true })
-  if (!existsSync(cache)) {
-    await writeFile(cache, '', { mode: 0o644 })
+  await fsp.mkdir(cacheDir, { recursive: true })
+  if (!fs.existsSync(cache)) {
+    await fsp.writeFile(cache, '', { mode: 0o644 })
     ctx.log(`tank: created ${cache} for zfs-mount-generator`)
   }
   await ctx.exec(['systemctl', 'enable', 'zfs-zed.service'])
@@ -340,19 +340,19 @@ export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
     await ctx.exec(['zfs', 'set', `canmount=${canmount}`, pool])
     // Nudge once more if zed is slow (toggle org.rocky:cache-stamp).
     for (let i = 0; i < 20; i++) {
-      if (existsSync(cache) && (await readFile(cache, 'utf8')).trim()) break
+      if (fs.existsSync(cache) && (await fsp.readFile(cache, 'utf8')).trim()) break
       if (i === 5) {
         await ctx.exec(['zfs', 'set', `org.rocky:cache-stamp=${Date.now()}`, pool])
       }
       await new Promise((r) => setTimeout(r, 250))
     }
   }
-  if (!existsSync(cache) || !(await readFile(cache, 'utf8')).trim()) {
+  if (!fs.existsSync(cache) || !(await fsp.readFile(cache, 'utf8')).trim()) {
     ctx.log(
       `tank: warn: ${cache} still empty — generator may not emit zfs-load-key@${pool} until next property change`,
     )
   } else {
-    const bytes = (await readFile(cache)).length
+    const bytes = (await fsp.readFile(cache)).length
     ctx.log(`tank: zfs-list.cache ready (${bytes} bytes) → zfs-load-key@${pool} on next boot`)
   }
   await ctx.exec(['systemctl', 'daemon-reload'])
@@ -366,9 +366,9 @@ export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
  */
 export async function writeTankCanary(ctx, path, mountPath) {
   const canary = path || tankCanary(ctx, mountPath)
-  await mkdir(dirname(canary), { recursive: true })
+  await fsp.mkdir(dirname(canary), { recursive: true })
   const line = `rocky tank canary ${new Date().toISOString()}\n`
-  await writeFile(canary, line, { mode: 0o644 })
+  await fsp.writeFile(canary, line, { mode: 0o644 })
   await ctx.exec(['sync', canary])
   ctx.log(`tank: canary → ${canary}`)
   return canary

@@ -2,28 +2,19 @@
  * find -prune does not skip files — protected basenames use ! -name.
  * Repo-root `.env` must be deletable (instance uses .env.dev/.env.prod only).
  */
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { $ } from 'zx'
 
-import { buildRepoArchive, listArchivePaths, remoteDeleteScript } from './repo.js'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { makeTempDir } from '@qctl/shared/test-helpers'
 
-/** @type {string[]} */
-const temps = []
-afterEach(async () => {
-  while (temps.length) {
-    const d = temps.pop()
-    if (d) await $`rm -rf ${d}`.nothrow()
-  }
-})
+import { buildRepoArchive, listArchivePaths, remoteDeleteScript } from './repo.js'
+import { describe, expect, test } from 'bun:test'
 
 describe('sync --delete', () => {
   test('removes stale files and stray .env; keeps .hg and build.env', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'qctl-del-'))
-    temps.push(root)
+    const root = makeTempDir('qctl-del-')
     const remote = join(root, 'remote')
     mkdirSync(remote)
     writeFileSync(join(remote, 'README.md'), 'hi\n')

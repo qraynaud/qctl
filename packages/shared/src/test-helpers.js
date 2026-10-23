@@ -1,22 +1,84 @@
 /**
  * Shared fixtures for bun:test (temp instance trees).
+ *
+ * Every {@link makeTempDir} is registered; `tooling/test-preload.js` removes
+ * leftovers after each test (and on process exit), plus a prefix scrub for
+ * known test-only `/tmp` names that bypassed this helper.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+/** @type {Set<string>} */
+const liveTemps = new Set()
+
 /**
+ * Basenames under `os.tmpdir()` that tests may leave behind.
+ * Matches `/tmp/qctl-*`, `/tmp/tank-pass-*`, `/tmp/admin-stage-*` (and
+ * `ssh-host-keys-*`). Never touches the user's `qctl-lab` tree.
+ * @param {string} name
+ */
+export function isTestTempBasename(name) {
+  if (name === 'qctl-lab' || name.startsWith('qctl-lab')) return false
+  return (
+    name.startsWith('qctl-')
+    || name.startsWith('tank-pass-')
+    || name.startsWith('admin-stage-')
+    || name.startsWith('ssh-host-keys-')
+  )
+}
+
+/** @deprecated Prefer {@link isTestTempBasename}; kept for callers that listed prefixes. */
+export const TEST_TEMP_PREFIXES = Object.freeze([
+  'qctl-',
+  'tank-pass-',
+  'admin-stage-',
+  'ssh-host-keys-',
+])
+
+/**
+ * @param {string} [prefix] mkdtemp prefix under `os.tmpdir()` (default `qctl-test-`)
  * @returns {string}
  */
-export function makeTempDir() {
-  return mkdtempSync(join(tmpdir(), 'qctl-test-'))
+export function makeTempDir(prefix = 'qctl-test-') {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  liveTemps.add(dir)
+  return dir
 }
 
 /**
  * @param {string} dir
  */
 export function removeTempDir(dir) {
+  liveTemps.delete(dir)
   rmSync(dir, { recursive: true, force: true })
+}
+
+/** Remove every dir still tracked by {@link makeTempDir}. */
+export function removeAllTempDirs() {
+  for (const dir of [...liveTemps]) {
+    removeTempDir(dir)
+  }
+}
+
+/**
+ * Delete leftover entries in `os.tmpdir()` matching {@link isTestTempBasename}
+ * (safety net for raw `mkdtemp` / crashed cleans / untracked prefixes).
+ */
+export function scrubTestTempPrefixes() {
+  const root = tmpdir()
+  let names = []
+  try {
+    names = readdirSync(root)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    if (!isTestTempBasename(name)) continue
+    const full = join(root, name)
+    rmSync(full, { recursive: true, force: true })
+    liveTemps.delete(full)
+  }
 }
 
 /**
