@@ -6,7 +6,7 @@ import { runSync } from '../sync/run.js'
 
 export const command = 'sync'
 export const describe =
-  'Wait for SSH on the profile VM, then push the instance repo (optional guest tooling refresh)'
+  'Push this repo over SSH (waits until the profile VM is reachable; optional tooling refresh)'
 
 /**
  * @param {Argv} yargs

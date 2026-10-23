@@ -6,8 +6,7 @@ import { runSeed } from '../libs/seed/run.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'seed'
-export const describe =
-  'Build NoCloud seed ISO from provision layers (common → target-* → env-* → profile-*)'
+export const describe = 'Build the cloud-init seed ISO (usually automatic via bare vm up)'
 
 /**
  * @param {Argv} yargs

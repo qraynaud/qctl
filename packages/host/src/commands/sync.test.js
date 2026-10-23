@@ -12,7 +12,7 @@ afterEach(() => {
 describe('sync command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('sync')
-    expect(mod.describe).toMatch(/Wait for SSH/i)
+    expect(mod.describe).toMatch(/waits until the profile VM is reachable/i)
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')
   })

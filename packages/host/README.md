@@ -193,7 +193,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | `qctl vm download` | Download/cache the pinned Rocky 9 cloud image |
 | `qctl vm up [apps…]` | Start/create VM; with apps/`--all`, wait for SSH then guest `quadlet up` |
 | `qctl vm down [apps…]` | Bare: ACPI shut down VM; with apps/`--all`: guest `quadlet down` only |
-| `qctl vm destroy` | Undefine / delete VM; delete disks unless `--keep-persistent` |
+| `qctl vm destroy` | Delete the VM (and disks unless `--keep-persistent`) |
 | `qctl vm init-tank [poolId…]` | One-shot tank prep on a disposable boot disk (keeps `disks.os`); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ps [apps…]` | VM power state + guest `quadlet ps` (mirror of `local ps`) |

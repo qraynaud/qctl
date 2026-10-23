@@ -12,7 +12,7 @@ import { guestQuadletDown } from '../libs/guest-quadlet.js'
 
 export const command = 'down [apps..]'
 export const describe =
-  'With apps/--all: guest quadlet down only; bare: ACPI shutdown the whole VM (stays defined)'
+  'With apps/--all: stop guest apps only; with no apps: shut down the whole VM'
 
 /**
  * @param {Argv} yargs

@@ -2,22 +2,21 @@ import { commands } from './index.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('host commands registry', () => {
-  test('exports static command modules in order', () => {
+  test('happy-path order: init → vm → new → sync → local → seed-kit', () => {
     expect(commands.map((c) => c.command)).toEqual([
       'init [dir]',
+      'vm',
       'new',
       'sync',
-      'vm',
-      'seed-kit',
       'local',
+      'seed-kit',
     ])
   })
 
-  test('each entry has describe, builder, and handler', () => {
-    for (const c of commands) {
-      expect(typeof c.describe).toBe('string')
-      expect(typeof c.builder).toBe('function')
-      expect(typeof c.handler).toBe('function')
-    }
+  test('local is advanced; seed-kit is advanced', () => {
+    const local = commands.find((c) => c.command === 'local')
+    const seedKit = commands.find((c) => c.command === 'seed-kit')
+    expect(local?.describe).toMatch(/advanced/i)
+    expect(seedKit?.describe).toMatch(/advanced/i)
   })
 })

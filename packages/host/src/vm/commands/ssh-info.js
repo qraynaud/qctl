@@ -5,7 +5,7 @@ import { loadDriver } from '../drivers/index.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'ssh-info'
-export const describe = 'Print SSH connection hints'
+export const describe = 'Show SSH host/port for the VM'
 
 /**
  * @param {Argv} yargs

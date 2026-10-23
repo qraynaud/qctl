@@ -54,21 +54,29 @@ const VM_COMMANDS = [
   'destroy',
   'init-tank',
   'status',
+  'ps',
   'ssh-info',
   'shell',
   'target-check',
 ]
 
+/** Top-level command order: happy path then advanced. */
+const TOP_COMMANDS = ['init', 'vm', 'new', 'sync', 'local', 'seed-kit']
+
 describe('host CLI', () => {
-  test('--help lists init, new, sync, vm, seed-kit, local', async () => {
+  test('--help lists commands in happy-path order; local is advanced', async () => {
     const { stdout, code } = await runHost(['--help'])
     expect(code).toBe(0)
-    expect(stdout).toContain('init')
-    expect(stdout).toContain('new')
-    expect(stdout).toContain('sync')
-    expect(stdout).toContain('vm')
-    expect(stdout).toContain('seed-kit')
-    expect(stdout).toContain('local')
+    /** @type {number[]} */
+    const idxs = []
+    for (const name of TOP_COMMANDS) {
+      const i = stdout.indexOf(`qctl ${name}`)
+      expect(i).toBeGreaterThanOrEqual(0)
+      idxs.push(i)
+    }
+    for (let i = 1; i < idxs.length; i++) expect(idxs[i]).toBeGreaterThan(idxs[i - 1])
+    expect(stdout).toMatch(/Podman lab without a VM \(advanced\)/)
+    expect(stdout).toMatch(/seed kit \(advanced/)
   })
 
   test('--help epilog is Quickstart path + Later Proxmox (not local)', async () => {
@@ -81,7 +89,15 @@ describe('host CLI', () => {
     // listed as a command, but not in the Getting-started epilog path
     const epilog = stdout.slice(stdout.indexOf('Quickstart (local lab VM)'))
     expect(epilog).not.toMatch(/\bqctl local\b/)
-    expect(stdout).toMatch(/Podman lab without a VM \(advanced\)/)
+  })
+
+  test('--help describes match path-first wording', async () => {
+    const { stdout, code } = await runHost(['--help'])
+    expect(code).toBe(0)
+    const flat = stdout.replace(/\s+/g, ' ')
+    expect(flat).toMatch(/Quickstart for a local\s*lab VM/)
+    expect(flat).toMatch(/appliance VM \(workstation or Proxmox\)/)
+    expect(flat).toMatch(/waits until the profile VM is\s*reachable/)
   })
 
   test('local --help lists up/test/down/shell/ps/logs', async () => {
@@ -124,7 +140,7 @@ describe('host CLI', () => {
     expect(stdout).toContain('--remote-dir')
     expect(stdout).toContain('--delete')
     expect(stdout).toContain('--ssh-timeout')
-    expect(stdout).toMatch(/Wait for SSH/i)
+    expect(stdout).toMatch(/waits until the profile VM is reachable/i)
   })
 
   test('profile CLI help matrix: --profile/-p, no --env/--target', async () => {
@@ -150,11 +166,16 @@ describe('host CLI', () => {
     expect(stdout.toLowerCase()).toMatch(/scaffold|dir/)
   })
 
-  test('vm --help lists the real vm commands', async () => {
+  test('vm --help lists the real vm commands and app-lifecycle epilog', async () => {
     const { stdout, code } = await runHost(['vm', '--help'])
     expect(code).toBe(0)
     for (const name of VM_COMMANDS) expect(stdout).toContain(`qctl vm ${name}`)
     expect(stdout).not.toContain('not implemented yet')
+    expect(stdout).toContain('qctl vm up [apps…]|--all')
+    expect(stdout).toContain('qctl vm down [apps…]|--all')
+    expect(stdout).toContain('qctl vm ps [apps…]')
+    expect(stdout).toContain('qctl vm shell')
+    expect(stdout).toMatch(/Bare `vm down` ACPI-shuts/)
   })
 
   test('vm seed --help lists real options', async () => {
@@ -164,7 +185,7 @@ describe('host CLI', () => {
     expect(stdout).toContain('--seed-profile')
     expect(stdout).toContain('--allow-missing-tier0')
     expect(stdout).toContain('--instance-id')
-    expect(stdout).toMatch(/common\s*→\s*target-\*\s*→\s*env-\*\s*→\s*profile-\*/)
+    expect(stdout).toMatch(/usually automatic via bare vm up/)
   })
 
   test('vm up --help works outside an instance', async () => {
@@ -175,6 +196,19 @@ describe('host CLI', () => {
     expect(stdout).toContain('--wipe-os')
     expect(stdout).toContain('--profile')
     expect(stdout).toMatch(/\s-p,|--profile/)
+    expect(stdout).toContain('--all')
+    expect(stdout).toContain('--ssh-timeout')
+  })
+
+  test('vm down/ps --help document app parity', async () => {
+    const down = await runHost(['vm', 'down', '--help'])
+    expect(down.code).toBe(0)
+    expect(down.stdout).toContain('--all')
+    expect(down.stdout).toMatch(/stop guest apps|quadlet down/i)
+
+    const ps = await runHost(['vm', 'ps', '--help'])
+    expect(ps.code).toBe(0)
+    expect(ps.stdout).toMatch(/power|quadlet ps/i)
   })
 
   test('vm init-tank --help has boot flags and pool ids', async () => {

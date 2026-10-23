@@ -10,7 +10,7 @@ import { resolveVmPowerState } from '../libs/power-state.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'ps [apps..]'
-export const describe = 'VM power state and guest quadlet ps (mirror of local ps)'
+export const describe = 'VM power state and guest app status (quadlet ps)'
 
 /**
  * @param {Argv} yargs

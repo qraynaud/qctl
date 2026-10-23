@@ -12,7 +12,7 @@ afterEach(() => {
 describe('vm seed command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('seed')
-    expect(mod.describe).toContain('NoCloud')
+    expect(mod.describe).toMatch(/cloud-init seed ISO/i)
   })
 
   test('handler delegates to runSeed', async () => {

@@ -12,7 +12,7 @@ import { guestQuadletUp, guestQuadletUpAll } from '../libs/guest-quadlet.js'
 
 export const command = 'up [apps..]'
 export const describe =
-  'Start existing VM, or create if missing; with apps/--all, wait for SSH then guest quadlet up'
+  'Start the VM (create if missing); with apps/--all, also quadlet-up those apps on the guest'
 
 /**
  * @param {Argv} yargs

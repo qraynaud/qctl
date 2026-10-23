@@ -7,8 +7,7 @@ import { loadDriver } from '../drivers/index.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'init-tank [poolIds..]'
-export const describe =
-  'One-shot VM: create+export selected tank pool(s) then poweroff; disposable boot disk only'
+export const describe = 'Create ZFS tanks once (Quickstart init can run this for you)'
 
 /**
  * @param {Argv} yargs

@@ -9,8 +9,7 @@ import { confirmProdFullDestroy } from '../libs/confirm-destroy.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'destroy'
-export const describe =
-  'Undefine / delete VM; delete disks unless --keep-persistent (data + tank members)'
+export const describe = 'Delete the VM (and disks unless --keep-persistent)'
 
 /**
  * @param {Argv} yargs

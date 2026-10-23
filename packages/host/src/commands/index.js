@@ -6,4 +6,5 @@ import * as seedKit from './seed-kit.js'
 import * as sync from './sync.js'
 import * as vm from './vm.js'
 
-export const commands = [init, newCmd, sync, vm, seedKit, local]
+/** Happy path first: init → vm → new → sync; then local / seed-kit (advanced). */
+export const commands = [init, vm, newCmd, sync, local, seedKit]
