@@ -1,0 +1,6 @@
+# Demo Quadlet unit (httpd). Replace Image= / PublishPort= for real workloads.
+# Docs: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html
+[Container]
+Image=docker.io/library/httpd:2-alpine
+ContainerName={{ unit }}
+PublishPort=8080:80

@@ -1,7 +1,8 @@
+import { resolveNewNamedPackageOptions } from '../../new/prompt.js'
 import { newPackage } from '../../new.js'
 /** @import { Argv } from 'yargs' */
 
-export const command = 'common <name>'
+export const command = 'common [name]'
 export const describe = 'Create common/<name>/'
 
 /**
@@ -11,19 +12,27 @@ export function builder(yargs) {
   return yargs
     .positional('name', {
       type: 'string',
-      describe: 'Common package name',
+      describe: 'Common package name (prompted on TTY if omitted)',
     })
     .option('force', {
+      alias: 'f',
       type: 'boolean',
       default: false,
-      describe: 'Overwrite existing schema/README',
+      describe: 'Overwrite existing scaffold files',
+    })
+    .option('yes', {
+      alias: 'y',
+      type: 'boolean',
+      default: false,
+      describe: 'Non-interactive (name required on CLI)',
     })
 }
 
 /**
  * @typedef {object} NewCommonArgv
- * @property {string} name
+ * @property {string} [name]
  * @property {boolean} [force]
+ * @property {boolean} [yes]
  */
 
 /**
@@ -31,8 +40,12 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   try {
-    const result = newPackage('common', String(argv.name), {
-      force: Boolean(argv.force),
+    const opts = await resolveNewNamedPackageOptions(
+      { name: argv.name, force: Boolean(argv.force), yes: Boolean(argv.yes) },
+      { kind: 'common' },
+    )
+    const result = newPackage('common', opts.name, {
+      force: opts.force,
     })
     console.log(`created ${result.path}`)
   } catch (err) {
