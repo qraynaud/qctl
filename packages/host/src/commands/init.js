@@ -29,7 +29,7 @@ import { runNewProfile } from './new/profile.js'
 
 export const command = 'init [dir]'
 export const describe =
-  'Create an instance (interactive Quickstart for a local lab VM, or Custom; --check / --fix)'
+  'Create an instance repo (interactive Quickstart for a local lab VM, or Custom)'
 
 /**
  * @param {Argv} yargs

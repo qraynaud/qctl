@@ -16,7 +16,7 @@ import { getRockySeedRoot, isEmbeddedSeedRoot } from '../seed-root.js'
 
 export const command = 'seed-kit'
 export const describe =
-  'Print or export the Rocky seed kit (cloud-init / first-boot / lib) for qctl vm seed'
+  'Export the embedded cloud-init seed kit (advanced; usually via qctl vm seed)'
 
 /** Parent command — subcommands do the work. */
 export function handler() {}

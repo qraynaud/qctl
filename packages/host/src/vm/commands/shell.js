@@ -9,7 +9,7 @@ import { sshInteractiveShell } from '../../sync/ssh.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'shell'
-export const describe = 'Open an SSH shell into the VM (same endpoint as sync / ssh-info)'
+export const describe = 'Open an SSH shell into the VM'
 
 /**
  * @param {Argv} yargs

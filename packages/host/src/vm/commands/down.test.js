@@ -26,7 +26,7 @@ afterEach(() => {
 describe('vm down command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('down [apps..]')
-    expect(mod.describe).toMatch(/ACPI|quadlet/i)
+    expect(mod.describe).toMatch(/guest apps|shut down the whole VM/i)
   })
 
   test('handler loads driver and calls down when no apps', async () => {

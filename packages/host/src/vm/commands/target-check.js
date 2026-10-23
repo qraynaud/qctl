@@ -8,8 +8,7 @@ import { loadDriver } from '../drivers/index.js'
 /** @import { VmArgv } from '../types.js' */
 
 export const command = 'target-check'
-export const describe =
-  'Verify host tools / provision / hypervisor config for the selected profile target'
+export const describe = 'Check that this host can run the VM (tools + provision)'
 
 /**
  * @param {Argv} yargs
