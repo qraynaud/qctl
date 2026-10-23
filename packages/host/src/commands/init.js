@@ -18,6 +18,9 @@ import {
 } from '../init/quickstart.js'
 import { promptProject, writeProject } from '../init/wizard/index.js'
 import { syncSchemaFromProvisionYaml } from '../init/wizard/secrets.js'
+import { resolveNewEnvOptions } from '../new/prompt.js'
+import { newEnv } from '../new/provision.js'
+import { runNewProfile } from './new/profile.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { QuickstartAnswers } from '../init/quickstart.js' */
@@ -185,8 +188,65 @@ export async function handler(argv) {
       return
     }
 
-    // Existing instance without --force → ensure missing files only (no secret catalog re-inject).
+    // Existing instance without --force → additive menu on TTY, else ensure missing files.
     if (existing && !force) {
+      if (!fix && !yes && !dryRun && isInteractiveTty()) {
+        clack.intro(chalk.cyan('qctl init'))
+        const choice = await clack.select({
+          message: 'This directory is already a qctl instance. What next?',
+          options: [
+            {
+              value: 'proxmox',
+              label: 'Add Proxmox profile',
+              hint: 'same as qctl new profile (keeps lab)',
+            },
+            {
+              value: 'env',
+              label: 'Add another environment',
+              hint: 'qctl new env',
+            },
+            {
+              value: 'ensure',
+              label: 'Fix / ensure layout',
+              hint: 'create missing scaffold files only',
+            },
+            { value: 'cancel', label: 'Cancel' },
+          ],
+          initialValue: 'proxmox',
+        })
+        if (clack.isCancel(choice) || choice === 'cancel') {
+          clack.cancel('Nothing changed.')
+          return
+        }
+        if (choice === 'proxmox') {
+          await runNewProfile({
+            preferTarget: 'proxmox',
+            nameInitial: 'pve',
+            cwd: root,
+          })
+          clack.outro('Proxmox profile added (lab unchanged).')
+          return
+        }
+        if (choice === 'env') {
+          const envOpts = await resolveNewEnvOptions({}, { cwd: root })
+          const result = newEnv(envOpts.name, {
+            force: envOpts.force,
+            production: envOpts.production,
+            from: envOpts.from,
+          })
+          console.log(`created environment ${result.name}`)
+          for (const rel of result.written) console.log(`  + ${rel}`)
+          for (const rel of result.skipped) console.log(`  = ${rel} (exists)`)
+          if (envOpts.syncEnvFromYaml) {
+            const { added } = syncSchemaFromProvisionYaml(result.root)
+            if (added.length) console.log(`  schema + ${added.join(', ')}`)
+          }
+          clack.outro(`Environment ${result.name} ready.`)
+          return
+        }
+        // fall through to ensure
+      }
+
       const result = ensureInstance(root, { dryRun, name: argv.name })
       printWriteReport(result, { dryRun })
       if (syncEnv) {
@@ -206,7 +266,8 @@ export async function handler(argv) {
       if (!fix) {
         console.log(
           chalk.dim(
-            'Existing instance: ensured missing scaffold. Pass --force to rewrite from Quickstart/Custom.',
+            'Existing instance: ensured missing scaffold. Pass --force to rewrite from Quickstart/Custom.'
+              + ' Later Proxmox: qctl new profile <name>.',
           ),
         )
       }

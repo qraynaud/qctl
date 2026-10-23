@@ -11,10 +11,11 @@ describe('new command', () => {
     expect(typeof mod.handler).toBe('function')
   })
 
-  test('builder registers app/common/network', async () => {
+  test('builder registers app/common/network/env/profile', async () => {
     const help = await mod.builder(yargs().scriptName('qctl')).getHelp()
-    for (const name of ['app', 'common', 'network']) {
+    for (const name of ['app', 'common', 'network', 'env', 'profile']) {
       expect(help).toMatch(new RegExp(`\\b${name}\\b`))
     }
+    expect(help).toMatch(/Proxmox|profile/i)
   })
 })
