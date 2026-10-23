@@ -1,15 +1,37 @@
 /**
- * Interactive / `--yes` option resolution for `qctl new app|common|network|unit|env`.
+ * Interactive / `--yes` option resolution for `qctl new app|common|network|unit|env|profile`.
  */
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import * as clack from '@clack/prompts'
+import YAML from 'yaml'
+
+import { PROVISION_TARGETS, provisionEnvFile, provisionTargetFile } from '@qctl/shared'
 
 import { isInteractiveTty } from '../init/quickstart.js'
+import {
+  applyOverlaysAnswers,
+  defaultProxmoxOverlay,
+  defaultWorkstationOverlay,
+  promptOverlays,
+} from '../init/wizard/overlays.js'
 import { asBindingPrompts } from '../lib/binding.js'
 import { listAppsForNewUnit, newUnit, requireInstanceRoot } from '../new.js'
-import { listEnvYamlNames } from './provision.js'
+import {
+  listEnvYamlNames,
+  listEnvironmentKeys,
+  listProvisionTargets,
+  newEnv,
+  newProfile,
+  targetLayerExists,
+} from './provision.js'
 
+/** @import { NetworkingTopology } from '../init/wizard/networking.js' */
+/** @import { OverlaysWizardAnswers } from '../init/wizard/overlays.js' */
 /** @import { BindingPrompts } from '../lib/binding.js' */
 /** @import { AppEngine, UnitContainerKind } from '../new.js' */
+/** @import { NewProfileResult } from './provision.js' */
 
 /**
  * @typedef {BindingPrompts & {
@@ -468,4 +490,280 @@ export async function resolveNewEnvOptions(flags, opts = {}) {
   }
 
   return { name, force, production, from, syncEnvFromYaml }
+}
+
+/**
+ * Peek uplink / vlan topology from common + env YAML (best-effort for Proxmox net prompts).
+ * @param {string} root
+ * @param {string} env
+ * @returns {{ topology: NetworkingTopology } | null}
+ */
+export function peekNetworkingForEnv(root, env) {
+  /** @type {Partial<NetworkingTopology>} */
+  const merged = {}
+  for (const rel of ['common.yaml', provisionEnvFile(env)]) {
+    const path = join(root, 'provision', rel)
+    if (!existsSync(path)) continue
+    try {
+      const doc = /** @type {{ networking?: Partial<NetworkingTopology> }} */ (
+        YAML.parse(readFileSync(path, 'utf8')) ?? {}
+      )
+      if (doc.networking && typeof doc.networking === 'object' && !Array.isArray(doc.networking)) {
+        Object.assign(merged, doc.networking)
+      }
+    } catch {
+      // ignore parse errors; overlays fall back to eth0
+    }
+  }
+  const uplinksRaw = merged.uplinks
+  if (!uplinksRaw || typeof uplinksRaw !== 'object' || Array.isArray(uplinksRaw)) return null
+  /** @type {NetworkingTopology} */
+  const topology = {
+    ports: merged.ports ?? {},
+    uplinks: uplinksRaw,
+    vlans: merged.vlans ?? {},
+  }
+  return { topology }
+}
+
+/**
+ * @param {string | undefined} raw
+ * @returns {'workstation' | 'proxmox' | null}
+ */
+export function parseTargetFlag(raw) {
+  if (raw == null || raw === '') return null
+  const t = String(raw).trim()
+  if (t === 'workstation' || t === 'proxmox') return t
+  throw new Error(`invalid --target '${raw}' (want workstation|proxmox)`)
+}
+
+/**
+ * @typedef {object} NewProfileFlags
+ * @property {string} [name]
+ * @property {boolean} [force]
+ * @property {boolean} [yes]
+ * @property {string} [env]
+ * @property {string} [target]
+ * @property {boolean} [setDefault]
+ * @property {boolean} [skipOverlays]
+ */
+
+/**
+ * @typedef {object} NewProfileResolved
+ * @property {string} name
+ * @property {boolean} force
+ * @property {boolean} yes
+ * @property {string} env
+ * @property {'workstation' | 'proxmox'} target
+ * @property {boolean} setDefault
+ * @property {boolean} skipOverlays
+ * @property {OverlaysWizardAnswers | null} overlays
+ */
+
+/**
+ * Resolve profile scaffolding options (flags + optional TTY prompts + section D overlays).
+ * @param {NewProfileFlags} flags
+ * @param {{
+ *   cwd?: string
+ *   prompts?: NewPrompts
+ *   preferTarget?: 'workstation' | 'proxmox'
+ *   nameInitial?: string
+ * }} [opts]
+ * @returns {Promise<NewProfileResolved>}
+ */
+export async function resolveNewProfileOptions(flags, opts = {}) {
+  const force = Boolean(flags.force)
+  const yes = Boolean(flags.yes)
+  const skipOverlaysFlag = Boolean(flags.skipOverlays)
+  const root = requireInstanceRoot(opts.cwd)
+
+  const name = await resolvePackageName(flags.name, {
+    label: 'name',
+    message: 'Profile name',
+    placeholder: opts.nameInitial ?? (opts.preferTarget === 'proxmox' ? 'pve' : 'lab'),
+    initialValue: opts.nameInitial,
+    yes,
+    prompts: opts.prompts,
+  })
+
+  /** @type {string} */
+  let env = flags.env?.trim() || ''
+  if (env) {
+    assertPackageName(env, '--env')
+  } else if (yes || !canPrompt(opts)) {
+    throw new Error('env required (pass --env, or run on a TTY without --yes)')
+  } else {
+    const existing = listEnvironmentKeys(root)
+    const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+    const picked = await p.select({
+      message: 'Environment for this profile',
+      options: [
+        ...existing.map((e) => ({ value: e, label: e })),
+        { value: '__new__', label: 'Create new environment…' },
+      ],
+      initialValue: existing[0] ?? '__new__',
+    })
+    if (p.isCancel(picked)) {
+      p.cancel?.('Cancelled')
+      throw new Error('cancelled')
+    }
+    if (picked === '__new__') {
+      const envOpts = await resolveNewEnvOptions(
+        { yes: false },
+        { cwd: opts.cwd, prompts: opts.prompts },
+      )
+      newEnv(envOpts.name, {
+        force: envOpts.force,
+        production: envOpts.production,
+        from: envOpts.from,
+      })
+      env = envOpts.name
+    } else {
+      env = String(picked)
+    }
+  }
+
+  if (!listEnvironmentKeys(root).includes(env)) {
+    throw new Error(
+      `env ${JSON.stringify(env)} is not in qctl.environments. Run \`qctl new env\` first.`,
+    )
+  }
+
+  /** @type {'workstation' | 'proxmox'} */
+  let target
+  const targetFlag = parseTargetFlag(flags.target)
+  if (targetFlag) {
+    target = targetFlag
+  } else if (yes || !canPrompt(opts)) {
+    target = opts.preferTarget ?? 'proxmox'
+  } else {
+    const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+    const targets = listProvisionTargets()
+    const initial = opts.preferTarget ?? (targets.includes('proxmox') ? 'proxmox' : targets[0])
+    const picked = await p.select({
+      message: 'Hypervisor target',
+      options: targets.map((t) => ({
+        value: t,
+        label: t,
+        hint: t === 'proxmox' ? 'remote Proxmox VE' : 'VM on this machine',
+      })),
+      initialValue: initial,
+    })
+    if (p.isCancel(picked)) {
+      p.cancel?.('Cancelled')
+      throw new Error('cancelled')
+    }
+    target = /** @type {'workstation' | 'proxmox'} */ (picked)
+  }
+  if (!PROVISION_TARGETS.has(target)) {
+    throw new Error(`invalid target '${target}' (want workstation|proxmox)`)
+  }
+
+  /** @type {boolean} */
+  let setDefault
+  if (flags.setDefault !== undefined) {
+    setDefault = Boolean(flags.setDefault)
+  } else if (yes || !canPrompt(opts)) {
+    setDefault = false
+  } else {
+    const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+    const picked = await p.confirm({
+      message: 'Set as default-profile?',
+      initialValue: false,
+    })
+    if (p.isCancel(picked)) {
+      p.cancel?.('Cancelled')
+      throw new Error('cancelled')
+    }
+    setDefault = Boolean(picked)
+  }
+
+  const targetExists = targetLayerExists(root, target)
+  const proxmoxStub =
+    target === 'proxmox'
+    && targetExists
+    && (() => {
+      try {
+        const text = readFileSync(join(root, 'provision', provisionTargetFile(target)), 'utf8')
+        return text.includes('SET_PROXMOX_API_TOKEN') || text.includes('pve.example')
+      } catch {
+        return false
+      }
+    })()
+  const needOverlayWrite =
+    !skipOverlaysFlag && (force || !targetExists || proxmoxStub || (!yes && target === 'proxmox'))
+
+  /** @type {OverlaysWizardAnswers | null} */
+  let overlays = null
+  if (needOverlayWrite) {
+    const networking = peekNetworkingForEnv(root, env)
+    if (yes || !canPrompt(opts)) {
+      const uplinkKeys = networking ? Object.keys(networking.topology.uplinks) : ['eth0']
+      if (target === 'proxmox') overlays = { proxmox: defaultProxmoxOverlay(uplinkKeys) }
+      else overlays = { workstation: defaultWorkstationOverlay() }
+    } else {
+      const overlayAns = await promptOverlays({
+        prompts: opts.prompts,
+        profiles: { [name]: { env, target } },
+        networking,
+      })
+      if (typeof overlayAns === 'symbol') {
+        const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+        p.cancel?.('Cancelled')
+        throw new Error('cancelled')
+      }
+      overlays = overlayAns
+    }
+  }
+
+  const skipOverlays = !needOverlayWrite
+
+  return { name, force, yes, env, target, setDefault, skipOverlays, overlays }
+}
+
+/**
+ * Write profile + optional target overlays (section D).
+ * @param {NewProfileResolved} opts
+ * @param {{ cwd?: string }} [ctx]
+ * @returns {NewProfileResult & { overlayWritten: boolean }}
+ */
+export function scaffoldNewProfile(opts, ctx = {}) {
+  const result = newProfile(opts.name, {
+    cwd: ctx.cwd,
+    force: opts.force,
+    env: opts.env,
+    target: opts.target,
+    setDefault: opts.setDefault,
+    ensureTargetStub: opts.overlays == null,
+  })
+  let overlayWritten = false
+  if (opts.overlays && Object.keys(opts.overlays).length > 0) {
+    applyOverlaysAnswers(result.root, opts.overlays, {
+      profiles: { [opts.name]: { env: opts.env, target: opts.target } },
+    })
+    overlayWritten = true
+  }
+  return { ...result, overlayWritten }
+}
+
+/**
+ * @param {string} name
+ * @param {'workstation' | 'proxmox'} target
+ * @returns {string}
+ */
+export function formatNewProfileOutro(name, target) {
+  const p = `--profile ${name}`
+  return [
+    `Profile ${name} → ${target}.`,
+    '',
+    'Next:',
+    `  qctl vm target-check ${p}`,
+    `  qctl vm up ${p}`,
+    `  qctl sync ${p}`,
+    target === 'proxmox'
+      ? 'SSH uses the guest IP from `qctl vm ssh-info` (not localhost forward).'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
