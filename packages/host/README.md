@@ -196,6 +196,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | `qctl vm init-tank [poolId…]` | One-shot tank prep on a disposable boot disk (keeps `disks.os`); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
 | `qctl vm ssh-info` | Print SSH connection hints |
+| `qctl vm shell` | Interactive SSH into the VM (same endpoint as sync; Proxmox needs `--host`) |
 | `qctl vm target-check` | Verify host tools (incl. `swtpm` on workstation) / provision / hypervisor |
 
 #### `qctl vm seed`

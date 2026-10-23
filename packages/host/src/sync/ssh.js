@@ -8,7 +8,22 @@ import { join } from 'node:path'
 
 import { Client } from 'ssh2'
 
+/** @import { Duplex } from 'node:stream' */
 /** @import { SFTPWrapper } from 'ssh2' */
+
+/**
+ * @typedef {Duplex & {
+ *   setWindow?: (rows: number, cols: number, height: number, width: number) => void
+ *   stderr?: NodeJS.ReadableStream
+ * }} SshShellStream
+ */
+
+/**
+ * @typedef {(
+ *   opts: { term?: string, rows?: number, cols?: number },
+ *   cb: (err: Error | undefined | null, stream: SshShellStream) => void,
+ * ) => void} SshShellFn
+ */
 
 /**
  * @typedef {object} SshConnectOpts
@@ -180,4 +195,88 @@ export async function withSsh(opts, fn) {
   } finally {
     conn.end()
   }
+}
+
+/**
+ * Interactive remote shell (PTY). Same auth as {@link sshConnect} / `qctl sync`.
+ * @param {SshConnectOpts} opts
+ * @returns {Promise<number>} remote shell exit status (0 if unknown)
+ */
+export async function sshInteractiveShell(opts) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      'qctl vm shell needs a TTY (stdin and stdout). Use `qctl vm ssh-info` for the ssh command.',
+    )
+  }
+
+  const conn = await sshConnect(opts)
+  const wasRaw = Boolean(process.stdin.isRaw)
+  // ssh2 Client.shell exists at runtime; published typings omit it.
+  const shellFn = /** @type {SshShellFn | undefined} */ (
+    /** @type {{ shell?: SshShellFn }} */ (conn).shell
+  )
+  if (typeof shellFn !== 'function') {
+    conn.end()
+    throw new Error('ssh2 Client.shell is unavailable')
+  }
+
+  return new Promise((resolve, reject) => {
+    const rows = process.stdout.rows || 24
+    const cols = process.stdout.columns || 80
+    shellFn.call(
+      conn,
+      {
+        term: process.env.TERM || 'xterm-256color',
+        rows,
+        cols,
+      },
+      (err, stream) => {
+        if (err) {
+          conn.end()
+          reject(err)
+          return
+        }
+
+        process.stdin.setRawMode(true)
+        process.stdin.resume()
+        process.stdin.pipe(stream)
+        stream.pipe(process.stdout)
+        if (stream.stderr) stream.stderr.pipe(process.stderr)
+
+        const onResize = () => {
+          try {
+            stream.setWindow?.(process.stdout.rows || 24, process.stdout.columns || 80, 0, 0)
+          } catch {
+            /* ignore */
+          }
+        }
+        process.stdout.on('resize', onResize)
+
+        const cleanup = () => {
+          process.stdout.off('resize', onResize)
+          process.stdin.unpipe(stream)
+          try {
+            process.stdin.setRawMode(wasRaw)
+          } catch {
+            /* ignore */
+          }
+          conn.end()
+        }
+
+        /** @type {number} */
+        let exitCode = 0
+        stream.on('exit', (/** @type {number | null | undefined} */ code) => {
+          if (typeof code === 'number') exitCode = code
+        })
+        stream.on('close', () => {
+          cleanup()
+          resolve(exitCode)
+        })
+        stream.on('error', (/** @type {Error} */ e) => {
+          cleanup()
+          reject(e)
+        })
+      },
+    )
+  })
 }

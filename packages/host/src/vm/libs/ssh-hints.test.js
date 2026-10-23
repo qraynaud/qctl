@@ -23,8 +23,10 @@ describe('ssh-hints', () => {
       },
     })
     const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(joined).toMatch(/SSH/)
-    expect(joined).toMatch(/2222/)
+    expect(joined).toMatch(/Shell/)
+    expect(joined).toMatch(/qctl vm shell/)
+    expect(joined).not.toMatch(/\bssh -p\b/)
     expect(joined).toMatch(/Cockpit/)
+    expect(joined).toMatch(/9090/)
   })
 })

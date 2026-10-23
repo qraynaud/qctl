@@ -53,7 +53,9 @@ import { clientFrom, ping } from './shared.js'
  * @returns {Promise<void>}
  */
 async function printSshHint() {
-  console.log(chalk.dim(`  (Proxmox: SSH via guest IP / PVE net; no local passt hostfwd)`))
+  console.log(
+    chalk.dim('  next: qctl vm shell --host <guest-ip>  (Proxmox: no local passt hostfwd)'),
+  )
 }
 
 /**
