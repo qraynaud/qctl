@@ -76,7 +76,7 @@ REPO_BRANCH=
 `
 
 export const PROVISION_ENV_DEV = `# Lab host bindings for provision !env (QCTL_ENV=dev).
-# users: omitted in provision/dev.yaml → admin/apps defaults (key-only admin; passwd for Cockpit).
+# users: omitted in provision/env-dev.yaml → admin/apps defaults (key-only admin; passwd for Cockpit).
 # Uncomment users.admin.password: !env ADMIN_PASSWORD in the YAML to use ADMIN_PASSWORD= below.
 # ---
 # Wired by disks.tanks.tank.passphrase: !env TANK_PASSPHRASE (→ tank_passphrase_tank).
@@ -85,7 +85,7 @@ SSH_HOST_KEYS=
 # ADMIN_PASSWORD=lab
 DEPLOY_KEY=lab-deploy-key-placeholder
 HEPTAPOD_REGISTRY=
-# Required for proxmox-target profiles (provision/dev.proxmox.yaml):
+# Required for proxmox-target profiles (provision/target-proxmox.yaml):
 # PROXMOX_API_TOKEN=
 `
 
@@ -154,7 +154,7 @@ export function treeEnvSchema(kind, name) {
 }
 
 /** Shared foundation layer + host meta (environments / profiles). Always merged first. */
-export const PROVISION_COMMON_YAML = `# Shared foundation (common → target → env → env.target).
+export const PROVISION_COMMON_YAML = `# Shared foundation (common → target-* → env-* → profile-*).
 # qctl.environments / qctl.profiles / qctl.default-profile are read from this file only.
 # Built-ins when omitted: environments {dev, prod: {production: true}},
 # profiles {default: {env: dev, target: workstation}}.
@@ -175,7 +175,7 @@ qctl:
 export const PROVISION_DEV_YAML = `# Env layer (dev). Secrets: !env → provision/.env.<QCTL_ENV>.
 # Seed injects disks.tanks.*.passphrase → tank_passphrase_<poolId>, plus
 # admin/repo/ssh/registries as Tier-0 (guest does not resolve vw()).
-# Overlay: provision/dev.workstation.yaml or provision/dev.proxmox.yaml
+# Target / profile leaves: provision/target-*.yaml, provision/profile-*.yaml
 # Platform + profiles: see provision/common.yaml
 
 # OS + persistent data volumes + ZFS tanks. Member map keys become disk serials.
@@ -283,7 +283,7 @@ networking:
 # hg-evolve, and files gets stock /etc/mercurial/hgrc (unless that path is listed).
 `
 
-export const PROVISION_DEV_WORKSTATION_YAML = `# Overlay for workstation-target profiles (libvirt). Deep-merged onto provision/dev.yaml.
+export const PROVISION_DEV_WORKSTATION_YAML = `# Target layer for workstation (libvirt). Merged after common, before env-*.
 
 workstation:
   cpu: 2
@@ -295,7 +295,7 @@ networking:
       ipv4: 10.42.2.2
 `
 
-export const PROVISION_DEV_PROXMOX_YAML = `# Overlay for proxmox-target profiles. Deep-merged onto provision/dev.yaml.
+export const PROVISION_DEV_PROXMOX_YAML = `# Target layer for proxmox. Merged after common, before env-*.
 
 proxmox:
   api_url: https://pve.example:8006
@@ -316,10 +316,11 @@ networking:
 
 export const PROVISION_README = `# provision/
 
-Merge order: \`common.yaml\` → \`<target>.yaml\` → \`<env>.yaml\` → \`<env>.<target>.yaml\`
-(later wins). Host meta (\`qctl.environments\` / \`qctl.profiles\` / \`qctl.default-profile\`)
-is read from \`common.yaml\` only; omit them to use built-ins. Select a profile with
-\`qctl … --profile\` / \`-p\` (sets \`QCTL_ENV\` from the profile’s env).
+Merge order: \`common.yaml\` → \`target-<target>.yaml\` → \`env-<env>.yaml\` →
+\`profile-<profile>.yaml\` (later wins). Host meta (\`qctl.environments\` /
+\`qctl.profiles\` / \`qctl.default-profile\`) is read from \`common.yaml\` only; omit
+them to use built-ins. Select a profile with \`qctl … --profile\` / \`-p\` (sets
+\`QCTL_ENV\` from the profile’s env).
 
 Topology YAML plus the host env graph (\`.env.schema\` + \`.env.<env>\`, optional
 \`.env.local\`). Disk topology lives under \`disks:\` (\`os\` / \`data\` / \`tanks\`).

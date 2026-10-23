@@ -148,7 +148,7 @@ describe('host CLI', () => {
     expect(stdout).toContain('--seed-profile')
     expect(stdout).toContain('--allow-missing-tier0')
     expect(stdout).toContain('--instance-id')
-    expect(stdout).toMatch(/common\s*→\s*target\s*→\s*env\s*→\s*env\.target/)
+    expect(stdout).toMatch(/common\s*→\s*target-\*\s*→\s*env-\*\s*→\s*profile-\*/)
   })
 
   test('vm up --help works outside an instance', async () => {

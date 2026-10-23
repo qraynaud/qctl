@@ -31,19 +31,15 @@ export function writeMinimalInstance(root = makeTempDir(), opts = {}) {
   const secretLine = withEnvRefs ? '  client_id: !env VW_CLIENT_ID\n' : '  client_id: "plain"\n'
 
   writeFileSync(
-    join(root, 'provision', 'dev.yaml'),
+    join(root, 'provision', 'env-dev.yaml'),
     `qctl:\n  platform: rocky\nvaultwarden:\n${secretLine}`,
     'utf8',
   )
 
   if (withOverlay) {
+    writeFileSync(join(root, 'provision', 'profile-lab.yaml'), 'workstation:\n  cpu: 2\n', 'utf8')
     writeFileSync(
-      join(root, 'provision', 'dev.workstation.yaml'),
-      'workstation:\n  cpu: 2\n',
-      'utf8',
-    )
-    writeFileSync(
-      join(root, 'provision', 'dev.proxmox.yaml'),
+      join(root, 'provision', 'target-proxmox.yaml'),
       withEnvRefs
         ? 'proxmox:\n  api_token: !env PROXMOX_API_TOKEN\n'
         : 'proxmox:\n  api_token: "tok"\n',

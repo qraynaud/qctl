@@ -15,20 +15,21 @@ export { sharedProfile } from './profile-argv.js'
 
 /**
  * Unresolved provision YAML (no !env / varlock). For yargs builders and CLI defaults only.
- * Internal `env` / `target` come from the selected profile (see resolveProfileArgv).
- * @param {{ env?: string, target?: string }} [argv]
+ * Internal `env` / `target` / `profile` come from the selected profile (see resolveProfileArgv).
+ * @param {{ env?: string, target?: string, profile?: string }} [argv]
  */
 function loadProvisionUnresolved(argv = {}) {
   const root = tryGetRepoRoot()
   if (!root) return null
   const env = argv.env || 'dev'
+  const profile = argv.profile || 'lab'
   const target = /** @type {VmTarget} */ (
     argv.target && /** @type {readonly string[]} */ (TARGETS).includes(argv.target)
       ? argv.target
       : 'workstation'
   )
   try {
-    return loadProvisionDocument({ root, env, target })
+    return loadProvisionDocument({ root, env, target, profile })
   } catch {
     return null
   }
@@ -98,6 +99,7 @@ export function resolveBootResources(argv) {
     const doc = loadProvisionUnresolved({
       env: argv.env || 'dev',
       target: argv.target || 'workstation',
+      profile: argv.profile || 'lab',
     })
     if (doc?.data) {
       const block = argv.target === 'proxmox' ? doc.data.proxmox : doc.data.workstation

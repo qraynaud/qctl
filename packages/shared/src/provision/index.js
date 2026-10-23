@@ -14,7 +14,10 @@ export {
   PROVISION_TARGETS,
   loadProvision,
   loadProvisionDocument,
+  provisionEnvFile,
   provisionNeedsEnv,
+  provisionProfileFile,
+  provisionTargetFile,
 } from './load.js'
 export {
   BUILTIN_ENVIRONMENTS,

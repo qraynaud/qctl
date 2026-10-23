@@ -7,7 +7,7 @@ import { runSeed } from '../libs/seed/run.js'
 
 export const command = 'seed'
 export const describe =
-  'Build NoCloud seed ISO from provision layers (common → target → env → env.target)'
+  'Build NoCloud seed ISO from provision layers (common → target-* → env-* → profile-*)'
 
 /**
  * @param {Argv} yargs

@@ -2,8 +2,9 @@
  * Load provision YAML layers and resolve `!env`.
  *
  * Merge order (later wins; maps deep-merge, arrays replaced):
- *   common.yaml → <target>.yaml → <env>.yaml → <env>.<target>.yaml
+ *   common.yaml → target-<target>.yaml → env-<env>.yaml → profile-<profile>.yaml
  *
+ * Prefixes avoid basename collisions (env/profile keys need not be reserved).
  * At least one of those four files must exist.
  */
 import { existsSync, readFileSync } from 'node:fs'
@@ -16,20 +17,45 @@ import { collectEnvRefs, parseProvisionYaml, resolveEnvRefs, stripOppositeTarget
 /** @import { YamlMapping, YamlValue } from '../yaml.js' */
 /** @import { ProvisionMapping } from './yaml.js' */
 
-/** Shared foundation basename; reserved as env/profile name. */
+/** Shared foundation basename (`provision/common.yaml`). */
 export const COMMON_PROVISION = 'common'
 
 /**
- * Target-layer basenames (`provision/<target>.yaml`); also reserved as env/profile names.
+ * Valid hypervisor targets (`target` in profiles; file `target-<target>.yaml`).
  * @type {ReadonlySet<string>}
  */
 export const PROVISION_TARGETS = Object.freeze(new Set(['workstation', 'proxmox']))
+
+/**
+ * @param {string} target
+ * @returns {string} Basename under provision/
+ */
+export function provisionTargetFile(target) {
+  return `target-${target}.yaml`
+}
+
+/**
+ * @param {string} env
+ * @returns {string}
+ */
+export function provisionEnvFile(env) {
+  return `env-${env}.yaml`
+}
+
+/**
+ * @param {string} profile
+ * @returns {string}
+ */
+export function provisionProfileFile(profile) {
+  return `profile-${profile}.yaml`
+}
 
 /**
  * @typedef {object} LoadProvisionOptions
  * @property {string} root - instance repo root
  * @property {string} env - e.g. "dev"
  * @property {'workstation' | 'proxmox'} [target]
+ * @property {string} profile - profile key (leaf layer `profile-<profile>.yaml`)
  * @property {NodeJS.ProcessEnv} [processEnv]
  * @property {boolean} [resolve] - resolve !env (default true)
  */
@@ -73,25 +99,22 @@ function mergeIfPresent(data, filePath) {
  *   commonPath: string | null,
  *   targetPath: string | null,
  *   envPath: string | null,
- *   overlayPath: string | null,
+ *   profilePath: string | null,
  *   envRefs: string[],
  * }}
  */
 export function loadProvisionDocument(opts) {
-  const { root, env, target = 'workstation' } = opts
-
-  if (env === COMMON_PROVISION || PROVISION_TARGETS.has(env)) {
-    throw new Error(
-      `env "${env}" is reserved for provision/${env}.yaml `
-        + '(layer basename); pick a different profile.env / QCTL_ENV',
-    )
+  const { root, env, target = 'workstation', profile } = opts
+  if (!profile || !String(profile).trim()) {
+    throw new Error('loadProvisionDocument: profile is required')
   }
+  const profileKey = String(profile).trim()
 
   const provisionDir = join(root, 'provision')
   const commonCandidate = join(provisionDir, `${COMMON_PROVISION}.yaml`)
-  const targetCandidate = join(provisionDir, `${target}.yaml`)
-  const envCandidate = join(provisionDir, `${env}.yaml`)
-  const overlayCandidate = join(provisionDir, `${env}.${target}.yaml`)
+  const targetCandidate = join(provisionDir, provisionTargetFile(target))
+  const envCandidate = join(provisionDir, provisionEnvFile(env))
+  const profileCandidate = join(provisionDir, provisionProfileFile(profileKey))
 
   /** @type {ProvisionMapping} */
   let data = {}
@@ -101,13 +124,14 @@ export function loadProvisionDocument(opts) {
   data = targetLayer.data
   const envLayer = mergeIfPresent(data, envCandidate)
   data = envLayer.data
-  const overlay = mergeIfPresent(data, overlayCandidate)
-  data = overlay.data
+  const profileLayer = mergeIfPresent(data, profileCandidate)
+  data = profileLayer.data
 
-  if (!common.path && !targetLayer.path && !envLayer.path && !overlay.path) {
+  if (!common.path && !targetLayer.path && !envLayer.path && !profileLayer.path) {
     throw new Error(
-      `no provision YAML found for env=${env} target=${target} `
-        + `(tried provision/{${COMMON_PROVISION},${target},${env},${env}.${target}}.yaml)`,
+      `no provision YAML found for profile=${profileKey} env=${env} target=${target} `
+        + `(tried provision/{${COMMON_PROVISION}.yaml,${provisionTargetFile(target)},`
+        + `${provisionEnvFile(env)},${provisionProfileFile(profileKey)}})`,
     )
   }
 
@@ -118,7 +142,7 @@ export function loadProvisionDocument(opts) {
     commonPath: common.path,
     targetPath: targetLayer.path,
     envPath: envLayer.path,
-    overlayPath: overlay.path,
+    profilePath: profileLayer.path,
     envRefs,
   }
 }
@@ -129,7 +153,7 @@ export function loadProvisionDocument(opts) {
  * @property {string | null} commonPath
  * @property {string | null} targetPath
  * @property {string | null} envPath
- * @property {string | null} overlayPath
+ * @property {string | null} profilePath
  * @property {string[]} envRefs
  */
 
@@ -155,8 +179,9 @@ export async function loadProvision(opts) {
  * @param {string} root
  * @param {string} env
  * @param {'workstation' | 'proxmox'} [target]
+ * @param {string} [profile]
  */
-export function provisionNeedsEnv(root, env, target = 'workstation') {
-  const { envRefs } = loadProvisionDocument({ root, env, target })
+export function provisionNeedsEnv(root, env, target = 'workstation', profile = 'lab') {
+  const { envRefs } = loadProvisionDocument({ root, env, target, profile })
   return envRefs.length > 0
 }

@@ -1,13 +1,13 @@
 /**
  * VM config: provision YAML layers via `@qctl/shared` `loadProvision`
- * (common → target → env → env.target; `!env` from process.env /
+ * (common → target-* → env-* → profile-*; `!env` from process.env /
  * `provision/.env.<env>` via loadHostEnv), then zod-validated by the provision
  * schema. Tier-0 credentials come from provision YAML
  * (`tank` / `admin` / `repo.deploy_key` / …) via `!env`. Optional extra
  * `@tag(guest)` keys are still sealed. Admin SSH pubkeys: `ssh.authorized_keys`.
  *
  * Prefer {@link loadEnvProvisionSafe} for soft paths; {@link loadEnvProvision}
- * dies on failure. One successful env+target (+ instance root) per process
+ * dies on failure. One successful profile (+ instance root) per process
  * lifetime (cached); failures are not cached. Call
  * {@link clearEnvProvisionCache} in tests.
  */
@@ -36,7 +36,7 @@ import { die } from './util.js'
 const SSH_PUB_CANDIDATES = ['id_ed25519.pub', 'id_rsa.pub']
 
 /**
- * Single-flight cache: one env+target per process (commands never mix).
+ * Single-flight cache: one profile per process (commands never mix).
  * @type {{ key: string, result: LoadEnvProvisionResult } | null}
  */
 let provisionCache = null
@@ -120,20 +120,21 @@ function normalizeTarget(target) {
 }
 
 /**
+ * @param {string} profile
  * @param {string} e
  * @param {"workstation" | "proxmox"} t
  * @returns {string}
  */
-function cacheKey(e, t) {
-  return `${e}\0${t}`
+function cacheKey(profile, e, t) {
+  return `${profile}\0${e}\0${t}`
 }
 
 /**
  * Uncached load (throws). Used only by {@link loadEnvProvisionSafe}.
- * @param {{ env: string, target: "workstation" | "proxmox" }} opts
+ * @param {{ env: string, target: "workstation" | "proxmox", profile: string }} opts
  * @returns {Promise<LoadedProvision>}
  */
-async function loadEnvProvisionUncached({ env: e, target: t }) {
+async function loadEnvProvisionUncached({ env: e, target: t, profile: p }) {
   const root = tryGetRepoRoot()
   if (!root) {
     throw new Error(
@@ -151,26 +152,27 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
   /** @type {string[]} */
   let paths
   try {
-    const loaded = await loadProvision({ root, env: e, target: t, processEnv })
+    const loaded = await loadProvision({ root, env: e, target: t, profile: p, processEnv })
     raw = /** @type {YamlMapping} */ (loaded.data)
     paths = [
       ...(loaded.commonPath ? [loaded.commonPath] : []),
       ...(loaded.targetPath ? [loaded.targetPath] : []),
       ...(loaded.envPath ? [loaded.envPath] : []),
-      ...(loaded.overlayPath ? [loaded.overlayPath] : []),
+      ...(loaded.profilePath ? [loaded.profilePath] : []),
     ]
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.startsWith('no provision YAML found')) {
       throw new Error(
-        `${msg}\n  Create at least one of provision/{common,${t},${e},${e}.${t}}.yaml `
+        `${msg}\n  Create at least one of `
+          + `provision/{common.yaml,target-${t}.yaml,env-${e}.yaml,profile-${p}.yaml} `
           + '(see `qctl init`).',
       )
     }
     throw err
   }
 
-  const sourceLabel = paths.map((p) => path.basename(p)).join(' + ')
+  const sourceLabel = paths.map((pathName) => path.basename(pathName)).join(' + ')
   const data = parseProvisionOrThrow(raw, sourceLabel)
   for (const w of collectDisksWarnings(data.disks, {
     env: e,
@@ -201,6 +203,7 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
   return {
     env: e,
     target: t,
+    profile: p,
     provisionDir: getProvision(),
     path: paths.join(' + '),
     paths,
@@ -222,33 +225,37 @@ async function loadEnvProvisionUncached({ env: e, target: t }) {
 
 /**
  * Soft load: never throws for provision/schema errors.
- * Caches the first successful env+target (+ instance root); repeating the same
- * key returns cache; a different key throws (commands do not mix envs).
+ * Caches the first successful profile (+ instance root); repeating the same
+ * key returns cache; a different key throws (commands do not mix profiles).
  * Failures are not cached — they are often cwd / missing-instance transients
  * (poisoning later loads in the same process, e.g. bun test workers).
  *
- * @param {{ env?: string, target?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile?: string }} [opts]
  * @returns {Promise<LoadEnvProvisionResult>}
  */
-export async function loadEnvProvisionSafe({ env = 'dev', target = 'workstation' } = {}) {
+export async function loadEnvProvisionSafe({
+  env = 'dev',
+  target = 'workstation',
+  profile = 'lab',
+} = {}) {
   const e = env || 'dev'
   const t = normalizeTarget(target || 'workstation')
+  const p = profile || 'lab'
   const root = tryGetRepoRoot()
-  const key = `${root ?? ''}\0${cacheKey(e, t)}`
+  const key = `${root ?? ''}\0${cacheKey(p, e, t)}`
 
   if (provisionCache) {
     if (provisionCache.key === key) return provisionCache.result
     const parts = provisionCache.key.split('\0')
-    const cachedEnv = parts[1] ?? '?'
-    const cachedTarget = parts[2] ?? '?'
+    const cachedProfile = parts[1] ?? '?'
     throw new Error(
-      `loadEnvProvisionSafe: already loaded env=${cachedEnv} target=${cachedTarget}; `
-        + `refusing env=${e} target=${t} (clearEnvProvisionCache in tests if needed)`,
+      `loadEnvProvisionSafe: already loaded profile=${cachedProfile}; `
+        + `refusing profile=${p} (clearEnvProvisionCache in tests if needed)`,
     )
   }
 
   try {
-    const provision = await loadEnvProvisionUncached({ env: e, target: t })
+    const provision = await loadEnvProvisionUncached({ env: e, target: t, profile: p })
     const result = /** @type {const} */ ({ ok: true, provision })
     provisionCache = { key, result }
     return result
@@ -261,8 +268,8 @@ export async function loadEnvProvisionSafe({ env = 'dev', target = 'workstation'
 }
 
 /**
- * Load config for env (+ target overlay). Throws on failure.
- * @param {{ env?: string, target?: string }} [opts]
+ * Load config for a profile. Throws on failure.
+ * @param {{ env?: string, target?: string, profile?: string }} [opts]
  * @returns {Promise<LoadedProvision>}
  */
 export async function loadEnvProvisionOrThrow(opts = {}) {
@@ -273,7 +280,7 @@ export async function loadEnvProvisionOrThrow(opts = {}) {
 
 /**
  * Same as {@link loadEnvProvisionOrThrow} but prints the error and exits 1.
- * @param {{ env?: string, target?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile?: string }} [opts]
  * @returns {Promise<LoadedProvision>}
  */
 export async function loadEnvProvision(opts = {}) {

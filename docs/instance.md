@@ -37,10 +37,10 @@ networks/
   <net>/.env.schema + <net>.network
 provision/.env.schema                # host provision graph (!env / @tag(guest))
 provision/.env.<env>                 # host provision values (+ optional .env.local)
-provision/common.yaml                # foundation + qctl.environments / profiles
-provision/<target>.yaml              # target layer (workstation / proxmox)
-provision/<env>.yaml                 # env layer + !env topology
-provision/<env>.<target>.yaml        # env+target overlay (always last)
+provision/common.yaml                # shared + environments / profiles
+provision/target-<target>.yaml       # hypervisor defaults
+provision/env-<env>.yaml             # per-env topology (!env secrets OK)
+provision/profile-<profile>.yaml     # per-profile overrides (merged last)
 mise.toml                            # host: pin qctl-host (or _.path to sibling bin)
 # caches: ~/.cache/qctl/{images,tooling,repos/<hash>/seed}
 #          ~/.local/share/qctl/repos/<hash>/vms
@@ -82,26 +82,24 @@ adds a package `.env.schema` + README.
 ## Provision YAML
 
 ```yaml
-# provision/common.yaml — platform + optional environments / profiles
+# provision/common.yaml
 qctl:
   platform: rocky                          # or github:owner/repo[@x.y.z]
-# Env / overlay layers: networking, disks, … — secret fields use !env
+# Other layers: networking, disks, … — secrets use !env
 ```
 
-Host/guest binaries follow the running `qctl` (mise). `qctl.platform` selects
-which platform adapter module to seed/import; its release tag defaults to the
-host version. Profiles (`qctl.profiles`) pick env + target — see
-[provision.md](./provision.md). Varlock plugins are **not** provision pins —
-declare them in `package.json` `dependencies` (version SoT) and schemas with
-`# @plugin(@pkg)` (no `@version` in the decorator).
+Host and guest binaries match the running `qctl` (mise). `qctl.platform` picks
+the guest platform module (release tag defaults to the host version). Profiles
+pick env + target — see [provision.md](./provision.md). List varlock plugins in
+`package.json` `dependencies` and `# @plugin(@pkg)` in schemas (no `@version` in
+the decorator).
 
-- Committable provision layers (at least one required; merge
-  common → target → env → env.target): `provision/common.yaml`,
-  `provision/<target>.yaml`, `provision/<env>.yaml`,
-  `provision/<env>.<target>.yaml`.
-- Host resolves `!env` via `loadHostEnv` (bundled graph API over
-  `provision/.env.schema` + `.env.<env>`, optional `.env.local`) — no `varlock` CLI.
-- VM/seed/image caches: XDG (`~/.cache/qctl`, `~/.local/share/qctl`), not in-repo.
+- Layers (at least one): `common.yaml`, `target-*.yaml`, `env-*.yaml`,
+  `profile-*.yaml` — merge order in [provision.md](./provision.md).
+- `!env` resolves from `provision/.env.schema` + `.env.<env>` (+ optional
+  `.env.local`); no separate `varlock` CLI.
+- Images / seed / VM disks: under `~/.cache/qctl` and `~/.local/share/qctl`, not
+  in the instance repo.
 
 ## mise (host only)
 

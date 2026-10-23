@@ -64,6 +64,7 @@ export async function runSeed(argv) {
 
   const env = argv.env || 'dev'
   const target = argv.target || 'workstation'
+  const provisionProfile = argv.profile || 'lab'
   const paths = resolveSeedPaths(profileName, env)
   const keepDir =
     argv.out != null && String(argv.out).trim() !== '' ? path.resolve(String(argv.out)) : null
@@ -84,7 +85,7 @@ export async function runSeed(argv) {
     chalk.dim(`profile=${profileName} env=${env} target=${target} config=provision/`),
   )
 
-  const secRaw = await loadEnvProvision({ env, target })
+  const secRaw = await loadEnvProvision({ env, target, profile: provisionProfile })
   const sec = applySeedProfileDefaults(secRaw, profileName)
   await ensurePlatformSeedKit()
 

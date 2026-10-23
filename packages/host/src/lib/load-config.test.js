@@ -60,8 +60,9 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(sec.target).toBe('workstation')
     expect(sec.paths.map((p) => p.split('/').pop())).toEqual([
       'common.yaml',
-      'dev.yaml',
-      'dev.workstation.yaml',
+      'target-workstation.yaml',
+      'env-dev.yaml',
+      'profile-lab.yaml',
     ])
     expect(sec.provisionDir).toBe(join(root, 'provision'))
     expect(sec.guest).toMatchObject({
@@ -92,16 +93,16 @@ describe('loadEnvProvision (provision adapter)', () => {
   test('uses ssh.authorized_keys from provision YAML (string or list)', async () => {
     const root = makeInstance()
     process.chdir(root)
-    const base = readFileSync(join(root, 'provision', 'dev.yaml'), 'utf8')
+    const base = readFileSync(join(root, 'provision', 'env-dev.yaml'), 'utf8')
     writeFileSync(
-      join(root, 'provision', 'dev.yaml'),
+      join(root, 'provision', 'env-dev.yaml'),
       `${base}\nssh:\n  authorized_keys:\n    - ssh-ed25519 AAAALIST list@test\n`,
     )
     const sec = await loadEnvProvisionOrThrow({ env: 'dev', target: 'workstation' })
     expect(sec.sshAuthorizedKeys).toBe('ssh-ed25519 AAAALIST list@test\n')
 
     writeFileSync(
-      join(root, 'provision', 'dev.yaml'),
+      join(root, 'provision', 'env-dev.yaml'),
       `${base}\nssh:\n  authorized_keys: |\n    ssh-ed25519 AAAASTR string@test\n`,
     )
     clearEnvProvisionCache()
@@ -175,7 +176,13 @@ describe('loadEnvProvision (provision adapter)', () => {
     const root = makeInstance()
     process.chdir(root)
     const provision = join(root, 'provision')
-    for (const name of ['common.yaml', 'dev.yaml', 'dev.workstation.yaml', 'dev.proxmox.yaml']) {
+    for (const name of [
+      'common.yaml',
+      'env-dev.yaml',
+      'target-workstation.yaml',
+      'target-proxmox.yaml',
+      'profile-lab.yaml',
+    ]) {
       unlinkSync(join(provision, name))
     }
     // Keep a non-layer YAML so the tree still counts as an instance root.

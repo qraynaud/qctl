@@ -69,7 +69,7 @@ export async function ensurePlatformSeedKit() {
 
 /**
  * Resolve `qctl.platform` from provision (default `rocky`).
- * @param {{ env?: string, target?: string, platform?: string }} [opts]
+ * @param {{ env?: string, target?: string, profile?: string, platform?: string }} [opts]
  * @returns {Promise<PlatformRef>}
  */
 export async function resolvePlatformRef(opts = {}) {
@@ -80,6 +80,7 @@ export async function resolvePlatformRef(opts = {}) {
     const sec = await loadEnvProvisionOrThrow({
       env: opts.env || 'dev',
       target: opts.target || 'workstation',
+      profile: opts.profile || 'lab',
     })
     return parsePlatformRef(sec.platform)
   } catch {

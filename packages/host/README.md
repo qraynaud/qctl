@@ -205,15 +205,13 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 ## Provision
 
-Topology and provision wiring live in the instance:
+- **Profiles** — declare in `provision/common.yaml`; select with `-p` / `--profile`
+- **Layers** — `common.yaml` → `target-*.yaml` → `env-*.yaml` → `profile-*.yaml` (at least one)
+- **Secrets** — `!env` from `provision/.env.<env>` (+ optional `.env.local`)
+- **Platform** — `qctl.platform` (`rocky` or `github:owner/repo[@x.y.z]`)
 
-- **Profiles** in `provision/common.yaml` (`qctl.environments` / `qctl.profiles`) — select with `-p` / `--profile`
-- Merge layers: `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml` (at least one)
-- `!env` fields resolve from `provision/.env.<env>` (+ optional `.env.local`) via the bundled varlock graph API
-- Tier-0 credentials: `# @tag(guest)` keys on provision env (seeded into `/var/lib/rocky/tier0-pending/<KEY>`)
-- Platform selection: `qctl.platform` (`rocky` or `github:owner/repo[@x.y.z]`)
-
-See [docs/provision.md](../../docs/provision.md) and [docs/instance.md](../../docs/instance.md).
+Full field reference: [docs/provision.md](../../docs/provision.md). Repo layout:
+[docs/instance.md](../../docs/instance.md).
 
 ## Develop
 

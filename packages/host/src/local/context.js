@@ -59,10 +59,11 @@ export async function createLocalContext(argv, opts = {}) {
     root,
     env,
     target: 'workstation',
+    profile: String(argv.profile || 'lab'),
     processEnv: { ...process.env, QCTL_ENV: env },
   })
   const sourceLabel =
-    [loaded.commonPath, loaded.targetPath, loaded.envPath, loaded.overlayPath]
+    [loaded.commonPath, loaded.targetPath, loaded.envPath, loaded.profilePath]
       .filter(Boolean)
       .map((p) => basename(/** @type {string} */ (p)))
       .join(' + ') || 'provision'

@@ -55,7 +55,7 @@ export type { PortEntry, PortsMap } from '../provision/schema/types.js'
 
 export type VmDriver = {
   id: 'workstation' | 'proxmox'
-  check: (argv: VmArgv) => Promise<void>
+  check: (argv: VmArgv) => Promise<boolean>
   up: (argv: VmArgv) => Promise<void>
   down: (argv: VmArgv) => Promise<void>
   destroy: (argv: VmArgv) => Promise<void>

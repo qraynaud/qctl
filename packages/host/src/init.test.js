@@ -49,7 +49,7 @@ describe('initInstance', () => {
       'TANK_PASSPHRASE=',
     )
     expect(existsSync(join(result.root, 'provision', 'common.yaml'))).toBe(true)
-    expect(existsSync(join(result.root, 'provision', 'dev.yaml'))).toBe(true)
+    expect(existsSync(join(result.root, 'provision', 'env-dev.yaml'))).toBe(true)
     expect(readFileSync(join(result.root, 'provision', 'common.yaml'), 'utf8')).toContain(
       'platform: rocky',
     )
@@ -68,10 +68,11 @@ describe('initInstance', () => {
       root: result.root,
       env: 'dev',
       target: 'workstation',
+      profile: 'lab',
       resolve: false,
     })
     expect(envRefs.length).toBeGreaterThan(0)
-    const prov = readFileSync(join(result.root, 'provision', 'dev.yaml'), 'utf8')
+    const prov = readFileSync(join(result.root, 'provision', 'env-dev.yaml'), 'utf8')
     expect(prov).toMatch(/^disks:/m)
     expect(prov).toContain('tanks:')
     expect(prov).toContain('role: data')
@@ -86,6 +87,7 @@ describe('initInstance', () => {
       root: result.root,
       env: 'dev',
       target: 'workstation',
+      profile: 'lab',
       processEnv: { ...process.env, QCTL_ENV: 'dev' },
     })
     const data = provisionSchema.parse(loaded.data)
