@@ -129,7 +129,7 @@ export async function ensureAppliance(ctx) {
     '-e',
     'QCTL_LIB_DIR=/usr/local/lib/qctl',
     '-e',
-    'TANK_ROOT=/tank/rocky/volumes',
+    'APP_ROOT=/tank/rocky/volumes',
     '-e',
     'CONTAINERS_LOG_LEVEL=fatal',
     ctx.image,

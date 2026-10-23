@@ -21,7 +21,7 @@ const ctxOf = (root, seedDir, env = {}) => ({ root, baseEnv: { PATH: '/bin', ...
 
 describe('name helpers', () => {
   test('path keys', () => {
-    expect(isPathKey('TANK_ROOT')).toBe(true)
+    expect(isPathKey('APP_ROOT')).toBe(true)
     expect(isPathKey('FOO_DIR')).toBe(true)
     expect(isPathKey('REPO_ROOT')).toBe(false)
     expect(isPathKey('TZ')).toBe(false)
@@ -37,7 +37,7 @@ describe('render env', () => {
         join(fx.root, 'applications/web'),
       )
       expect(renv.qctlEnv).toBe('dev') // from the repo .env link (no QCTL_ENV in the process env)
-      expect(renv.scope.TANK_ROOT).toBe(join(fx.root, 'volumes'))
+      expect(renv.scope.APP_ROOT).toBe(join(fx.root, 'volumes'))
       expect(renv.scope.VERSION).toBe('2.0-dev')
       expect(renv.scope.APPS_UID).toBe('1000')
       expect(renv.substKeys).toContain('REPO_ROOT')
@@ -70,7 +70,7 @@ describe('render env', () => {
       const prod = await loadRenderEnv(ctxOf(fx.root, seed), join(fx.root, 'applications/web'))
       expect(prod.qctlEnv).toBe('prod')
       expect(prod.scope.FQDN).toBe('x.eu')
-      expect(prod.scope.TANK_ROOT).toBe('/tank/apps')
+      expect(prod.scope.APP_ROOT).toBe('/tank/apps')
       expect(prod.scope.VERSION).toBe('2.0')
       const dev = await loadRenderEnv(
         ctxOf(fx.root, seed, { QCTL_ENV: 'dev' }),

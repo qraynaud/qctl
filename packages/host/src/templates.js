@@ -43,7 +43,7 @@ QCTL_ENV=dev
 # @internal @public @optional
 ENV=
 # @internal @public @optional
-TANK_ROOT=
+APP_ROOT=
 # @internal @public @optional
 TZ=
 `
@@ -117,7 +117,7 @@ export const PACKAGE_JSON = `{
 
 /** Non-secret root values for QCTL_ENV=dev (literal values: varlock, not bash \`source\`). */
 export const ROOT_ENV_DEV = `ENV=dev
-TANK_ROOT=./volumes
+APP_ROOT=./volumes
 TZ=UTC
 `
 
@@ -128,7 +128,7 @@ export const ROOT_ENV_PROD = `# Shared prod values. For Vaultwarden unlock + vw(
 # List the plugin in package.json dependencies (version via lockfile). See docs/secrets.md.
 # ---
 ENV=prod
-TANK_ROOT=/tank/apps
+APP_ROOT=/tank/apps
 TZ=UTC
 `
 

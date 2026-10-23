@@ -78,14 +78,14 @@ export function makeQuadletInstance() {
       '# @type=enum(dev, prod)',
       '# @public',
       'QCTL_ENV=dev',
-      ...['ENV', 'FQDN', 'APPS_UID', 'TANK_ROOT'].flatMap((k) => ['# @internal @public', `${k}=`]),
+      ...['ENV', 'FQDN', 'APPS_UID', 'APP_ROOT'].flatMap((k) => ['# @internal @public', `${k}=`]),
       '# @sensitive',
       'VW_CLIENT_SECRET=root-only-secret-value',
       '',
     ].join('\n'),
   )
-  writeFile(root, '.env.dev', 'ENV=dev\nFQDN=x.localhost\nAPPS_UID=1000\nTANK_ROOT=./volumes\n')
-  writeFile(root, '.env.prod', 'ENV=prod\nFQDN=x.eu\nAPPS_UID=900\nTANK_ROOT=/tank/apps\n')
+  writeFile(root, '.env.dev', 'ENV=dev\nFQDN=x.localhost\nAPPS_UID=1000\nAPP_ROOT=./volumes\n')
+  writeFile(root, '.env.prod', 'ENV=prod\nFQDN=x.eu\nAPPS_UID=900\nAPP_ROOT=/tank/apps\n')
   writeFile(root, '.env', 'ENV=dev\n')
 
   writeFile(root, 'applications/proxy/app.yaml', 'engine: rootless\n')
@@ -118,7 +118,7 @@ export function makeQuadletInstance() {
       'ContainerName=web',
       'Network=web.network',
       'Network=shared.network:ip=10.0.0.2',
-      'Volume=${TANK_ROOT}/web:/data',
+      'Volume=${APP_ROOT}/web:/data',
       'EnvironmentFile=.env',
       'Label=host=${FQDN}',
       '',

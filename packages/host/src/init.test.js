@@ -128,7 +128,7 @@ describe('initInstance', () => {
     expect(resolvedNonSensitive(dev)).toMatchObject({ QCTL_ENV: 'dev' })
     expect(resolvedNonSensitive(dev, { includeInternal: true })).toMatchObject({
       ENV: 'dev',
-      TANK_ROOT: './volumes',
+      APP_ROOT: './volumes',
     })
     expect(resolvedNonSensitive(dev).ENV).toBeUndefined() // @internal
     expect(sensitiveKeys(dev)).not.toContain('VW_CLIENT_ID')
@@ -161,7 +161,7 @@ describe('initInstance', () => {
     })
     expect(resolvedNonSensitive(prod, { includeInternal: true })).toMatchObject({
       ENV: 'prod',
-      TANK_ROOT: '/tank/apps',
+      APP_ROOT: '/tank/apps',
     })
   })
   test('refuses to re-init without --force', () => {
