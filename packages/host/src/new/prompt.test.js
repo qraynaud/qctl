@@ -8,6 +8,7 @@ import {
   assertPackageName,
   parseEngineFlag,
   resolveNewAppOptions,
+  resolveNewEnvOptions,
   resolveNewNamedPackageOptions,
   resolveNewUnitOptions,
   resolvePackageName,
@@ -196,5 +197,17 @@ describe('resolveNewNamedPackageOptions', () => {
       { kind: 'network' },
     )
     expect(opts).toEqual({ name: 'vlan2', force: true })
+  })
+})
+
+describe('resolveNewEnvOptions', () => {
+  test('--yes requires name and defaults production/sync off', async () => {
+    await expect(resolveNewEnvOptions({ yes: true })).rejects.toThrow(/name required/)
+    const opts = await resolveNewEnvOptions({ name: 'staging', yes: true })
+    expect(opts).toMatchObject({
+      name: 'staging',
+      production: false,
+      syncEnvFromYaml: false,
+    })
   })
 })

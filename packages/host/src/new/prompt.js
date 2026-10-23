@@ -1,11 +1,12 @@
 /**
- * Interactive / `--yes` option resolution for `qctl new app|common|network|unit`.
+ * Interactive / `--yes` option resolution for `qctl new app|common|network|unit|env`.
  */
 import * as clack from '@clack/prompts'
 
 import { isInteractiveTty } from '../init/quickstart.js'
 import { asBindingPrompts } from '../lib/binding.js'
-import { listAppsForNewUnit, newUnit } from '../new.js'
+import { listAppsForNewUnit, newUnit, requireInstanceRoot } from '../new.js'
+import { listEnvYamlNames } from './provision.js'
 
 /** @import { BindingPrompts } from '../lib/binding.js' */
 /** @import { AppEngine, UnitContainerKind } from '../new.js' */
@@ -365,4 +366,106 @@ export async function resolveNewUnitOptions(flags, opts = {}) {
   }
 
   return { app, name, force, container, envStub }
+}
+
+/**
+ * @typedef {object} NewEnvFlags
+ * @property {string} [name]
+ * @property {boolean} [force]
+ * @property {boolean} [yes]
+ * @property {boolean} [production]
+ * @property {string} [from]
+ * @property {boolean} [syncEnvFromYaml]
+ */
+
+/**
+ * @typedef {object} NewEnvResolved
+ * @property {string} name
+ * @property {boolean} force
+ * @property {boolean} production
+ * @property {string | undefined} from
+ * @property {boolean} syncEnvFromYaml
+ */
+
+/**
+ * @param {NewEnvFlags} flags
+ * @param {{ cwd?: string, prompts?: NewPrompts }} [opts]
+ * @returns {Promise<NewEnvResolved>}
+ */
+export async function resolveNewEnvOptions(flags, opts = {}) {
+  const force = Boolean(flags.force)
+  const yes = Boolean(flags.yes)
+
+  const name = await resolvePackageName(flags.name, {
+    label: 'name',
+    message: 'Environment name',
+    placeholder: 'staging',
+    yes,
+    prompts: opts.prompts,
+  })
+
+  /** @type {boolean} */
+  let production
+  if (flags.production !== undefined) {
+    production = Boolean(flags.production)
+  } else if (yes || !canPrompt(opts)) {
+    production = false
+  } else {
+    const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+    const picked = await p.confirm({
+      message: 'Mark as production environment?',
+      initialValue: false,
+    })
+    if (p.isCancel(picked)) {
+      p.cancel?.('Cancelled')
+      throw new Error('cancelled')
+    }
+    production = Boolean(picked)
+  }
+
+  /** @type {string | undefined} */
+  let from = flags.from?.trim() || undefined
+  if (from) {
+    assertPackageName(from, '--from')
+  } else if (!yes && canPrompt(opts)) {
+    const root = requireInstanceRoot(opts.cwd)
+    const existing = listEnvYamlNames(root)
+    if (existing.length > 0) {
+      const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+      const picked = await p.select({
+        message: 'Copy env YAML from existing environment?',
+        options: [
+          { value: '', label: 'Start from stub / template' },
+          ...existing.map((e) => ({ value: e, label: e })),
+        ],
+        initialValue: '',
+      })
+      if (p.isCancel(picked)) {
+        p.cancel?.('Cancelled')
+        throw new Error('cancelled')
+      }
+      from = picked ? String(picked) : undefined
+    }
+  }
+
+  /** @type {boolean} */
+  let syncEnvFromYaml
+  if (flags.syncEnvFromYaml !== undefined) {
+    syncEnvFromYaml = Boolean(flags.syncEnvFromYaml)
+  } else if (yes || !canPrompt(opts)) {
+    syncEnvFromYaml = false
+  } else {
+    const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
+    const picked = await p.confirm({
+      message: 'Sync provision/.env.schema from !env refs? (add-only)',
+      initialValue: false,
+    })
+    if (p.isCancel(picked)) {
+      p.cancel?.('Cancelled')
+      throw new Error('cancelled')
+    }
+    syncEnvFromYaml = Boolean(picked)
+  }
+
+  return { name, force, production, from, syncEnvFromYaml }
 }
