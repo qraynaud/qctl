@@ -23,13 +23,12 @@ describe('name helpers', () => {
   test('path keys', () => {
     expect(isPathKey('APP_ROOT')).toBe(true)
     expect(isPathKey('FOO_DIR')).toBe(true)
-    expect(isPathKey('REPO_ROOT')).toBe(false)
     expect(isPathKey('TZ')).toBe(false)
   })
 })
 
 describe('render env', () => {
-  test('package-root graph + .env.<ENV> autoload; path keys absolutized; REPO_ROOT', async () => {
+  test('package-root graph + .env.<ENV> autoload; path keys absolutized; __DIRNAME', async () => {
     const fx = makeQuadletInstance()
     try {
       const renv = await loadRenderEnv(
@@ -40,13 +39,31 @@ describe('render env', () => {
       expect(renv.scope.APP_ROOT).toBe(join(fx.root, 'volumes'))
       expect(renv.scope.VERSION).toBe('2.0-dev')
       expect(renv.scope.APPS_UID).toBe('1000')
-      expect(renv.substKeys).toContain('REPO_ROOT')
+      expect(renv.substKeys).not.toContain('REPO_ROOT')
+      expect(renv.scope.REPO_ROOT).toBeUndefined()
       expect(renv.appEnvLabel).toBe(join(fx.root, 'applications/web'))
       expect(renv.scope.VW_CLIENT_SECRET).toBeUndefined() // @sensitive never enters the scope
 
-      const out = renderFile(join(fx.root, 'applications/web/web/web.container'), renv)
+      const unitDir = join(fx.root, 'applications/web/web')
+      writeFile(fx.root, 'applications/web/web/sidecar.txt', 'x')
+      writeFile(
+        fx.root,
+        'applications/web/web/web.container',
+        [
+          '[Container]',
+          'Image=img/web:${VERSION}',
+          'Volume=${APP_ROOT}/web:/data',
+          'Volume=${__DIRNAME}/sidecar.txt:/sidecar:ro,Z',
+          'Label=host=${FQDN}',
+          'EnvironmentFile=.env',
+          '',
+        ].join('\n'),
+      )
+      const unit = join(unitDir, 'web.container')
+      const out = renderFile(unit, renv)
       expect(out).toContain('Image=img/web:2.0-dev')
       expect(out).toContain(`Volume=${join(fx.root, 'volumes')}/web:/data`)
+      expect(out).toContain(`Volume=${unitDir}/sidecar.txt:/sidecar:ro,Z`)
       expect(out).toContain('Label=host=x.localhost')
       expect(out).toContain('EnvironmentFile=.env')
       expect(out.endsWith('\n')).toBe(true)
@@ -134,8 +151,11 @@ describe('render env', () => {
         ctxOf(fx.root, join(fx.sysDir, 'seed')),
         join(fx.root, 'applications/proxy'),
       )
-      expect(() => substitute('a=${NOPE}\nb=${REPO_ROOT}', renv, 't.container')).toThrow(
-        /unresolved.*\n\$\{NOPE\}/s,
+      expect(() => substitute('a=${NOPE}\nb=${__DIRNAME}', renv, 't.container')).toThrow(
+        /unresolved.*\n\$\{NOPE\}\n\$\{__DIRNAME\}/s,
+      )
+      expect(substitute('p=${__DIRNAME}/x', renv, 't.container', { dirname: '/abs/unit' })).toBe(
+        'p=/abs/unit/x\n',
       )
     } finally {
       removeTempDir(fx.root)
@@ -149,7 +169,7 @@ describe('render env', () => {
       const c = ctxOf(fx.root, join(fx.sysDir, 'seed'))
       const bare = join(fx.root, 'applications/empty')
       writeFile(fx.root, 'applications/empty/app.yaml', 'engine: rootless\n')
-      expect((await loadRenderEnv(c, bare)).scope.REPO_ROOT).toBe(fx.root)
+      expect((await loadRenderEnv(c, bare)).repoRoot).toBe(fx.root)
       writeFile(fx.root, 'applications/empty/.env.dev', 'X=1\n')
       await expect(loadRenderEnv(c, bare)).rejects.toThrow(/no package-root \.env\.schema/)
     } finally {

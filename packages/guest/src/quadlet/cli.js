@@ -19,7 +19,7 @@ export function withRootOption(yargs) {
   return /** @type {T} */ (
     yargs.option('root', {
       type: 'string',
-      describe: 'Instance root (default: $QCTL_ROOT, else walk up from cwd to provision/ + qctl:)',
+      describe: 'Instance root ($QCTL_ROOT, else cwd walk-up, else /tank/rocky)',
     })
   )
 }

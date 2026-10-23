@@ -162,7 +162,7 @@ export async function runEnable(ctx, opts) {
   ctx.print(`env=${renv.qctlEnv} (varlock graph: ${join(dir, '.env.schema')})`)
   if (renv.appEnvLabel) ctx.print(`app_env=${renv.appEnvLabel}`)
   ctx.print(`APP_ROOT=${renv.scope.APP_ROOT ?? '?'}`)
-  ctx.print(`REPO_ROOT=${ctx.root}`)
+  ctx.print(`instance=${ctx.root}`)
   ctx.print(
     install
       ? `install=autostart drop-in (WantedBy=${paths.wantedBy})`

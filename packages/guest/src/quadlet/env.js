@@ -38,7 +38,6 @@ const UNRESOLVED_RE = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/g
  * @returns {boolean}
  */
 export function isPathKey(key) {
-  if (key === 'REPO_ROOT') return false
   return /(_ROOT|_DIR|_PATH|_BIN)$/.test(key)
 }
 
@@ -93,7 +92,8 @@ export function detectQctlEnvFor(root, baseEnv) {
 }
 
 /**
- * Fresh render env: process env + REPO_ROOT + seed-baked derived keys. No graph values yet.
+ * Fresh render env: process env + seed-baked derived keys. No graph values yet.
+ * Template path builtin `${__DIRNAME}` is applied in {@link substitute}, not here.
  * @param {{ root: string, baseEnv: Scope, seedDir: string }} ctx
  * @param {string} qctlEnv
  * @returns {RenderEnv}
@@ -102,8 +102,8 @@ function seedRenderEnv(ctx, qctlEnv) {
   /** @type {RenderEnv} */
   const renv = {
     repoRoot: ctx.root,
-    scope: { ...ctx.baseEnv, REPO_ROOT: ctx.root },
-    substKeys: ['REPO_ROOT'],
+    scope: { ...ctx.baseEnv },
+    substKeys: [],
     qctlEnv,
     graphValues: {},
     sensitive: new Set(),
@@ -253,14 +253,31 @@ export function runtimeUnitDirs(pkgDir) {
 }
 
 /**
- * `${KEY}` substitution for the listed keys; error on anything left over.
+ * Builtin `${…}` keys resolved from the template path (not the varlock graph).
+ * `__DIRNAME` = absolute directory of the file being rendered (like Node `__dirname`).
+ *
+ * @param {string} [dirnameAbs]
+ * @returns {Record<string, string>}
+ */
+export function renderBuiltins(dirnameAbs) {
+  if (!dirnameAbs) return {}
+  return { __DIRNAME: dirnameAbs }
+}
+
+/**
+ * `${KEY}` substitution for builtins + listed keys; error on anything left over.
  * @param {string} content
  * @param {RenderEnv} renv
  * @param {string} label
+ * @param {{ dirname?: string }} [opts]  absolute dir of the template (`__DIRNAME`)
  * @returns {string}
  */
-export function substitute(content, renv, label) {
+export function substitute(content, renv, label, opts = {}) {
   let out = content.replace(/\n+$/, '')
+  const builtins = renderBuiltins(opts.dirname)
+  for (const [key, value] of Object.entries(builtins)) {
+    out = out.split(`\${${key}}`).join(value)
+  }
   for (const key of renv.substKeys) {
     out = out.split(`\${${key}}`).join(renv.scope[key] ?? '')
   }
@@ -269,7 +286,8 @@ export function substitute(content, renv, label) {
     const uniq = [...new Set(left)].sort()
     die(
       `unresolved \${VAR} in render of ${label}:\n${uniq.join('\n')}\n`
-        + 'hint: declare the key in the package-root .env.schema (or hub → root .env.dev/.env.prod)',
+        + 'hint: declare the key in the package-root .env.schema (or hub → root .env.dev/.env.prod); '
+        + 'for paths next to this file use ${__DIRNAME}',
     )
   }
   return `${out}\n`
@@ -282,7 +300,8 @@ export function substitute(content, renv, label) {
  * @returns {string}
  */
 export function renderFile(src, renv) {
-  return substitute(readFileSync(src, 'utf8'), renv, src)
+  const abs = resolve(src)
+  return substitute(readFileSync(abs, 'utf8'), renv, abs, { dirname: dirname(abs) })
 }
 
 /**
