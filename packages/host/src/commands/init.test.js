@@ -54,6 +54,7 @@ describe('init command', () => {
     expect(options).toContain('profile')
     expect(options).toContain('sync-env-from-yaml')
     expect(options).toContain('no-init-tank')
+    expect(options).toContain('no-ai-skills')
   })
 
   test('--yes writes Quickstart lab and prints outro', async () => {
@@ -89,9 +90,31 @@ describe('init command', () => {
     expect(ws).toMatch(/cpu:\s*2/)
     expect(ws).toMatch(/memory:\s*4096/)
 
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(true)
+    expect(existsSync(join(root, '.cursor', 'skills', 'qctl-provision', 'SKILL.md'))).toBe(true)
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('qctl-provision')
+
     expect(lines.some((l) => l.includes('initialized'))).toBe(true)
     expect(lines.some((l) => l.includes('qctl vm shell'))).toBe(true)
     expect(lines.some((l) => l.includes('qctl new profile'))).toBe(true)
+  })
+
+  test('--yes --no-ai-skills skips AGENTS.md and skill scaffold', async () => {
+    const root = join(makeTempDir(), 'noai')
+    temps.push(join(root, '..'))
+    spyOn(console, 'log').mockImplementation(() => {})
+    await mod.handler({
+      dir: root,
+      yes: true,
+      force: true,
+      noInitTank: true,
+      noAiSkills: true,
+      name: 'noai',
+    })
+    expect(process.exitCode ?? 0).toBe(0)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(existsSync(join(root, '.cursor', 'skills', 'qctl-provision', 'SKILL.md'))).toBe(false)
+    expect(existsSync(join(root, 'provision', 'common.yaml'))).toBe(true)
   })
 
   test('--dry-run --yes does not create provision tree', async () => {

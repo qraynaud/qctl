@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import {
+  AI_SKILL_RELS,
   GITIGNORE_REQUIRED,
   MISE_QCTL_TOOL_LINE,
   ensureGitignore,
@@ -76,8 +77,32 @@ describe('writeLayout', () => {
     expect(report.written).toContain('.env.schema')
     expect(report.written).toContain('.env.dev')
     expect(report.written).toContain('applications/.gitkeep')
+    for (const rel of AI_SKILL_RELS) {
+      expect(report.written).toContain(rel)
+      expect(existsSync(join(root, rel))).toBe(true)
+    }
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('qctl --help')
+    expect(readFileSync(join(root, AI_SKILL_RELS[1]), 'utf8')).toContain('!env')
     expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name).toBe('demo-lab')
     expect(readFileSync(join(root, 'mise.toml'), 'utf8')).toContain(MISE_QCTL_TOOL_LINE)
+  })
+
+  test('aiSkills: false skips agent scaffolds', () => {
+    const root = join(makeTempDir(), 'noai')
+    temps.push(join(root, '..'))
+    writeLayout(root, { name: 'noai', aiSkills: false })
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(existsSync(join(root, '.cursor'))).toBe(false)
+  })
+
+  test('does not clobber existing AGENTS.md without force', () => {
+    const root = join(makeTempDir(), 'keep')
+    temps.push(join(root, '..'))
+    writeLayout(root, { name: 'keep' })
+    writeFileSync(join(root, 'AGENTS.md'), '# custom agents\n', 'utf8')
+    const report = writeLayout(root, { name: 'keep' })
+    expect(report.skipped).toContain('AGENTS.md')
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe('# custom agents\n')
   })
 
   test('ensure mode patches missing gitignore/mise lines without clobbering', () => {

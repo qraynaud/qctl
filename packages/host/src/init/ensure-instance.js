@@ -15,7 +15,7 @@ import {
 
 /**
  * @param {string} dir
- * @param {{ dryRun?: boolean, name?: string }} [opts]
+ * @param {{ dryRun?: boolean, name?: string, aiSkills?: boolean }} [opts]
  * @returns {{ root: string } & LayoutReport}
  */
 export function ensureInstance(dir, opts = {}) {
@@ -24,6 +24,7 @@ export function ensureInstance(dir, opts = {}) {
     force: false,
     dryRun: opts.dryRun,
     name: opts.name ?? basename(root),
+    aiSkills: opts.aiSkills,
   })
   const provision = writeProvision(root, {
     force: false,

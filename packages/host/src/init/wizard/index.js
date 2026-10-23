@@ -158,7 +158,7 @@ export function applyProjectRootEnv(root, answers) {
 /**
  * Write layout + provision meta from project answers, then disks/networking/overlays.
  * @param {ProjectAnswers} answers
- * @param {{ force?: boolean, dryRun?: boolean }} [opts]
+ * @param {{ force?: boolean, dryRun?: boolean, aiSkills?: boolean }} [opts]
  * @returns {{ root: string } & LayoutReport}
  */
 export function writeProject(answers, opts = {}) {
@@ -170,6 +170,7 @@ export function writeProject(answers, opts = {}) {
     name: answers.name,
     envs: envKeys,
     dependencies: projectDependencies(answers),
+    aiSkills: opts.aiSkills,
   })
   const provision = writeProvision(root, {
     force: opts.force,

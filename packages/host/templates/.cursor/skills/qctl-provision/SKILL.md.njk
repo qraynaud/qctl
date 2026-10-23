@@ -1,0 +1,58 @@
+---
+name: qctl-provision
+description: >-
+  Provision layout, profiles, qctl new / init --check, and !env bindings for this
+  instance. Use when editing provision YAML, scaffolding apps/units, or unsure
+  how to grow the lab toward Proxmox.
+---
+
+# qctl provision (instance)
+
+Thin, command-oriented. Prefer shelling `qctl` over hand-writing YAML when unsure.
+Full path: `qctl --help`.
+
+## Layout (prefixed)
+
+Under `provision/`:
+
+| File | Role |
+|------|------|
+| `common.yaml` | `qctl.environments`, `qctl.profiles`, `qctl.default-profile`, shared topology |
+| `target-workstation.yaml` / `target-proxmox.yaml` | Hypervisor defaults for that target |
+| `env-<name>.yaml` | Per-environment overlay |
+| `profile-<name>.yaml` | Per-profile overrides |
+| `.env.schema` / `.env.<env>` | Secret names + values for `!env` |
+
+Select a profile with `-p` / `--profile` (default: `qctl.default-profile`).
+
+## Grow the instance
+
+| Goal | Command |
+|------|---------|
+| App (+ unit) | `qctl new app [name]` (`--engine rootless\|rootful`) |
+| Unit under an app | `qctl new unit [app] [name]` |
+| Environment | `qctl new env [name]` |
+| Proxmox / extra profile | `qctl new profile [name]` (keep lab; **not** `init --force`) |
+| Network / common package | `qctl new network\|common [name]` |
+| Discover kinds | bare `qctl new` on a TTY |
+
+## Validate
+
+```bash
+qctl init --check
+qctl vm target-check          # host tools + provision for the profile
+```
+
+## Bindings / `!env`
+
+- Secrets in YAML use `!env NAME` (optional `{ name, encoding }` for binary/multiline).
+- Names are **UPPER_SNAKE_CASE** (`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$`).
+- **Do not invent** secret names. Only add schema keys the user chose (or add-only via `qctl init --sync-env-from-yaml` / wizard).
+- Values live in `provision/.env.<env>` for the profile’s env — not a fixed catalog of required keys.
+
+## Happy path reminders
+
+```text
+qctl init . → qctl vm up → qctl new app demo --engine rootless → qctl sync → qctl vm up demo
+Later: qctl new profile pve → qctl vm up --profile pve …
+```

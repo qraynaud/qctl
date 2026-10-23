@@ -207,6 +207,9 @@ export function ensureRootEnvSchema(text) {
   return { text: next, changed }
 }
 
+/** Rel paths under the instance root for agent skill scaffolds. */
+export const AI_SKILL_RELS = Object.freeze(['AGENTS.md', '.cursor/skills/qctl-provision/SKILL.md'])
+
 /**
  * Write or ensure instance layout under `root`.
  * @param {string} root Absolute instance root
@@ -216,6 +219,7 @@ export function ensureRootEnvSchema(text) {
  *   name?: string,
  *   envs?: string[],
  *   dependencies?: Record<string, string>,
+ *   aiSkills?: boolean,
  * }} [opts]
  * @returns {LayoutReport}
  */
@@ -225,6 +229,7 @@ export function writeLayout(root, opts = {}) {
   const name = opts.name ?? basename(root)
   const envs = opts.envs ?? ['dev', 'prod']
   const dependencies = opts.dependencies ?? {}
+  const aiSkills = opts.aiSkills !== false
   /** @type {LayoutReport} */
   const report = { written: [], patched: [], skipped: [] }
   const fileOpts = { force, dryRun }
@@ -316,6 +321,16 @@ export function writeLayout(root, opts = {}) {
       writeOrSkip(path, '', fileOpts, report, rel)
     } else {
       track(report, rel, 'skipped')
+    }
+  }
+
+  // Agent skills (default on; skip with aiSkills: false / --no-ai-skills).
+  // Existing files are left alone unless --force (do not clobber user edits).
+  if (aiSkills) {
+    for (const rel of AI_SKILL_RELS) {
+      const path = join(root, rel)
+      const contents = loadScaffoldTemplate(rel)
+      writeOrSkip(path, contents, fileOpts, report, rel)
     }
   }
 
