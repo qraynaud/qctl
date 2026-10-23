@@ -64,7 +64,7 @@ export const disksOsSchema = z
   })
   .optional()
 
-const disksDataVolumeSchema = z.strictObject({
+export const disksDataVolumeSchema = z.strictObject({
   id: optionalTrimmedId,
   mount: uniqueMount,
   fs: z.string().trim().min(1).optional(),
@@ -73,7 +73,7 @@ const disksDataVolumeSchema = z.strictObject({
 
 export const disksDataSchema = mapWithIdDefault(disksDataVolumeSchema, mapKey).optional()
 
-const disksMemberInSchema = z.strictObject({
+export const disksMemberInSchema = z.strictObject({
   id: optionalTrimmedId,
   size: sizeSchema.optional(),
 })
@@ -102,7 +102,7 @@ export const disksTankSchema = z
 
 export const disksTanksSchema = mapWithIdDefault(disksTankSchema, mapKey).optional()
 
-const disksBodySchema = z
+export const disksBodySchema = z
   .strictObject({
     os: disksOsSchema,
     data: disksDataSchema,

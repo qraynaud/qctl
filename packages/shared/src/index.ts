@@ -1,6 +1,7 @@
 // Runtime surface: src/exports.js. Add public `export type` here when needed.
 
 export type { DisksJson, DisksPackageHints } from './disks/disks-json-types.ts'
+export type { TankOptions, TankOptionsInput } from './disks/tank-options-types.ts'
 export * from './exports.js'
 export type {
   DnatEntry,

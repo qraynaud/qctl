@@ -7,11 +7,21 @@ import type { z } from 'zod'
 
 import type { PortEntry, PortsMap } from '@qctl/shared'
 
-import type { disksTankSchema } from './disks.js'
+import type {
+  disksBodySchema,
+  disksDataVolumeSchema,
+  disksMemberInSchema,
+  disksOsSchema,
+  disksTankSchema,
+  disksVdevSchema,
+} from './disks.js'
+import type { filesItemSchema, filesSchema } from './files.js'
 import type { registriesSchema } from './first-boot.js'
 import type { networkingSchema, proxmoxNetEntrySchema, proxmoxNetMapSchema } from './networking.js'
+import type { packagesSchema } from './packages.js'
 import type { provisionSchema } from './parse.js'
 import type { proxmoxSchema, workstationSchema } from './targets.js'
+import type { usersSchema } from './users.js'
 import type { optionalCredentialBytes, optionalTrimmedText, trimmedText } from './zod-utils.js'
 
 export type ProvisionFile = z.infer<typeof provisionSchema>
@@ -25,6 +35,39 @@ export type ProxmoxNetMap = z.infer<typeof proxmoxNetMapSchema>
 export type AlignedProxmoxNet = ProxmoxNetEntry & { name: string }
 export type WorkstationTarget = z.infer<typeof workstationSchema>
 export type ProxmoxTarget = z.infer<typeof proxmoxSchema>
+export type WorkstationInput = z.input<typeof workstationSchema>
+export type ProxmoxInput = z.input<typeof proxmoxSchema>
+
+/** Writer / wizard plain shapes (pre-default schema input; drop `.prefault` `| undefined`). */
+export type PackagesInput = NonNullable<z.input<typeof packagesSchema>>
+export type FilesInput = NonNullable<z.input<typeof filesSchema>>
+export type FileItemInput = z.input<typeof filesItemSchema>
+export type UsersInput = NonNullable<z.input<typeof usersSchema>>
+/** Wizard always writes both accounts (markers allowed on password). */
+export type UsersPlain = {
+  admin: NonNullable<UsersInput['admin']>
+  apps: NonNullable<UsersInput['apps']>
+}
+export type SshInput = NonNullable<ProvisionFileInput['ssh']>
+export type RepoInput = NonNullable<ProvisionFileInput['repo']>
+export type RegistriesInput = NonNullable<z.input<typeof registriesSchema>>
+
+/** Pre-default `disks:` YAML shape (writer / deep-merge overlays). */
+export type DisksInput = z.input<typeof disksBodySchema>
+export type DisksOsInput = NonNullable<z.input<typeof disksOsSchema>>
+export type DisksMemberInput = z.input<typeof disksMemberInSchema>
+export type DisksDataVolumeInput = z.input<typeof disksDataVolumeSchema>
+export type DisksVdevInput = z.input<typeof disksVdevSchema>
+
+/**
+ * Sparse profile overlay: size/id only (structure lives in common / env).
+ * Leaves are {@link DisksMemberInput} / {@link DisksOsInput}.
+ */
+export type DisksAttachmentOverlay = {
+  os?: DisksOsInput
+  data?: Record<string, DisksMemberInput>
+  tanks?: Record<string, { vdevs: Record<string, { members: Record<string, DisksMemberInput> }> }>
+}
 /** Resolved `!env` leaves are `Buffer`; schema inputs must accept them. */
 type EnvBytes = Buffer
 
@@ -56,9 +99,7 @@ type _hostKeys = AssertTrue<
 >
 /** List form and scalar form of `ssh.authorized_keys` both accept `!env` Buffer. */
 type AuthorizedKeysIn = NonNullable<NonNullable<In['ssh']>['authorized_keys']>
-type _authorizedKeysList = AssertTrue<
-  EnvBytes[] extends Extract<AuthorizedKeysIn, readonly unknown[]> ? true : false
->
-type _authorizedKeysScalar = AssertTrue<
-  EnvBytes extends Exclude<AuthorizedKeysIn, readonly unknown[]> ? true : false
->
+type AuthorizedKeysList = Extract<AuthorizedKeysIn, readonly (string | EnvBytes)[]>
+type AuthorizedKeysScalar = Exclude<AuthorizedKeysIn, readonly (string | EnvBytes)[]>
+type _authorizedKeysList = AssertTrue<EnvBytes[] extends AuthorizedKeysList ? true : false>
+type _authorizedKeysScalar = AssertTrue<EnvBytes extends AuthorizedKeysScalar ? true : false>

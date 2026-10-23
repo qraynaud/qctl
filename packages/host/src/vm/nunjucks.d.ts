@@ -1,5 +1,6 @@
 declare module 'nunjucks' {
   export class Environment {
+    constructor(loaders?: unknown, opts?: Record<string, unknown>)
     render(name: string, context?: Record<string, unknown>): string
     renderString(src: string, context?: Record<string, unknown>): string
     addFilter(name: string, fn: (...args: never[]) => unknown): this

@@ -1,0 +1,118 @@
+{# Quickstart / initInstance. Vars: defaultProvisionTemplateVars() / answers.
+   Optional ssh/repo use | yaml; passphrase stays interpolated so !env tags work. #}
+# Env "dev" — shared by every profile that uses env: dev.
+# Secrets: !env NAME → values in provision/.env.dev (see .env.schema).
+# Per-profile overrides: profile-<name>.yaml. Profiles list: common.yaml.
+#
+# Matches Custom init Enter-through defaults (Quickstart / --yes): OS + one
+# raidz tank (2 members); no data volumes / VLANs unless you add them later.
+
+# Disks: map keys become serials. size = virtual image; omit size = physical disk.
+# Create ZFS pools with `qctl vm init-tank` (not on normal appliance boot).
+disks:
+  os:
+    size: 20G
+  # data:                    # optional plain volumes (e.g. vw → /vw for Vaultwarden)
+  #   vw:
+  #     mount: /vw
+  #     size: 2G
+  tanks:
+    tank:
+      mount: /tank
+      # Literal passphrase, or !env NAME (add NAME to .env.schema)
+{%- if tankPassphrase %}
+      passphrase: {{ tankPassphrase }}
+{%- endif %}
+      # options: {}  # optional pool/dataset/acl tweaks
+      vdevs:
+        data:
+          role: data
+          type: raidz        # raidz1; mirror also fine (≥2 members)
+          members:
+            data1: { size: 2G }
+            data2: { size: 2G }
+
+# users:  # optional — defaults: admin (uid 1000), apps (uid 900, subids <id>×1000:32768)
+#   admin:
+#     username: admin
+#     password: !env ADMIN_PASSWORD
+#   apps:
+#     username: apps
+#     # uid: 900
+#     # gid: 900   # defaults to uid when omitted
+#     # subuid: 900000:32768
+#     # subgid: 900000:32768
+
+{%- if sshAuthorizedKey %}
+
+{{ { ssh: { authorized_keys: [sshAuthorizedKey] } } | yaml }}
+{%- else %}
+
+# ssh:
+#   authorized_keys:
+#     - ssh-ed25519 AAAA... user@host
+#   host_keys: !env SSH_HOST_KEYS
+{%- endif %}
+
+{%- if repo %}
+
+repo:
+  vcs: {{ repo.vcs }}
+  url: {{ repo.url }}
+  dir: {{ repo.dir }}
+  deploy_key: {{ repo.deployKey }}
+{%- else %}
+
+# repo:  # optional guest clone
+#   vcs: hg
+#   url: ssh://git@git.example/org/repo
+#   dir: /tank/rocky
+#   deploy_key: !env DEPLOY_KEY
+{%- endif %}
+
+# registries:
+#   - !env HEPTAPOD_REGISTRY
+
+networking:
+  ports:
+    ssh:
+      port: 22
+      forward: 2222
+    cockpit:
+      port: 9090
+      forward: 9090
+    http:
+      port: 80
+      forward: 8088
+      dnat: 8088
+    https:
+      port: 443
+      forward: 8443
+      dnat: 8443
+  uplinks:
+    eth0:
+      dhcp4: true
+  # vlans:                   # optional; host ipv4 often in profile-*.yaml
+  #   vlan2:
+  #     id: 2
+  #     link: eth0
+
+# Guest file drops → cloud-init write_files (defaults: owner root:root, permissions 0644):
+# files:
+#   - path: /etc/example.conf
+#     content: |
+#       key=value
+
+# Extra packages by install source (after cloud-init baseline):
+# packages:
+#   distro:           # OS package manager (dnf / apt / …)
+#     - nano
+#   http:             # URL → binary (zip member or raw)
+#     - url: https://example.com/releases/bw-linux.zip
+#       bin: bw
+#       test: '[[ "$($APP --version)" == "2025.11.0" ]]'
+#   pipx:             # optional; pipx is installed on the guest only if this list is non-empty
+#     - cowsay
+
+# If repo.vcs is hg, seed adds mercurial packages and a default hgrc unless you
+# already list /etc/mercurial/hgrc under files:.

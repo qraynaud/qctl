@@ -1,0 +1,14 @@
+# Defaults for profiles with target: proxmox.
+# Override api_url / node / vmid per profile in profile-<name>.yaml when needed.
+
+proxmox:
+  api_url: https://pve.example:8006
+  # Replace with !env PROXMOX_API_TOKEN (add the key to .env.schema / .env.<env>)
+  api_token: SET_PROXMOX_API_TOKEN
+  node: pve
+  cpu: 2
+  memory: 4096
+  net:
+    eth0:
+      bridge: vmbr0
+      trunks: [2]

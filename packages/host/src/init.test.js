@@ -45,8 +45,11 @@ describe('initInstance', () => {
     expect(existsSync(join(result.root, 'provision', '.env.schema'))).toBe(true)
     expect(existsSync(join(result.root, 'provision', '.env.dev'))).toBe(true)
     expect(existsSync(join(result.root, 'provision', '.env.prod'))).toBe(true)
-    expect(readFileSync(join(result.root, 'provision', '.env.schema'), 'utf8')).toContain(
+    expect(readFileSync(join(result.root, 'provision', '.env.schema'), 'utf8')).not.toContain(
       'TANK_PASSPHRASE=',
+    )
+    expect(readFileSync(join(result.root, 'provision', '.env.schema'), 'utf8')).toContain(
+      '!env NAME',
     )
     expect(existsSync(join(result.root, 'provision', 'common.yaml'))).toBe(true)
     expect(existsSync(join(result.root, 'provision', 'env-dev.yaml'))).toBe(true)
@@ -71,12 +74,13 @@ describe('initInstance', () => {
       profile: 'lab',
       resolve: false,
     })
-    expect(envRefs.length).toBeGreaterThan(0)
+    expect(envRefs).toEqual([])
     const prov = readFileSync(join(result.root, 'provision', 'env-dev.yaml'), 'utf8')
     expect(prov).toMatch(/^disks:/m)
     expect(prov).toContain('tanks:')
     expect(prov).toContain('role: data')
-    expect(prov).toContain('!env TANK_PASSPHRASE')
+    expect(prov).toContain('passphrase: lab-tank-passphrase')
+    expect(prov).not.toContain('!env TANK_PASSPHRASE')
     expect(prov).not.toMatch(/^tank:/m)
     const readme = readFileSync(join(result.root, 'provision', 'README.md'), 'utf8')
     expect(readme).toContain('disks.tanks')
@@ -133,25 +137,14 @@ describe('initInstance', () => {
     expect(resolvedNonSensitive(dev).ENV).toBeUndefined() // @internal
     expect(sensitiveKeys(dev)).not.toContain('VW_CLIENT_ID')
 
-    const hostOverrides = {
-      ...env,
-      QCTL_ENV: 'dev',
-      TANK_PASSPHRASE: 'lab-tank',
-      DEPLOY_KEY: 'lab-deploy',
-    }
+    // Provision schema ships empty of catalog keys; Secret slots add them later.
     const hostGraph = await loadEnvGraph({
       entryFilePaths: [join(dir, 'provision')],
       currentEnvFallback: 'dev',
-      overrideValues: hostOverrides,
       processEnvOverride: env,
       skipCache: true,
     })
-    expect(sensitiveKeys(hostGraph)).toContain('TANK_PASSPHRASE')
-    const { env: hostEnv } = await (await import('@qctl/shared')).loadHostEnvDetailed(
-      dir,
-      hostOverrides,
-    )
-    expect(hostEnv.TANK_PASSPHRASE).toBe('lab-tank')
+    expect(sensitiveKeys(hostGraph)).not.toContain('TANK_PASSPHRASE')
 
     const prod = await loadEnvGraphForDir(dir, {
       env,

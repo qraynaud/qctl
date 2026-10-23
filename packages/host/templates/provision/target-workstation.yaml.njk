@@ -1,0 +1,5 @@
+{# Vars: cpu, memory (or pass workstation object). #}
+# Defaults for profiles with target: workstation (VM on this machine).
+
+workstation:
+{{ { cpu: cpu, memory: memory } | yaml | indent(2) }}

@@ -1,41 +1,19 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
 
 import { isInstanceRoot } from '@qctl/shared'
 
+import { writeLayout } from './init/write-layout.js'
 import {
-  GITIGNORE,
-  MISE_TOML,
-  PACKAGE_JSON,
-  PROVISION_COMMON_YAML,
-  PROVISION_DEV_PROXMOX_YAML,
-  PROVISION_DEV_WORKSTATION_YAML,
-  PROVISION_DEV_YAML,
-  PROVISION_ENV_DEV,
-  PROVISION_ENV_PROD,
-  PROVISION_ENV_SCHEMA,
-  PROVISION_README,
-  ROOT_ENV_DEV,
-  ROOT_ENV_PROD,
-  ROOT_ENV_SCHEMA,
-} from './templates.js'
-
-/**
- * @param {string} path
- * @param {string} contents
- * @param {{ force?: boolean }} [opts]
- * @returns {'wrote' | 'skipped'}
- */
-function writeNew(path, contents, opts = {}) {
-  if (existsSync(path) && !opts.force) return 'skipped'
-  writeFileSync(path, contents, 'utf8')
-  return 'wrote'
-}
+  defaultQuickstartProvisionMeta,
+  mergeWriteReports,
+  writeProvision,
+} from './init/write-provision.js'
 
 /**
  * Scaffold a new instance repo.
  * @param {string} dir
- * @param {{ force?: boolean }} [opts]
+ * @param {{ force?: boolean, name?: string }} [opts]
  */
 export function initInstance(dir, opts = {}) {
   const root = resolve(dir)
@@ -47,42 +25,19 @@ export function initInstance(dir, opts = {}) {
     )
   }
 
-  /** @type {string[]} */
-  const written = []
-  /** @type {string[]} */
-  const skipped = []
+  const layout = writeLayout(root, {
+    force: opts.force,
+    name: opts.name ?? basename(root),
+  })
 
-  /**
-   * @param {string} rel
-   * @param {string} contents
-   */
-  const put = (rel, contents) => {
-    const path = join(root, rel)
-    mkdirSync(join(path, '..'), { recursive: true })
-    const result = writeNew(path, contents, opts)
-    ;(result === 'wrote' ? written : skipped).push(rel)
-  }
+  const provision = writeProvision(root, {
+    force: opts.force,
+    meta: defaultQuickstartProvisionMeta(),
+    // Sample Proxmox target stub for later `qctl new profile` (not wired into profiles yet).
+    extraTargets: ['proxmox'],
+    provisionEnvFiles: ['dev', 'prod'],
+  })
 
-  put('mise.toml', MISE_TOML)
-  put('package.json', PACKAGE_JSON)
-  put('.env.schema', ROOT_ENV_SCHEMA)
-  put('.env.dev', ROOT_ENV_DEV)
-  put('.env.prod', ROOT_ENV_PROD)
-  put('.gitignore', GITIGNORE)
-  put('provision/common.yaml', PROVISION_COMMON_YAML)
-  put('provision/env-dev.yaml', PROVISION_DEV_YAML)
-  put('provision/target-workstation.yaml', PROVISION_DEV_WORKSTATION_YAML)
-  put('provision/target-proxmox.yaml', PROVISION_DEV_PROXMOX_YAML)
-  put('provision/profile-lab.yaml', '# Lab profile leaf (optional overrides; merged last).\n')
-  put('provision/README.md', PROVISION_README)
-  put('provision/.env.schema', PROVISION_ENV_SCHEMA)
-  put('provision/.env.dev', PROVISION_ENV_DEV)
-  put('provision/.env.prod', PROVISION_ENV_PROD)
-
-  for (const tree of ['applications', 'common', 'networks']) {
-    mkdirSync(join(root, tree), { recursive: true })
-    put(`${tree}/.gitkeep`, '')
-  }
-
-  return { root, written, skipped }
+  const report = mergeWriteReports(layout, provision)
+  return { root, ...report }
 }
