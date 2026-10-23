@@ -55,7 +55,7 @@ export default {
   plan(ctx) {
     return [
       `Tier-0 DEPLOY_KEY (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
-      `hg clone/pull as admin into ${ctx.env.ROCKY_REPO_DIR || '/tank/rocky'}`,
+      `hg clone/pull as admin into ${ctx.env.QCTL_ROOT || '/tank/rocky'}`,
     ]
   },
   /**
@@ -64,7 +64,7 @@ export default {
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('hg-clone', 'must run as root')
 
-    const vcs = (ctx.env.ROCKY_REPO_VCS || 'hg').trim()
+    const vcs = (ctx.env.QCTL_REPO_VCS || 'hg').trim()
     if (vcs !== 'hg') {
       throw new StageError(
         'hg-clone',
@@ -72,10 +72,10 @@ export default {
       )
     }
 
-    const repoDir = ctx.env.ROCKY_REPO_DIR?.trim() || '/tank/rocky'
-    const hgUrl = ctx.env.ROCKY_HG_URL?.trim() || 'ssh://git@heptapod.lsystems.fr/qraynaud/rocky'
-    const hgBranch = ctx.env.ROCKY_HG_BRANCH?.trim() || ctx.env.ROCKY_REPO_BRANCH?.trim() || ''
-    const hgBin = ctx.env.ROCKY_HG_BIN?.trim() || '/usr/local/bin/hg'
+    const repoDir = ctx.env.QCTL_ROOT?.trim() || '/tank/rocky'
+    const hgUrl = ctx.env.QCTL_REPO_URL?.trim() || 'ssh://git@heptapod.lsystems.fr/qraynaud/rocky'
+    const hgBranch = ctx.env.QCTL_REPO_BRANCH?.trim() || ''
+    const hgBin = ctx.env.QCTL_HG_BIN?.trim() || '/usr/local/bin/hg'
     const deployHost =
       ctx.env.ROCKY_DEPLOY_SSH_HOST?.trim()
       || ctx.env.ROCKY_HEPTAPOD_HOST?.trim()

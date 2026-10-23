@@ -24,10 +24,10 @@ describe('envWithQctlEnv / createContext', () => {
 
   test('createContext normalizes QCTL_ENV on ctx.env', () => {
     const ctx = createContext({
-      env: { ROCKY_REPO_DIR: '/tank/rocky' },
+      env: { QCTL_ROOT: '/tank/rocky' },
       log: () => {},
     })
     expect(ctx.env.QCTL_ENV).toBe('dev')
-    expect(ctx.env.ROCKY_REPO_DIR).toBe('/tank/rocky')
+    expect(ctx.env.QCTL_ROOT).toBe('/tank/rocky')
   })
 })

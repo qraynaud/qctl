@@ -141,7 +141,7 @@ export default {
       return
     }
 
-    const appsUser = ctx.env.ROCKY_QUADLET_USER?.trim() || 'apps'
+    const appsUser = ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
     let n = 0
     for (let i = 0; i < lines.length; i++) {
       const label = `registries[${i}]`

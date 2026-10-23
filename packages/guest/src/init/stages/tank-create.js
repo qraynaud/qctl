@@ -57,7 +57,7 @@ async function resolveTankVdevs(ctx, tank) {
  * @returns {string[]}
  */
 function poolsToCreate(ctx, disks) {
-  const poolsEnv = ctx.env.ROCKY_INIT_TANK_POOLS?.trim()
+  const poolsEnv = ctx.env.QCTL_INIT_TANK_POOLS?.trim()
   if (poolsEnv) {
     return poolsEnv
       .split(',')
@@ -85,7 +85,7 @@ async function createOneTank(ctx, disks, poolId) {
   if (await tankPoolImported(ctx, poolId)) {
     throw new Error(
       `pool ${poolId} already imported — aborting`
-        + (ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
+        + (ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
           ? ' (host -f should have wiped members)'
           : ' (pass host init-tank -f to recreate)'),
     )
@@ -93,7 +93,7 @@ async function createOneTank(ctx, disks, poolId) {
   if (await tankPoolImportable(ctx, poolId)) {
     throw new Error(
       `pool ${poolId} is importable on these disks — aborting`
-        + (ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
+        + (ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
           ? ' (host -f should have wiped members)'
           : ' (pass host init-tank -f to recreate)'),
     )
@@ -137,7 +137,7 @@ export default {
   plan(ctx) {
     return [
       'require ROCKY_TANK_CREATE_I_UNDERSTAND=yes',
-      'read disks.json tanks (+ ROCKY_INIT_TANK_POOLS filter)',
+      'read disks.json tanks (+ QCTL_INIT_TANK_POOLS filter)',
       `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
       'zpool create from vdev role registry (options.pool / dataset / acl; no child datasets)',
       'export + stamp',
@@ -155,9 +155,9 @@ export default {
       )
     }
 
-    const stamp = ctx.env.ROCKY_INIT_TANK_STAMP?.trim() || '/var/lib/rocky/init-tank-done'
-    const okMarker = ctx.env.ROCKY_INIT_TANK_OK?.trim() || '/vw/.rocky-init-tank-ok'
-    const force = ctx.env.ROCKY_INIT_TANK_FORCE === 'yes'
+    const stamp = ctx.env.QCTL_INIT_TANK_STAMP?.trim() || '/var/lib/rocky/init-tank-done'
+    const okMarker = ctx.env.QCTL_INIT_TANK_OK?.trim() || '/vw/.rocky-init-tank-ok'
+    const force = ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
 
     if (existsSync(stamp) && !force) {
       ctx.log(`tank-create: already done (${stamp}) — skipping create`)
@@ -169,7 +169,7 @@ export default {
       if (!disks) throw new Error('disks.json missing — cannot create tanks')
       const poolIds = poolsToCreate(ctx, disks)
       if (!poolIds.length) {
-        ctx.log('tank-create: no tanks in disks.json / ROCKY_INIT_TANK_POOLS — nothing to create')
+        ctx.log('tank-create: no tanks in disks.json / QCTL_INIT_TANK_POOLS — nothing to create')
         return
       }
 

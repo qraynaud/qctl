@@ -58,7 +58,7 @@ const provisionBodySchema = z.strictObject({
       /** Instance VCS for the clone stage. */
       vcs: z.enum(['git', 'hg']).default('git'),
       branch: optionalTrimmedText,
-      /** Clone URL (baked as ROCKY_HG_URL / ROCKY_REPO_URL). */
+      /** Clone URL (baked as QCTL_REPO_URL). */
       url: optionalTrimmedText,
       /** Guest checkout path (default /tank/rocky). */
       dir: optionalTrimmedText,

@@ -7,7 +7,7 @@ describe('hg-clone stage', () => {
   test('exports name and plan', () => {
     expect(hgClone.name).toBe('hg-clone')
     const ctx = createContext({
-      env: { QCTL_ENV: 'dev', ROCKY_REPO_DIR: '/tank/x' },
+      env: { QCTL_ENV: 'dev', QCTL_ROOT: '/tank/x' },
       log: () => {},
     })
     expect(hgClone.plan(ctx).join('\n')).toMatch(/hg clone/)
@@ -15,7 +15,7 @@ describe('hg-clone stage', () => {
 
   test('run requires root', async () => {
     const ctx = createContext({
-      env: { QCTL_ENV: 'dev', ROCKY_REPO_VCS: 'hg' },
+      env: { QCTL_ENV: 'dev', QCTL_REPO_VCS: 'hg' },
       log: () => {},
       isRoot: () => false,
     })
@@ -24,7 +24,7 @@ describe('hg-clone stage', () => {
 
   test('run rejects non-hg vcs', async () => {
     const ctx = createContext({
-      env: { QCTL_ENV: 'dev', ROCKY_REPO_VCS: 'git' },
+      env: { QCTL_ENV: 'dev', QCTL_REPO_VCS: 'git' },
       log: () => {},
       isRoot: () => true,
     })

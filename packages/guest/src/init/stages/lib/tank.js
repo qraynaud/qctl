@@ -23,9 +23,9 @@ export const CREDSTORE_DEFAULT = '/etc/credstore/rocky'
  */
 export function tankPool(ctx, poolId) {
   if (poolId?.trim()) return poolId.trim()
-  // Host init-tank sets ROCKY_ZFS_POOL / ROCKY_INIT_TANK_POOLS via seed env.
-  const fromList = ctx.env.ROCKY_INIT_TANK_POOLS?.trim()?.split(',')[0]?.trim()
-  return ctx.env.ROCKY_ZFS_POOL?.trim() || fromList || POOL_DEFAULT
+  // Host init-tank sets QCTL_ZFS_POOL / QCTL_INIT_TANK_POOLS via seed env.
+  const fromList = ctx.env.QCTL_INIT_TANK_POOLS?.trim()?.split(',')[0]?.trim()
+  return ctx.env.QCTL_ZFS_POOL?.trim() || fromList || POOL_DEFAULT
 }
 
 /**

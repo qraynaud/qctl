@@ -115,7 +115,7 @@ describe('ready-stamp', () => {
     /** @type {string[][]} */
     const execs = []
     const { ctx, logs } = testCtx({
-      env: { QCTL_STAMP_DIR: join(dir, 'state'), QCTL_REPO_DIR: '/tmp/repo', QCTL_HG_BIN: '/x/hg' },
+      env: { QCTL_STAMP_DIR: join(dir, 'state'), QCTL_ROOT: '/tmp/repo', QCTL_HG_BIN: '/x/hg' },
       exec: async (argv) => {
         execs.push(argv)
         return { code: 0, stdout: 'deadbeef+\n', stderr: '' }
@@ -134,10 +134,10 @@ describe('ready-stamp', () => {
     expect(logs.join('\n')).toContain('first-boot complete')
   })
 
-  test('ROCKY_STAMP_* still honoured (cloud-init baked names)', async () => {
+  test('QCTL_STAMP_* overrides default stamp paths', async () => {
     const dir = makeTempDir('qctl-stamp-')
     const file = join(dir, 'custom.done')
-    const { ctx } = testCtx({ env: { ROCKY_STAMP_DIR: dir, ROCKY_STAMP_FILE: file } })
+    const { ctx } = testCtx({ env: { QCTL_STAMP_DIR: dir, QCTL_STAMP_FILE: file } })
     await runStage('ready-stamp', ctx)
     expect((await readFile(file, 'utf8')).startsWith('ok\n')).toBe(true)
   })

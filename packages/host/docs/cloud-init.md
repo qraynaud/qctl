@@ -39,7 +39,7 @@ Matches prod appliance roles (lab uses tiny qcow2s; same counts and serials):
 | `!file path` | Embed seed-kit `<path>` (`lib/…`, `first-boot/…`). Nunjucks only if the file contains `{{` / `{%`; empty render drops the entry. |
 
 Bake `provision/<env>.yaml` into seed as `provision.*` (e.g. `ports.json` for guest DNAT,
-`vlan-parents.env`, `ROCKY_APPS_SUBID_*` / `ROCKY_APPS_SUBGID_*` for `/etc/subuid` +
+`vlan-parents.env`, `QCTL_APPS_SUBID_*` / `QCTL_APPS_SUBGID_*` for `/etc/subuid` +
 `/etc/subgid`) — no YAML parsing on the guest.
 Appliance users under `users` are optional. Defaults: `admin` (uid/gid 1000; password
 omitted → key-only sudo with seed SSH keys / host pubkey fallback) and `apps`
@@ -132,8 +132,8 @@ The `hg-clone` stage writes it under the **admin** `~/.ssh/deploy_key`, then
 `hg clone|pull` as that user into `/tank/rocky`. The selected provision profile’s
 `env` bakes `QCTL_ENV` into `/etc/environment.d/91-rocky-env.conf` (first-boot /
 init-tank units load it). Provision
-`repo.vcs` (`git`|`hg`, default `git`) is baked as `ROCKY_REPO_VCS`. Optional
-`repo.branch` → `ROCKY_REPO_BRANCH` / `ROCKY_HG_BRANCH`. On **appliance** seed
+`repo.vcs` (`git`|`hg`, default `git`) is baked as `QCTL_REPO_VCS`. Optional
+`repo.branch` → `QCTL_REPO_BRANCH`. On **appliance** seed
 (`vm up`), `repo.vcs: hg` also adds mercurial+hg-evolve to `packages.pipx` and stock
 `/etc/mercurial/hgrc` via provision `files:` (override by listing that path yourself).
 Init-tank does not auto-add mercurial.
