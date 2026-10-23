@@ -54,7 +54,7 @@ export async function installInitPackages(opts) {
   const env = opts.env ?? process.env
   const log = opts.log ?? ((l) => console.log(l))
   const platform = await (opts.loadPlatform ? opts.loadPlatform() : loadPlatformModule(env))
-  const vcs = (env.ROCKY_REPO_VCS || env.QCTL_REPO_VCS || '').trim() || undefined
+  const vcs = (env.QCTL_REPO_VCS || '').trim() || undefined
   const disks = await loadDisksPackageHints(env)
   if (!disks) {
     log(`qctl _internal_init: no disks.json — skipping storage package capabilities (fs/zfs)`)

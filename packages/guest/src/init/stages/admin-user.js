@@ -178,7 +178,7 @@ export default {
     const username = envString(ctx.env, 'ADMIN_USERNAME')
     const password = envString(ctx.env, 'ADMIN_PASSWORD')
     const defaultUser = ctx.env.ROCKY_ADMIN_DEFAULT_USER?.trim() || DEFAULT_USER
-    const appsUsername = ctx.env.ROCKY_QUADLET_USER?.trim() || 'apps'
+    const appsUsername = ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
     const keysSrc = ctx.env.ROCKY_ADMIN_SSH_KEYS?.trim() || ADMIN_KEYS_SRC_DEFAULT
     const sudoers = ctx.env.ROCKY_SUDOERS_DROPIN?.trim() || SUDOERS_DROPIN_DEFAULT
 

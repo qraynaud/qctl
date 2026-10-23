@@ -8,19 +8,18 @@ import { StageError } from '../errors.js'
 /** @import { Stage } from './types.js' */
 
 /**
- * `QCTL_*` wins; the `ROCKY_*` names are what the seed/cloud-init still bakes
- * (kept readable until the rename lands).
+ * Paths for the ready stamp (`QCTL_*` overrides; defaults under `/var/lib/rocky`).
  *
  * @param {StageContext} ctx
  */
 export function stampPaths(ctx) {
   const e = ctx.env
-  const dir = e.QCTL_STAMP_DIR ?? e.ROCKY_STAMP_DIR ?? '/var/lib/rocky'
+  const dir = e.QCTL_STAMP_DIR ?? '/var/lib/rocky'
   return {
     dir,
-    file: e.QCTL_STAMP_FILE ?? e.ROCKY_STAMP_FILE ?? join(dir, 'first-boot.done'),
-    repoDir: e.QCTL_REPO_DIR ?? e.ROCKY_REPO_DIR ?? '/tank/rocky',
-    hgBin: e.QCTL_HG_BIN ?? e.ROCKY_HG_BIN ?? '/usr/local/bin/hg',
+    file: e.QCTL_STAMP_FILE ?? join(dir, 'first-boot.done'),
+    repoDir: e.QCTL_ROOT ?? '/tank/rocky',
+    hgBin: e.QCTL_HG_BIN ?? '/usr/local/bin/hg',
   }
 }
 

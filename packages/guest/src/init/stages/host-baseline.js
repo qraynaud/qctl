@@ -14,7 +14,7 @@ import { StageError } from '../errors.js'
  * @returns {string}
  */
 function appsUser(ctx) {
-  return ctx.env.ROCKY_QUADLET_USER?.trim() || 'apps'
+  return ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
 }
 
 /**
@@ -114,15 +114,15 @@ async function ensureAppsJournalGroup(ctx) {
  */
 async function ensureAppsSubids(ctx) {
   const user = appsUser(ctx)
-  const uidCount = Number(ctx.env.ROCKY_APPS_SUBID_COUNT || 32768) || 32768
+  const uidCount = Number(ctx.env.QCTL_APPS_SUBID_COUNT || 32768) || 32768
   const gidCount =
-    Number(ctx.env.ROCKY_APPS_SUBGID_COUNT || ctx.env.ROCKY_APPS_SUBID_COUNT || 32768) || 32768
+    Number(ctx.env.QCTL_APPS_SUBGID_COUNT || ctx.env.QCTL_APPS_SUBID_COUNT || 32768) || 32768
   const subuid = await Bun.file('/etc/subuid')
     .text()
     .catch(() => '')
   const userLine = new RegExp(`^${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`, 'm')
   if (!userLine.test(subuid)) {
-    const start = Number(ctx.env.ROCKY_APPS_SUBID_START) || nextSubidStart('/etc/subuid')
+    const start = Number(ctx.env.QCTL_APPS_SUBID_START) || nextSubidStart('/etc/subuid')
     const end = start + uidCount - 1
     ctx.log(`rocky-baseline: usermod --add-subuids ${start}-${end} ${user}`)
     await must(ctx, 'usermod', '--add-subuids', `${start}-${end}`, user)
@@ -132,8 +132,8 @@ async function ensureAppsSubids(ctx) {
     .catch(() => '')
   if (!userLine.test(subgid)) {
     const start =
-      Number(ctx.env.ROCKY_APPS_SUBGID_START)
-      || Number(ctx.env.ROCKY_APPS_SUBID_START)
+      Number(ctx.env.QCTL_APPS_SUBGID_START)
+      || Number(ctx.env.QCTL_APPS_SUBID_START)
       || nextSubidStart('/etc/subgid')
     const end = start + gidCount - 1
     ctx.log(`rocky-baseline: usermod --add-subgids ${start}-${end} ${user}`)

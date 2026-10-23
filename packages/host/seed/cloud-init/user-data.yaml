@@ -84,22 +84,18 @@ write_files:
     permissions: "0644"
     content: !template |
       QCTL_ENV={{ env }}
-      ROCKY_REPO_VCS={{ provision.repo.vcs or 'git' }}
-      ROCKY_QUADLET_USER={{ provision.users.apps.username }}
-      ROCKY_APPS_SUBID_START={{ provision.users.apps.subuid.start }}
-      ROCKY_APPS_SUBID_COUNT={{ provision.users.apps.subuid.count }}
-      ROCKY_APPS_SUBGID_START={{ provision.users.apps.subgid.start }}
-      ROCKY_APPS_SUBGID_COUNT={{ provision.users.apps.subgid.count }}
+      QCTL_REPO_VCS={{ provision.repo.vcs or 'git' }}
+      QCTL_QUADLET_USER={{ provision.users.apps.username }}
+      QCTL_APPS_SUBID_START={{ provision.users.apps.subuid.start }}
+      QCTL_APPS_SUBID_COUNT={{ provision.users.apps.subuid.count }}
+      QCTL_APPS_SUBGID_START={{ provision.users.apps.subgid.start }}
+      QCTL_APPS_SUBGID_COUNT={{ provision.users.apps.subgid.count }}
       {%- if provision.repo.url %}
-      ROCKY_HG_URL={{ provision.repo.url }}
-      ROCKY_REPO_URL={{ provision.repo.url }}
+      QCTL_REPO_URL={{ provision.repo.url }}
       {%- endif %}
-      {%- if provision.repo.dir %}
-      ROCKY_REPO_DIR={{ provision.repo.dir }}
-      {%- endif %}
+      QCTL_ROOT={{ provision.repo.dir or '/tank/rocky' }}
       {%- if provision.repo.branch %}
-      ROCKY_REPO_BRANCH={{ provision.repo.branch }}
-      ROCKY_HG_BRANCH={{ provision.repo.branch }}
+      QCTL_REPO_BRANCH={{ provision.repo.branch }}
       {%- endif %}
 
   - path: /usr/local/lib/rocky/vlan-parents.env
@@ -175,9 +171,9 @@ write_files:
     permissions: "0644"
     content: !template |
       {% if is_init_tank %}
-      ROCKY_INIT_TANK_POOLS={{ init_tank_pools }}
-      ROCKY_ZFS_POOL={{ init_tank_primary_pool }}
-      {% if init_tank_force %}ROCKY_INIT_TANK_FORCE=yes
+      QCTL_INIT_TANK_POOLS={{ init_tank_pools }}
+      QCTL_ZFS_POOL={{ init_tank_primary_pool }}
+      {% if init_tank_force %}QCTL_INIT_TANK_FORCE=yes
       {% endif %}
       {% endif %}
 

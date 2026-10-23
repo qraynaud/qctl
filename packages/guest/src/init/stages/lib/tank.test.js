@@ -46,7 +46,7 @@ describe('ensureTankPassphraseFromBootstrap', () => {
         QCTL_ENV: 'dev',
         tank_passphrase_tank: 'lab-pass',
         ROCKY_TANK_CRED_FILE: cred,
-        ROCKY_ZFS_POOL: 'tank',
+        QCTL_ZFS_POOL: 'tank',
       },
       log: () => {},
       isRoot: () => true,

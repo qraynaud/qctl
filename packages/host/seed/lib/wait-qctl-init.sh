@@ -10,7 +10,7 @@
 # already waits for the oneshot ExecStart job to finish.
 set -euo pipefail
 
-STAMP="${ROCKY_STAMP_FILE:-/var/lib/rocky/first-boot.done}"
+STAMP="${QCTL_STAMP_FILE:-/var/lib/rocky/first-boot.done}"
 UNIT=rocky-first-boot.service
 
 say() {

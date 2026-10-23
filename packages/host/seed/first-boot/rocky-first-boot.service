@@ -8,7 +8,7 @@ ConditionPathExists=!/var/lib/rocky/first-boot.done
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Seed-baked: QCTL_ENV, optional ROCKY_HG_BRANCH (see 91-rocky-env.conf).
+# Seed-baked: QCTL_ENV, optional QCTL_REPO_BRANCH (see 91-rocky-env.conf).
 EnvironmentFile=-/etc/environment.d/91-rocky-env.conf
 EnvironmentFile=-/etc/environment.d/90-qctl-platform.conf
 # Tier-0: LoadCredentialEncrypted via rocky-first-boot.service.d/tier0.conf
