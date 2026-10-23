@@ -1,9 +1,9 @@
-import { LOCAL_TANK_ROOT, applianceExecEnv } from './exec-in.js'
+import { LOCAL_APP_ROOT, applianceExecEnv } from './exec-in.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('applianceExecEnv', () => {
-  test('exports tank root constant', () => {
-    expect(LOCAL_TANK_ROOT).toBe('/tank/rocky/volumes')
+  test('exports app root constant', () => {
+    expect(LOCAL_APP_ROOT).toBe('/tank/rocky/volumes')
   })
 
   test('builds guest qctl env for podman exec', () => {
@@ -30,6 +30,6 @@ describe('applianceExecEnv', () => {
     expect(env.QCTL_ENV).toBe('prod')
     expect(env.QCTL_ROOT).toBe('/tank/rocky')
     expect(env.QCTL_PLATFORM_MODULE).toBe('/usr/local/lib/qctl/qctl-platform-rocky.mjs')
-    expect(env.TANK_ROOT).toBe(LOCAL_TANK_ROOT)
+    expect(env.APP_ROOT).toBe(LOCAL_APP_ROOT)
   })
 })

@@ -141,7 +141,7 @@ async function applyGraph(renv, ctx, dir) {
 }
 
 /**
- * Optional seed-dir overrides (e.g. nested lab `TANK_ROOT`).
+ * Optional seed-dir overrides (e.g. nested lab `APP_ROOT`).
  * @param {RenderEnv} renv
  * @param {string} seedDir
  */

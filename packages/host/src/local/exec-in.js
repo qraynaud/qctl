@@ -4,7 +4,7 @@ import { die } from './util.js'
 /** @import { LocalContext } from './context.js' */
 
 /** Bind-mounted instance volumes root inside the appliance (CI parity). */
-export const LOCAL_TANK_ROOT = '/tank/rocky/volumes'
+export const LOCAL_APP_ROOT = '/tank/rocky/volumes'
 
 /**
  * Env passed into every `podman exec` for guest qctl.
@@ -17,7 +17,7 @@ export function applianceExecEnv(ctx) {
     QCTL_ROOT: '/tank/rocky',
     QCTL_PLATFORM_MODULE: `/usr/local/lib/qctl/${ctx.platformBasename}`,
     QCTL_LIB_DIR: '/usr/local/lib/qctl',
-    TANK_ROOT: LOCAL_TANK_ROOT,
+    APP_ROOT: LOCAL_APP_ROOT,
     // Nested podman inside the appliance — keep its logs quiet too.
     CONTAINERS_LOG_LEVEL: 'fatal',
   }

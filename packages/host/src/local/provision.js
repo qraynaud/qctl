@@ -39,9 +39,9 @@ sed -i "/^\${APPS_USER}:/d" /etc/subuid /etc/subgid 2>/dev/null || true
 usermod --add-subuids "${ctx.appsSubuid.start}-${subUidLast}" "$APPS_USER"
 usermod --add-subgids "${ctx.appsSubgid.start}-${subGidLast}" "$APPS_USER"
 mkdir -p /usr/local/lib/rocky
-printf '%s\\n' "TANK_ROOT=/tank/rocky/volumes" \\
+printf '%s\\n' "APP_ROOT=/tank/rocky/volumes" \\
   > /usr/local/lib/rocky/local-overrides.env
-export TANK_ROOT=/tank/rocky/volumes
+export APP_ROOT=/tank/rocky/volumes
 mkdir -p "${home}/.config/containers/containers.conf.d"
 cp /etc/containers/containers.conf.d/90-ci-uts.conf \\
   "${home}/.config/containers/containers.conf.d/90-ci-uts.conf"
