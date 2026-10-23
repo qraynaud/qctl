@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 import { z } from 'zod'
 
-import { COMMON_PROVISION, PROVISION_TARGETS } from './load.js'
+import { COMMON_PROVISION } from './load.js'
 import { BUILTIN_ENVIRONMENTS, isProductionEnv } from './production.js'
 import { parseProvisionYaml } from './yaml.js'
 
@@ -16,23 +16,21 @@ export { BUILTIN_ENVIRONMENTS, isProductionEnv } from './production.js'
 /** @import { YamlMapping } from '../yaml.js' */
 
 /**
- * Names that collide with provision layer basenames (not usable as env or profile keys).
- * @param {string} name
+ * Formerly reserved layer basenames. Prefixed files (`env-*` / `target-*` /
+ * `profile-*`) remove collisions — always false; kept for call-site compat.
+ * @param {string} _name
  * @returns {boolean}
  */
-export function isReservedProvisionName(name) {
-  return name === COMMON_PROVISION || PROVISION_TARGETS.has(name)
+export function isReservedProvisionName(_name) {
+  return false
 }
 
-/** Env / profile map keys (basename-safe, not reserved layer names). */
+/** Env / profile map keys (basename-safe; no path separators). */
 export const provisionLayerNameSchema = z
   .string()
   .trim()
   .min(1)
   .regex(/^[^./\\]+$/, 'must not contain "." or "/"')
-  .refine((n) => !isReservedProvisionName(n), {
-    message: 'reserved for provision layer basename (common / workstation / proxmox)',
-  })
 
 export const environmentSpecSchema = z.strictObject({
   production: z.boolean().default(false),
@@ -53,7 +51,8 @@ export const qctlHostMetaFieldsSchema = z.strictObject({
     .record(provisionLayerNameSchema, profileSpecSchema)
     .refine((m) => Object.keys(m).length > 0, { message: 'must not be empty when present' })
     .optional(),
-  'default-profile': z.string().trim().min(1).optional(),
+  /** string = default; null = require `-p` (even with 1 profile); omit = sole profile or null */
+  'default-profile': z.union([z.string().trim().min(1), z.null()]).optional(),
 })
 
 /** @typedef {z.infer<typeof environmentSpecSchema>} EnvironmentSpec */
@@ -65,7 +64,7 @@ export const qctlHostMetaFieldsSchema = z.strictObject({
  * @property {Record<string, EnvironmentSpec>} environments
  * @property {Record<string, ProfileSpec>} profiles
  * @property {string | null} defaultProfile
- *   effective default key, or null if multi without default-profile
+ *   effective default key, or null when unset / explicit `default-profile: null`
  */
 
 /**
@@ -116,7 +115,9 @@ export function enrichQctlHostMetaFields(fields) {
   const environments = rawEnvs ?? cloneBuiltinEnvironments()
   const profiles = rawProfiles ?? cloneBuiltinProfiles()
   const keys = Object.keys(profiles)
-  const defaultProfile = rawDefault ?? (keys.length === 1 ? keys[0] : null)
+  // Explicit `null` keeps no default (require `-p`). Omitted → sole profile, else null.
+  const defaultProfile =
+    rawDefault !== undefined ? rawDefault : keys.length === 1 ? (keys[0] ?? null) : null
   return { ...rest, environments, profiles, defaultProfile }
 }
 
@@ -187,8 +188,12 @@ export function loadQctlHostMeta(root) {
     /** @type {z.input<typeof qctlHostMetaFieldsSchema>} */ ({
       environments: qctl?.environments,
       profiles: qctl?.profiles,
-      'default-profile':
-        typeof qctl?.['default-profile'] === 'string' ? qctl['default-profile'] : undefined,
+      'default-profile': (() => {
+        const v = qctl?.['default-profile']
+        if (v === null) return null
+        if (typeof v === 'string') return v
+        return undefined
+      })(),
     }),
   )
   if (!parsed.success) {
@@ -215,8 +220,7 @@ export function resolveProfile(opts) {
   if (!key) {
     const keys = Object.keys(meta.profiles).sort()
     throw new Error(
-      `profile required: multiple profiles defined and qctl.default-profile is unset `
-        + `(choose one of: ${keys.join(', ')})`,
+      `profile required: qctl.default-profile is unset (pass -p; known: ${keys.join(', ')})`,
     )
   }
   const spec = meta.profiles[key]

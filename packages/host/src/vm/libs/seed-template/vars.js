@@ -25,6 +25,7 @@ import { withTrailingNewline } from './util.js'
  *   allowMissingTier0?: boolean,
  *   env?: string,
  *   target?: string,
+ *   provisionProfile?: string,
  *   provision?: LoadedProvision | null,
  *   profile?: string,
  *   initTankPools?: string[],
@@ -36,23 +37,29 @@ export async function buildVars({
   allowMissingTier0,
   env = 'dev',
   target = 'workstation',
+  provisionProfile = 'lab',
   provision = null,
   profile = 'appliance',
   initTankPools,
   initTankForce = false,
 }) {
-  const sec = provision || (await loadEnvProvision({ env, target }))
+  const sec = provision || (await loadEnvProvision({ env, target, profile: provisionProfile }))
 
   if (!sec.sshAuthorizedKeys) {
     die(
       `no admin SSH public key `
-        + `(set ssh.authorized_keys in provision/${env}.yaml, `
+        + `(set ssh.authorized_keys in provision/env-${env}.yaml or profile-*.yaml, `
         + `or place id_ed25519.pub / id_rsa.pub in ~/.ssh)`,
     )
   }
 
   /** @type {ResolvedDisks} */
-  const resolvedDisks = await resolveProvisionDisks({ env, target, provision: sec })
+  const resolvedDisks = await resolveProvisionDisks({
+    env,
+    target,
+    profile: provisionProfile,
+    provision: sec,
+  })
 
   /** @type {Record<string, string | Buffer | undefined>} */
   const guest = { ...(sec.guest || {}) }

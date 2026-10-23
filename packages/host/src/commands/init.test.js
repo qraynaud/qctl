@@ -24,7 +24,7 @@ describe('init command', () => {
     spyOn(initMod, 'initInstance').mockReturnValue({
       root: '/tmp/demo',
       written: ['mise.toml'],
-      skipped: ['provision/dev.yaml'],
+      skipped: ['provision/env-dev.yaml'],
     })
     /** @type {string[]} */
     const lines = []

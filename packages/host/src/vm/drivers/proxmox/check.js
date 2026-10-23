@@ -43,14 +43,17 @@ function contentTypes(entry) {
 
 /**
  * @param {VmArgv} argv
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>}
  */
 export async function check(argv) {
   const report = createCheckReport('proxmox')
   const envName = String(argv.env || 'dev')
 
   report.section('Provision / API config')
-  const { config, errors, usable } = await tryLoadProxmoxConfig({ env: envName })
+  const { config, errors, usable } = await tryLoadProxmoxConfig({
+    env: envName,
+    profile: String(argv.profile || 'lab'),
+  })
   for (const e of errors) report.fail(e)
   if (config) {
     if (config.apiUrl && /^https?:\/\//i.test(config.apiUrl)) report.ok(`apiUrl ${config.apiUrl}`)
@@ -64,7 +67,11 @@ export async function check(argv) {
   }
 
   report.section(`Seed config (provision/, env=${envName}, target=proxmox)`)
-  const loaded = await loadEnvProvisionSafe({ env: envName, target: 'proxmox' })
+  const loaded = await loadEnvProvisionSafe({
+    env: envName,
+    target: 'proxmox',
+    profile: String(argv.profile || 'lab'),
+  })
   if (!loaded.ok) {
     report.fail(loaded.error)
   } else {
@@ -223,7 +230,7 @@ export async function check(argv) {
               + `nics: ${eth.join(', ') || 'none'})`,
           )
           report.fail(
-            `host: create Linux bridge ${bridge} (System → Network), or fix proxmox.net.*.bridge in ${envName}.proxmox.yaml`,
+            `host: create Linux bridge ${bridge} (System → Network), or fix proxmox.net.*.bridge in profile-*.yaml / target-proxmox.yaml`,
           )
         }
       }
@@ -238,5 +245,5 @@ export async function check(argv) {
   report.ok('init-tank + up: holder <name>-disks via rename/promote (disks stay attached)')
   report.ok('disk topology from provision disks: + platform defaults (attach-mode)')
 
-  report.finish()
+  return report.finish()
 }

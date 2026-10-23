@@ -1,18 +1,16 @@
 # Provision YAML
 
-Committable topology for an instance: `disks`, networking, users, repo, packages, and
-hypervisor sizing. Secrets stay out of the YAML — use `!env NAME` and resolve values
-from `provision/.env.<QCTL_ENV>` (see [secrets.md](./secrets.md)).
+What goes in `provision/` for an instance: disks, networking, users, repo,
+packages, and hypervisor sizing. Keep secrets out of YAML — use `!env NAME` and
+put values in `provision/.env.<env>` (see [secrets.md](./secrets.md)).
 
-`qctl init` writes a minimal starter under `provision/`. This page documents **every**
-schema field, mainly via commented samples.
+`qctl init` writes a starter tree. This page lists every schema field (commented
+samples below).
 
-## Profiles (env + target)
+## Profiles
 
-Host commands select env and hypervisor target **only** by **profile**
-(`qctl … --profile` / `-p`).
-
-Declare them under `qctl:` in **`provision/common.yaml` only** (bootstrap SoT):
+Host commands pick env + hypervisor with **`-p` / `--profile`** only. Declare
+profiles in **`provision/common.yaml`**:
 
 ```yaml
 qctl:
@@ -28,64 +26,53 @@ qctl:
   default-profile: lab
 ```
 
-| Field | Role |
-|-------|------|
-| `environments` | Open map of env names. Optional `production: true` (default `false`). |
-| `profiles` | Named `{ env, target }` pairs (`target`: `workstation` \| `proxmox`). |
-| `default-profile` | Profile key used when `--profile` is omitted. |
+| Field | Meaning |
+|-------|---------|
+| `environments` | Named envs. Optional `production: true` (default `false`). |
+| `profiles` | Named `{ env, target }` (`target`: `workstation` \| `proxmox`). |
+| `default-profile` | Used when you omit `-p`. |
 
-**Built-ins when omitted:** environments `{ dev, prod: { production: true } }`,
-profiles `{ default: { env: dev, target: workstation } }` (so a fresh init works with
-`--profile` omitted).
+If you omit environments/profiles, built-ins apply: envs `dev` + `prod`, profile
+`default` → `dev` / `workstation`. With several profiles and no `default-profile`,
+`-p` is required. With exactly one profile, that name is the default.
 
-**Default profile key:** `default-profile` if set; else the sole profile key if
-the map has exactly one entry; else `--profile` is required.
+The selected profile sets `QCTL_ENV` for the command (ambient `$QCTL_ENV` does
+not choose the profile). `qctl local …` needs a profile with `target: workstation`.
 
-After resolve, qctl sets internal `env` / `target` / `production` and
-`QCTL_ENV=<profile.env>` for varlock / host-env loads (profile is SoT for the
-command — ambient `$QCTL_ENV` does not pick the profile).
+`production: true` on an env tightens destroy prompts, disk warnings, default VM
+name, and freezes `node_modules` installs (same as `CI=true`).
 
-`qctl local …` requires a profile whose `target` is `workstation`.
+## Files and merge order
 
-**Production flag** (`production: true` on an env) drives destroy confirm, disk
-warnings, Proxmox attach tip, default VM name, and frozen plugin installs.
-Frozen `node_modules` installs: `CI=true` **or** `production: true` on the
-active env (non-production custom envs such as `staging` stay mutable unless CI).
+| File | Put here |
+|------|----------|
+| `provision/common.yaml` | Shared settings + environments / profiles / default-profile |
+| `provision/target-<target>.yaml` | Defaults for that hypervisor |
+| `provision/env-<env>.yaml` | Settings shared by profiles using that env |
+| `provision/profile-<profile>.yaml` | Settings for one profile (wins last) |
+| `provision/.env.schema` | Schema for `!env` keys |
+| `provision/.env.<env>` | Secret values (literals / `vw()`); lab values may be committed |
+| `provision/.env.local` | Machine-local overrides (gitignored) |
 
-Reserved env / profile basenames: `common`, `workstation`, `proxmox` (layer names).
+When you run `qctl vm …` / `qctl local …` / seed:
 
-## Files and load order
-
-| File | Role |
-|------|------|
-| `provision/common.yaml` | Shared foundation + `qctl.environments` / `profiles` / `default-profile` |
-| `provision/<target>.yaml` | Target layer, e.g. `workstation.yaml` / `proxmox.yaml` |
-| `provision/<env>.yaml` | Env layer for the profile’s `env`, e.g. `dev.yaml` |
-| `provision/<env>.<target>.yaml` | Most-specific overlay, e.g. `dev.workstation.yaml` |
-| `provision/.env.schema` | Host graph schema for keys used by `!env` |
-| `provision/.env.<env>` | Host values (literals / `vw()`); committed lab values OK |
-| `provision/.env.local` | Machine-local host overrides (gitignored) |
-
-Load algorithm (`qctl vm …`, `qctl local …`, seed) after profile resolve:
-
-1. **Deep-merge** present layers in this order (later wins; maps merge by key;
-   **arrays are replaced** by the later file):
-   `common.yaml` → `<target>.yaml` → `<env>.yaml` → `<env>.<target>.yaml`.
-2. At least one of those four files must exist (any combination is fine).
+1. Deep-merge present layers (later wins; maps merge by key; **arrays replace**):
+   `common.yaml` → `target-<target>.yaml` → `env-<env>.yaml` → `profile-<profile>.yaml`.
+2. At least one of those four files must exist.
 3. Drop the opposite hypervisor block (`workstation` vs `proxmox`).
-4. Resolve every `!env` from process env + `provision/.env.*` graph to a
-   `Buffer` (empty process values do not win; missing keys error).
-5. Validate against the provision schema (below).
+4. Resolve every `!env` from process env + `provision/.env.*` (missing keys error;
+   empty string is allowed).
+5. Validate against the schema below.
 
 ```text
-provision/common.yaml           ← foundation + host meta (profiles)
-provision/workstation.yaml            ← target (before env)
-provision/dev.yaml              ← env (wins over target)
-provision/dev.workstation.yaml        ← env+target (always last)
+provision/common.yaml
+provision/target-workstation.yaml
+provision/env-dev.yaml
+provision/profile-lab.yaml          ← wins last
 ```
 
-Prefer shared topology and profiles in `common.yaml`, target-wide knobs in
-`<target>.yaml`, env knobs in `<env>.yaml`, and env+target specifics in the overlay.
+Typical split: shared disks/networking in `common` or `env-*`, CPU/memory or
+Proxmox defaults in `target-*`, disk sizes/ids and host IPs in `profile-*`.
 
 ## `!env` tag
 
@@ -93,25 +80,21 @@ Prefer shared topology and profiles in `common.yaml`, target-wide knobs in
 disks:
   tanks:
     tank:
-      passphrase: !env TANK_PASSPHRASE   # → Tier-0 tank_passphrase_tank
+      passphrase: !env TANK_PASSPHRASE
 
 repo:
-  # CI / process env cannot hold newlines — store base64, decode at resolve:
+  # Multiline secrets: store base64 in .env, decode here:
   deploy_key: !env { name: DEPLOY_KEY, encoding: base64 }
 ```
 
-- Scalar form: `!env NAME` (utf8).
-- Mapping form: `!env { name: NAME, encoding: base64 }` (`encoding` optional;
-  one of `utf8` | `base64` | `hex` | `latin1` | `ascii`; default `utf8`).
-- Resolves to a `Buffer` (`Buffer.from(env[NAME], encoding)`). Seed writers accept
-  `Buffer | string` and encode Tier-0 `write_files` appropriately.
-- `NAME` must exist in the merged host env (graph and/or process).
-- Empty string is allowed (optional slots); **unset** is an error.
-- Name the host keys however you like; Tier-0 guest names (`tank_passphrase_<poolId>`,
-  `ADMIN_USERNAME`, …) are assigned from the **resolved YAML**, not from your
-  `.env` key spelling.
+- `!env NAME` — utf8 value from the host env graph / process.
+- `!env { name: NAME, encoding: base64 }` — optional encoding (`utf8` \| `base64` \|
+  `hex` \| `latin1` \| `ascii`; default `utf8`).
+- `NAME` must be set (empty string OK; unset is an error).
+- Guest first-boot names (`tank_passphrase_<poolId>`, `ADMIN_USERNAME`, …) come
+  from the resolved YAML fields, not from how you spell the `.env` key.
 
-## Full base sample (`provision/dev.yaml`)
+## Full base sample (`provision/env-dev.yaml`)
 
 Every supported top-level key and nested field. Omit anything optional — defaults
 are noted in comments. Copy and trim for real instances.
@@ -265,30 +248,34 @@ files:
     content: |
       key=value
 
-# --- Hypervisor sizing in the *base* file is unusual; prefer overlays (below). ---
-# workstation: / proxmox: may appear here; the inactive one is stripped for the profile target.
+# Hypervisor blocks usually live in target-*.yaml / profile-*.yaml (below).
+# workstation: / proxmox: — the inactive one is stripped for the selected profile.
 ```
 
-## Overlay samples
+## Layer samples
 
-### `provision/dev.workstation.yaml` (profile `target: workstation`)
+### `provision/target-workstation.yaml`
 
 ```yaml
-# Deep-merged onto provision/dev.yaml for libvirt / qctl local (workstation target).
-# Arrays in this file replace the base array; maps merge by key.
+# Defaults for profiles with target: workstation.
 
 workstation:
   cpu: 2                     # vCPUs (1–256)
   memory: 4096               # MiB (256–1048576)
+```
+
+### `provision/profile-lab.yaml`
+
+```yaml
+# Overrides for profile "lab" only.
 
 networking:
   vlans:
     vlan2:
-      # Override / add host-side IPv4 for this VLAN only on workstation
       ipv4: 10.42.2.2
 ```
 
-### `provision/dev.proxmox.yaml` (profile `target: proxmox`)
+### `provision/target-proxmox.yaml`
 
 ```yaml
 proxmox:
@@ -310,36 +297,31 @@ proxmox:
       # mac: aa:bb:cc:dd:ee:ff
       # vlan: 2                # alias of tag
 
-networking:
-  vlans:
-    vlan2:
-      # VLAN id must be carried by proxmox.net.<link> tag or trunks
-      ipv4: 10.0.2.2
 ```
 
-### Overlay merge rules (examples)
+### How merges behave
 
 ```yaml
-# base networking.ports.http.forward: 8088
-# overlay:
+# Earlier layer had networking.ports.http.forward: 8088
+# Later layer:
 networking:
   ports:
     http:
-      forward: 18088         # merges → only forward changes; port/dnat kept from base
+      forward: 18088         # only forward changes; port/dnat kept from earlier
 
-# base packages.distro: [nano]
-# overlay:
+# Earlier layer had packages.distro: [nano]
+# Later layer:
 packages:
-  distro: [nano, git]        # replaces entire distro list (arrays do not append)
+  distro: [nano, git]        # whole list replaced (arrays do not append)
 ```
 
 ## Minimal valid base
 
-`networking.ports` is the only required topology. Everything else can be omitted
-(including `disks:` — resolve then uses the platform OS default only):
+Only `networking.ports` is required. You can omit everything else (including
+`disks:` — then you get the platform OS disk default only):
 
 ```yaml
-# common.yaml (or this file):
+# common.yaml (or any layer):
 qctl:
   platform: rocky
 
@@ -354,10 +336,10 @@ repo:
   deploy_key: !env DEPLOY_KEY
 ```
 
-Add a `disks:` block (see full sample) before `qctl vm init-tank` / appliance up with
-persistent volumes. Default `admin` / `apps`, default `eth0` uplink, and key-only admin
-(SSH via `ssh.authorized_keys` or the host pubkey fallback). Set
-`users.admin.password` (or SSH in and `passwd`) before Cockpit password login.
+Add `disks:` (see full sample) before `qctl vm init-tank` or an appliance up that
+needs persistent volumes. Defaults: admin/apps users, `eth0` uplink, key-only
+admin SSH (`ssh.authorized_keys` or `~/.ssh` pubkey). Set `users.admin.password`
+(or `passwd` after SSH) for Cockpit password login.
 
 ## Lifecycle (disks)
 

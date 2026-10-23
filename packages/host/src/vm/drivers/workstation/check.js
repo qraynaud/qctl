@@ -30,7 +30,7 @@ async function checkBin(report, name, hint) {
 
 /**
  * @param {VmArgv} argv
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>}
  */
 export async function check(argv) {
   const report = createCheckReport('workstation')
@@ -97,7 +97,11 @@ export async function check(argv) {
   const target = argv.target || 'workstation'
   report.section(`Config (provision/, env=${envName}, target=${target})`)
   report.ok('instance provision/ found')
-  const loaded = await loadEnvProvisionSafe({ env: envName, target })
+  const loaded = await loadEnvProvisionSafe({
+    env: envName,
+    target,
+    profile: String(argv.profile || 'lab'),
+  })
   if (!loaded.ok) {
     report.fail(loaded.error)
   } else {
@@ -124,5 +128,5 @@ export async function check(argv) {
     }
   }
 
-  report.finish()
+  return report.finish()
 }

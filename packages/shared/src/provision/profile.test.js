@@ -20,10 +20,10 @@ afterEach(() => {
 })
 
 describe('isReservedProvisionName', () => {
-  test('reserves layer basenames', () => {
-    expect(isReservedProvisionName('common')).toBe(true)
-    expect(isReservedProvisionName('workstation')).toBe(true)
-    expect(isReservedProvisionName('proxmox')).toBe(true)
+  test('prefixed layers → no reserved env/profile keys', () => {
+    expect(isReservedProvisionName('common')).toBe(false)
+    expect(isReservedProvisionName('workstation')).toBe(false)
+    expect(isReservedProvisionName('proxmox')).toBe(false)
     expect(isReservedProvisionName('dev')).toBe(false)
   })
 })
@@ -87,6 +87,26 @@ describe('loadQctlHostMeta', () => {
     expect(loadQctlHostMeta(root).defaultProfile).toBeNull()
   })
 
+  test('explicit default-profile: null → null even with one profile', () => {
+    const root = makeTempDir()
+    temps.push(root)
+    writeFile(
+      root,
+      'provision/common.yaml',
+      [
+        'qctl:',
+        '  environments:',
+        '    dev: {}',
+        '  profiles:',
+        '    lab: { env: dev, target: workstation }',
+        '  default-profile: null',
+        '',
+      ].join('\n'),
+    )
+    expect(loadQctlHostMeta(root).defaultProfile).toBeNull()
+    expect(() => resolveProfile({ root })).toThrow(/profile required/)
+  })
+
   test('honors default-profile', () => {
     const root = makeTempDir()
     temps.push(root)
@@ -108,20 +128,7 @@ describe('loadQctlHostMeta', () => {
     expect(loadQctlHostMeta(root).defaultProfile).toBe('lab')
   })
 
-  test('rejects reserved environment name', () => {
-    const root = makeTempDir()
-    temps.push(root)
-    writeFile(
-      root,
-      'provision/common.yaml',
-      'qctl:\n  environments:\n    workstation: {}\n  profiles:\n    x: { env: workstation, target: workstation }\n',
-    )
-    // Zod record keys surface as "Invalid key in record" (path includes the bad name).
-    expect(() => loadQctlHostMeta(root)).toThrow(/Invalid key in record/)
-    expect(() => loadQctlHostMeta(root)).toThrow(/environments\.workstation/)
-  })
-
-  test('rejects reserved profile name', () => {
+  test('allows env/profile keys that match former layer basenames', () => {
     const root = makeTempDir()
     temps.push(root)
     writeFile(
@@ -130,14 +137,19 @@ describe('loadQctlHostMeta', () => {
       [
         'qctl:',
         '  environments:',
-        '    dev: {}',
+        '    workstation: {}',
+        '    common: {}',
         '  profiles:',
-        '    common: { env: dev, target: workstation }',
+        '    common: { env: common, target: workstation }',
+        '    workstation: { env: workstation, target: workstation }',
+        '  default-profile: common',
         '',
       ].join('\n'),
     )
-    expect(() => loadQctlHostMeta(root)).toThrow(/Invalid key in record/)
-    expect(() => loadQctlHostMeta(root)).toThrow(/profiles\.common/)
+    const meta = loadQctlHostMeta(root)
+    expect(meta.environments.workstation).toEqual({ production: false })
+    expect(meta.profiles.common).toEqual({ env: 'common', target: 'workstation' })
+    expect(meta.defaultProfile).toBe('common')
   })
 
   test('rejects empty environments map when present', () => {

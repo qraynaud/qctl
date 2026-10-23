@@ -18,6 +18,8 @@ export type LoadedProvisionGuest = Record<string, string | Buffer | undefined>
 export type LoadedProvision = {
   env: string
   target: 'workstation' | 'proxmox'
+  /** Provision profile key (`qctl.profiles`). */
+  profile: string
   provisionDir: string
   path: string
   paths: string[]

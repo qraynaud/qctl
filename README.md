@@ -38,16 +38,14 @@ That writes schemas, root `package.json` (varlock plugin deps → `node_modules`
 `provision/`, `applications/` / `networks/` stubs, and a matching `mise.toml`
 (existing `mise.toml` is left alone unless you pass `--force`).
 
-Edit provision layers (`common.yaml`, `<target>.yaml`, `<env>.yaml`,
-`<env>.<target>.yaml` — at least one; merge order in
-[docs/provision.md](docs/provision.md)) for networking, users, tank, and
-hypervisor sizing.
+Edit `provision/` for networking, disks, users, and hypervisor sizing
+(`common.yaml`, `target-*.yaml`, `env-*.yaml`, `profile-*.yaml` — see
+[docs/provision.md](docs/provision.md)).
 
-Varlock `# @plugin` packages must be listed in the instance `package.json`
-`dependencies` (version SoT). In schemas use `# @plugin(@scope/name)` without a
-version pin. qctl installs them into `node_modules` (no npm CLI). Commit
-`package-lock.json` after a local non-production install — CI and envs marked
-`production: true` use a **frozen** lockfile install. Details:
+List varlock `# @plugin` packages in the instance `package.json` `dependencies`.
+In schemas write `# @plugin(@scope/name)` with no version. qctl installs them
+into `node_modules`. Commit `package-lock.json` after a local non-production
+install; CI and `production: true` envs use a frozen lockfile. More:
 [docs/secrets.md](docs/secrets.md), [docs/provision.md](docs/provision.md),
 [packages/guest/README.md](packages/guest/README.md).
 

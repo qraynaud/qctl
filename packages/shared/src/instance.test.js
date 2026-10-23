@@ -29,7 +29,7 @@ describe('instance root detection', () => {
     expect(hasQctlProvision(root)).toBe(false)
 
     mkdirSync(join(root, 'provision'), { recursive: true })
-    writeFileSync(join(root, 'provision', 'dev.yaml'), 'networking: {}\n', 'utf8')
+    writeFileSync(join(root, 'provision', 'env-dev.yaml'), 'networking: {}\n', 'utf8')
     expect(hasQctlProvision(root)).toBe(false)
   })
 
@@ -52,7 +52,7 @@ describe('instance root detection', () => {
     temps.push(root)
     mkdirSync(join(root, 'provision'), { recursive: true })
     writeFileSync(join(root, 'provision', 'broken.yaml'), ':\n  -', 'utf8')
-    writeFileSync(join(root, 'provision', 'dev.yaml'), 'qctl:\n  platform: rocky\n', 'utf8')
+    writeFileSync(join(root, 'provision', 'env-dev.yaml'), 'qctl:\n  platform: rocky\n', 'utf8')
     expect(hasQctlProvision(root)).toBe(true)
   })
 })

@@ -42,6 +42,7 @@ async function platformDiskDefaultsFromModule(modPath) {
  * @param {{
  *   env?: string,
  *   target?: string,
+ *   profile?: string,
  *   provision?: LoadedProvision,
  * }} [opts]
  * @returns {Promise<ResolvedDisks>}
@@ -49,7 +50,8 @@ async function platformDiskDefaultsFromModule(modPath) {
 export async function resolveProvisionDisks(opts = {}) {
   const env = opts.env || opts.provision?.env || 'dev'
   const target = opts.target || opts.provision?.target || 'workstation'
-  const provision = opts.provision || (await loadEnvProvisionOrThrow({ env, target }))
+  const profile = opts.profile || opts.provision?.profile || 'lab'
+  const provision = opts.provision || (await loadEnvProvisionOrThrow({ env, target, profile }))
   const modPath = await ensurePlatformModule({
     env,
     target,
