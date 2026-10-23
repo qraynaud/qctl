@@ -64,9 +64,9 @@ before CI or production (frozen installs require the lockfile).
 
 ### `qctl sync`
 
-Push the current instance working tree to the appliance over SSH (`ssh2` SFTP +
-exec). Env/target come from the selected provision **profile** (see
-[docs/provision.md](../../docs/provision.md)).
+Wait until the profile VM accepts SSH, then push the instance working tree
+(`ssh2` SFTP + exec). Env/target come from the selected provision **profile** (see
+[docs/provision.md](../../docs/provision.md)). On timeout: `qctl vm up`, then retry.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -76,6 +76,7 @@ exec). Env/target come from the selected provision **profile** (see
 | `--host` / `--port` | (derived) | Override endpoint (required for proxmox-target profiles) |
 | `--remote-dir` | `/tank/rocky` | Guest repo path |
 | `--identity` | `~/.ssh/id_*` / agent | Private key |
+| `--ssh-timeout` | `180` | Seconds to wait for SSH before syncing |
 | `--include-tooling` | `false` | Also install `qctl-guest` → `/usr/local/bin/qctl` and `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/` (plus `varlock-local-encrypt` when present) |
 | `--delete` | `true` | Remove guest files absent from this checkout (`--no-delete` to overlay only) |
 | `--dry-run` | `false` | Print plan only |
@@ -190,11 +191,12 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 |------------|-------------|
 | `qctl vm seed` | Build NoCloud ISO in-process (embeds guest binaries; no host ISO tools) |
 | `qctl vm download` | Download/cache the pinned Rocky 9 cloud image |
-| `qctl vm up` | Start existing VM, or create if missing; stream console until ready |
-| `qctl vm down` | ACPI shutdown; wait until shut off (VM stays defined) |
+| `qctl vm up [apps…]` | Start/create VM; with apps/`--all`, wait for SSH then guest `quadlet up` |
+| `qctl vm down [apps…]` | Bare: ACPI shut down VM; with apps/`--all`: guest `quadlet down` only |
 | `qctl vm destroy` | Undefine / delete VM; delete disks unless `--keep-persistent` |
 | `qctl vm init-tank [poolId…]` | One-shot tank prep on a disposable boot disk (keeps `disks.os`); bare = all tanks |
 | `qctl vm status` | Show VM status + SSH hints |
+| `qctl vm ps [apps…]` | VM power state + guest `quadlet ps` (mirror of `local ps`) |
 | `qctl vm ssh-info` | Print SSH connection hints |
 | `qctl vm shell` | Interactive SSH into the VM (same endpoint as sync; Proxmox needs `--host`) |
 | `qctl vm target-check` | Verify host tools (incl. `swtpm` on workstation) / provision / hypervisor |
@@ -214,17 +216,22 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `[apps…]` / `--all` | (none) | After VM ready: guest `qctl quadlet up` for those apps (or every `applications/*/app.yaml`) |
 | `--wipe-os` | `false` | Recreate OS overlay (keep `/vw` + tank vdevs) |
 | `--force-download` | `false` | Re-download cloud image even if cached |
 | `--timeout` | `2700` | Seconds to wait for boot ready |
+| `--ssh-timeout` | `180` | Seconds to wait for SSH before guest quadlet (apps/`--all` only) |
 | `--no-console` | `false` | Do not stream serial / wait for boot |
+| `--host` / `--port` / `--user` | (endpoint) | SSH overrides for guest quadlet (Proxmox needs `--host`) |
 
 #### `qctl vm down`
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--timeout` | `120` | Seconds to wait for shut off after ACPI |
-| `--force` | `false` | Force poweroff if still running after timeout |
+| `[apps…]` / `--all` | (none) | Guest `quadlet down` only (VM stays up). Omit apps → ACPI shut down the VM |
+| `--timeout` | `120` | Seconds to wait for shut off after ACPI (bare down) |
+| `--force` | `false` | Force poweroff if still running after timeout (bare down) |
+| `--ssh-timeout` | `60` | Seconds to wait for SSH before guest quadlet (apps/`--all` only) |
 
 #### `qctl vm destroy`
 

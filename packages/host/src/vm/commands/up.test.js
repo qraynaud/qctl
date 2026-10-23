@@ -1,4 +1,8 @@
+import * as endpointMod from '../../sync/endpoint.js'
+import * as waitMod from '../../sync/wait-ssh.js'
 import * as driversMod from '../drivers/index.js'
+import * as appsMod from '../libs/guest-apps.js'
+import * as quadletMod from '../libs/guest-quadlet.js'
 import * as mod from './up.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
@@ -7,24 +11,71 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 afterEach(() => {
   // @ts-expect-error restore
   driversMod.loadDriver.mockRestore?.()
+  // @ts-expect-error restore
+  appsMod.resolveVmAppSelection.mockRestore?.()
+  // @ts-expect-error restore
+  endpointMod.resolveSyncEndpoint.mockRestore?.()
+  // @ts-expect-error restore
+  waitMod.waitForSsh.mockRestore?.()
+  // @ts-expect-error restore
+  quadletMod.guestQuadletUp.mockRestore?.()
+  // @ts-expect-error restore
+  quadletMod.guestQuadletUpAll.mockRestore?.()
+  // @ts-expect-error restore
+  console.log.mockRestore?.()
 })
 
 describe('vm up command', () => {
   test('exports yargs metadata', () => {
-    expect(mod.command).toBe('up')
+    expect(mod.command).toBe('up [apps..]')
+    expect(mod.describe).toMatch(/quadlet/i)
   })
 
-  test('handler loads driver and calls up', async () => {
+  test('handler loads driver and calls up (VM only)', async () => {
     const up = async () => {}
     const spy = spyOn({ up }, 'up')
     spyOn(driversMod, 'loadDriver').mockResolvedValue(
       /** @type {VmDriver} */ (/** @type {never} */ ({ up: spy })),
     )
+    spyOn(appsMod, 'resolveVmAppSelection').mockReturnValue({ mode: 'none' })
+    spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
       /** @type {VmArgv} */ (
-        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })
+        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky', profile: 'lab' })
       ),
     )
     expect(spy).toHaveBeenCalled()
+  })
+
+  test('handler waits for SSH then guestQuadletUp when apps given', async () => {
+    const up = async () => {}
+    spyOn(driversMod, 'loadDriver').mockResolvedValue(
+      /** @type {VmDriver} */ (/** @type {never} */ ({ up })),
+    )
+    spyOn(appsMod, 'resolveVmAppSelection').mockReturnValue({
+      mode: 'list',
+      apps: ['demo'],
+    })
+    spyOn(endpointMod, 'resolveSyncEndpoint').mockResolvedValue({
+      host: '127.0.0.1',
+      port: 2222,
+      username: 'rocky',
+      remoteDir: '/tank/rocky',
+      label: 'rocky@127.0.0.1:2222',
+    })
+    const wait = spyOn(waitMod, 'waitForSsh').mockResolvedValue(undefined)
+    const qUp = spyOn(quadletMod, 'guestQuadletUp').mockResolvedValue(undefined)
+    spyOn(console, 'log').mockImplementation(() => {})
+    await mod.handler(
+      /** @type {never} */ ({
+        target: 'workstation',
+        env: 'dev',
+        name: 'rocky',
+        profile: 'lab',
+        apps: ['demo'],
+      }),
+    )
+    expect(wait).toHaveBeenCalled()
+    expect(qUp).toHaveBeenCalled()
   })
 })

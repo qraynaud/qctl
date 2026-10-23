@@ -12,7 +12,7 @@ afterEach(() => {
 describe('sync command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('sync')
-    expect(mod.describe).toContain('SSH')
+    expect(mod.describe).toMatch(/Wait for SSH/i)
     expect(typeof mod.builder).toBe('function')
     expect(typeof mod.handler).toBe('function')
   })

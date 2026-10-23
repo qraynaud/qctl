@@ -6,7 +6,7 @@ import { runSync } from '../sync/run.js'
 
 export const command = 'sync'
 export const describe =
-  'Push the instance repo to the appliance over SSH (ssh2); optional guest tooling refresh'
+  'Wait for SSH on the profile VM, then push the instance repo (optional guest tooling refresh)'
 
 /**
  * @param {Argv} yargs
@@ -43,6 +43,11 @@ export function builder(yargs) {
         type: 'string',
         describe: 'SSH private key path (default: ~/.ssh/id_ed25519|id_rsa or ssh-agent)',
       })
+      .option('ssh-timeout', {
+        type: 'number',
+        default: 180,
+        describe: 'Seconds to wait for SSH before syncing (hint: qctl vm up on timeout)',
+      })
       .option('include-tooling', {
         type: 'boolean',
         default: false,
@@ -70,6 +75,7 @@ export function builder(yargs) {
  *   identity?: string
  *   includeTooling?: boolean
  *   delete?: boolean
+ *   sshTimeout?: number
  * }} argv
  */
 export async function handler(argv) {
