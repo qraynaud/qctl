@@ -23,7 +23,7 @@ describe('quadlet down command', () => {
   test('handler runs runDown for each app', async () => {
     /** @type {string[]} */
     const downed = []
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     spyOn(lifecycleMod, 'runDown').mockImplementation((_ctx, app) => {

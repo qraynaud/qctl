@@ -22,7 +22,7 @@ describe('secret sync command', () => {
   })
 
   test('handler delegates to runSecretSync', async () => {
-    spyOn(cliMod, 'runSecretCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runSecretCommand').mockImplementation(async (fn) => {
       await fn('/repo')
     })
     const runSecretSync = spyOn(syncMod, 'runSecretSync').mockResolvedValue({

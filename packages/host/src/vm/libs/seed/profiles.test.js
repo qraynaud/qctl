@@ -8,7 +8,7 @@ describe('packagesForSeedProfile', () => {
     const pkgs = {
       distro: ['nano'],
       pipx: [{ package: 'cowsay', inject: [] }],
-      http: [{ url: 'https://example.com/bw.zip', bin: 'bw', dest: null, test: null }],
+      http: [{ url: 'https://example.com/bw.zip', bin: 'bw' }],
     }
     expect(packagesForSeedProfile('init-tank', pkgs, 'hg')).toEqual(pkgs)
     const appliance = packagesForSeedProfile('appliance', pkgs, 'hg')

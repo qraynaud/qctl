@@ -1,11 +1,11 @@
-import { createContext } from '../context.js'
+import { createTestContext } from '../context.test-helpers.js'
 import { StageError } from '../errors.js'
 import poweroff from './poweroff.js'
 import { describe, expect, spyOn, test } from 'bun:test'
 
 describe('poweroff stage', () => {
   test('plan lists sync + poweroff', () => {
-    expect(poweroff.plan(createContext({ env: { QCTL_ENV: 'dev' }, log: () => {} }))).toEqual([
+    expect(poweroff.plan(createTestContext({ log: () => {} }))).toEqual([
       'sync; systemctl poweroff --no-block',
     ])
   })
@@ -14,8 +14,7 @@ describe('poweroff stage', () => {
     spyOn(Bun, 'sleep').mockResolvedValue(undefined)
     /** @type {string[][]} */
     const calls = []
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       exec: async (argv) => {
         calls.push(argv)
@@ -31,8 +30,7 @@ describe('poweroff stage', () => {
 
   test('run falls back to poweroff and throws if both fail', async () => {
     spyOn(Bun, 'sleep').mockResolvedValue(undefined)
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       exec: async (argv) => {
         if (argv[0] === 'sync') return { code: 0, stdout: '', stderr: '' }

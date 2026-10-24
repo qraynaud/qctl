@@ -14,21 +14,11 @@ export const describe =
  */
 export function builder(yargs) {
   return yargs
-    .option('root', {
-      type: 'string',
-      describe: 'Instance root ($QCTL_ROOT, else cwd walk-up, else /tank/rocky)',
-    })
     .option('env', {
       type: 'string',
-      describe: 'Override QCTL_ENV for schema @import (default: detect from process / .env)',
+      describe: 'Override env label for schema @import',
     })
-    .epilog(
-      [
-        'Prefers root via passwordless sudo; without sudo, checks the rootless store only.',
-        'Uses the same discovery as `secret sync`. Does not write secrets.',
-        'On drift: qctl secret sync --restart',
-      ].join('\n'),
-    )
+    .epilog('On drift: qctl secret sync --restart')
 }
 
 /**
@@ -36,7 +26,7 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   try {
-    await runSecretCommand(argv, async (root) => {
+    await runSecretCommand(async (root) => {
       const report = await runSecretCheck({
         root: resolve(root),
         qctlEnv: typeof argv.env === 'string' ? argv.env : undefined,

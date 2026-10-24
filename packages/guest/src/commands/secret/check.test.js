@@ -22,7 +22,7 @@ describe('secret check command', () => {
   })
 
   test('handler sets exitCode 1 when report is not ok', async () => {
-    spyOn(cliMod, 'runSecretCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runSecretCommand').mockImplementation(async (fn) => {
       await fn('/instance')
     })
     spyOn(checkMod, 'runSecretCheck').mockResolvedValue({

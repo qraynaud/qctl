@@ -14,10 +14,6 @@ export const describe =
  */
 export function builder(yargs) {
   return yargs
-    .option('root', {
-      type: 'string',
-      describe: 'Instance root ($QCTL_ROOT, else cwd walk-up, else /tank/rocky)',
-    })
     .option('dry-run', { type: 'boolean', default: false, describe: 'Print actions only' })
     .option('restart', {
       type: 'boolean',
@@ -26,19 +22,13 @@ export function builder(yargs) {
     })
     .option('env', {
       type: 'string',
-      describe: 'Override QCTL_ENV for schema @import(..., enabled=eq($QCTL_ENV,…))',
+      describe: 'Override env label for schema @import',
     })
     .epilog(
       [
-        'Prefers root via passwordless sudo (shared varlock plugin cache + rootful secrets).',
-        'Without sudo (rootless ExecStartPre as apps): syncs the rootless store only.',
-        'Podman secret name = schema key as-is (CADDY_DNS → CADDY_DNS).',
-        'Store follows applications/<app>/app.yaml engine: (rootful → rootful store; else rootless).',
-        'Tag `# @tag(cross-engine)` to write the secret into both stores (shared across engines).',
-        'Unit schemas: applications/<app>/<unit>/.env.schema and common/<lib>/.env.schema.',
-        'Labels each secret qctl.sha256=… so unchanged values are skipped; `secret check` compares them.',
-        'Day-2 after vault changes: qctl secret check && qctl secret sync --restart',
-        'Quadlet hook:  ExecStartPre=qctl secret sync',
+        'Prefers root via passwordless sudo; without sudo, syncs the rootless store only.',
+        'After vault changes: qctl secret check && qctl secret sync --restart',
+        'Quadlet hook: ExecStartPre=qctl secret sync',
       ].join('\n'),
     )
 }
@@ -48,7 +38,7 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   try {
-    await runSecretCommand(argv, async (root) => {
+    await runSecretCommand(async (root) => {
       await runSecretSync({
         root: resolve(root),
         dryRun: Boolean(argv.dryRun),

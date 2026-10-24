@@ -22,6 +22,8 @@
  * Changed-files loose types (warnings only):
  * - `git status` working-copy `.js` / `.ts` (not `.d.ts`) that use `any` / `unknown` / bare `object`
  *   should prefer a qualified type unless the loose type is fully justified
+ * - Test files (`*.test.js` / `*.test.ts` / `*.spec.js` / `*.spec.ts`) and
+ *   `*.test-helpers.{js,ts}` / `test-helpers.{js,ts}` are skipped
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1160,12 +1162,24 @@ const findLooseTypeWarnings = (rel, source) => {
 }
 
 /**
+ * Unit / integration test sources and test helpers — skip loose-type warnings
+ * (fixtures cast freely).
+ * @param {string} rel
+ * @returns {boolean}
+ */
+const isTestFile = (rel) =>
+  /\.(test|spec)\.(js|ts)$/.test(rel) || /(^|\/)[^/]*test-helpers\.(js|ts)$/.test(rel)
+
+/**
  * @returns {string[]}
  */
 const checkChangedFilesLooseTypes = () => {
   /** @type {string[]} */
   const warnings = []
   for (const rel of listChangedJsTsFiles()) {
+    if (isTestFile(rel)) {
+      continue
+    }
     const full = path.join(ROOT, rel)
     if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
       continue

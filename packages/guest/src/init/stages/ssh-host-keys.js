@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import { StageError } from '../errors.js'
 import { decodeBootstrapBytes } from './lib/bootstrap.js'
-import { detectQctlEnv, envString } from './lib/credentials.js'
+import { detectQctlEnv, secretString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -64,7 +64,7 @@ export default {
    */
   plan(ctx) {
     return [
-      `Tier-0 SSH_HOST_KEYS (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      `Tier-0 SSH_HOST_KEYS (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'if SSH_HOST_KEYS set → extract into /etc/ssh; else ssh-keygen -A',
     ]
   },
@@ -77,7 +77,7 @@ export default {
     await mkdir('/run/rocky', { recursive: true })
     await ensureHostKeysOnDisk(ctx)
 
-    const raw = envString(ctx.env, 'SSH_HOST_KEYS')
+    const raw = secretString(ctx.secrets, 'SSH_HOST_KEYS')
     if (!raw) {
       ctx.log(
         'rocky-ssh-host-keys: SSH_HOST_KEYS empty — keeping freshly generated host keys (set ssh.host_keys in provision to persist)',

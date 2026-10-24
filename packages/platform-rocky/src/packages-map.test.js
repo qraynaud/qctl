@@ -13,6 +13,7 @@ describe('rockyPackagesMap', () => {
     expect(rockyPackagesMap.openssh?.distro).toEqual(['openssh-server'])
     expect(rockyPackagesMap.mercurial?.needs).toEqual(['pipx'])
     expect(rockyPackagesMap.cockpit?.distro).toContain('cockpit')
+    expect(rockyPackagesMap['host-tools']?.distro).toContain('tar')
   })
 
   test('xfsprogs aliases to xfs', () => {

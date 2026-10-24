@@ -1,3 +1,4 @@
+import { packageReadme, readScaffoldTemplate, renderTemplate, treeEnvSchema } from './templates.js'
 import {
   GITIGNORE,
   PROVISION_COMMON_YAML,
@@ -6,11 +7,7 @@ import {
   PROVISION_README,
   ROOT_ENV_DEV,
   ROOT_ENV_SCHEMA,
-  packageReadme,
-  readScaffoldTemplate,
-  renderTemplate,
-  treeEnvSchema,
-} from './templates.js'
+} from './templates.test-helpers.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('scaffold templates', () => {

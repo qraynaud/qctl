@@ -1,22 +1,12 @@
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { disksJsonSchema } from '@qctl/shared'
 
-import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
+import { disksPackageHintsFrom, resolveDisks } from './disks-json.js'
+import { describe, expect, test } from 'bun:test'
 
-import { loadDisksJson, loadDisksPackageHints } from './disks-json.js'
-import { afterEach, describe, expect, test } from 'bun:test'
+/** @import { DisksJson } from '@qctl/shared' */
 
-/** @type {string[]} */
-const temps = []
-
-afterEach(() => {
-  while (temps.length) {
-    const dir = temps.pop()
-    if (dir) removeTempDir(dir)
-  }
-})
-
-const sample = {
+/** @type {DisksJson} */
+const sample = disksJsonSchema.parse({
   os: { id: 'os', size: '20G' },
   data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs', size: '2G' } },
   tanks: {
@@ -43,34 +33,23 @@ const sample = {
     { id: 'rocky-data0', kind: 'tank', size: '2G', owner: 'tank', role: 'data' },
   ],
   encryptedTankIds: ['tank'],
-}
+})
 
-describe('loadDisksJson / loadDisksPackageHints', () => {
-  test('missing file → null', async () => {
-    expect(await loadDisksJson({ ROCKY_DISKS_JSON: '/tmp/qctl-missing-disks.json' })).toBe(null)
-    expect(await loadDisksPackageHints({ ROCKY_DISKS_JSON: '/tmp/qctl-missing-disks.json' })).toBe(
-      null,
-    )
+describe('resolveDisks / disksPackageHintsFrom', () => {
+  test('undefined → null', () => {
+    expect(resolveDisks(undefined)).toBe(null)
+    expect(disksPackageHintsFrom(undefined)).toBe(null)
   })
 
-  test('parses via shared disksJsonSchema and returns package hints', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const path = join(dir, 'disks.json')
-    writeFileSync(path, JSON.stringify(sample))
-    const disks = await loadDisksJson({ ROCKY_DISKS_JSON: path })
-    expect(disks?.os.id).toBe('os')
-    expect(await loadDisksPackageHints({ ROCKY_DISKS_JSON: path })).toEqual({
+  test('parses via shared disksJsonSchema and returns package hints', () => {
+    expect(resolveDisks(sample)?.os.id).toBe('os')
+    expect(disksPackageHintsFrom(sample)).toEqual({
       filesystems: ['xfs'],
       hasTanks: true,
     })
   })
 
-  test('rejects invalid disks.json', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const path = join(dir, 'disks.json')
-    writeFileSync(path, JSON.stringify({ os: { id: 'os' } }))
-    await expect(loadDisksJson({ ROCKY_DISKS_JSON: path })).rejects.toThrow(/failed to read/)
+  test('rejects invalid disks', () => {
+    expect(() => resolveDisks(/** @type {any} */ ({ os: { id: 'os' } }))).toThrow()
   })
 })

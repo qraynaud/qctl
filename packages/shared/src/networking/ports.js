@@ -1,6 +1,6 @@
 /**
- * Named ports map (provision `networking.ports` / guest `ports.json`).
- * Shared by host seed inject and guest DNAT apply.
+ * Named ports map (provision `networking.ports` / ISO seed config).
+ * Shared by host seed tree and guest DNAT apply.
  */
 import { z } from 'zod'
 

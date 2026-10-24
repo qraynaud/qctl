@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 
 import { StageError } from '../errors.js'
 import { decodeBootstrapBytes } from './lib/bootstrap.js'
-import { detectQctlEnv, envString } from './lib/credentials.js'
+import { detectQctlEnv, secretString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -54,8 +54,8 @@ export default {
    */
   plan(ctx) {
     return [
-      `Tier-0 DEPLOY_KEY (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
-      `hg clone/pull as admin into ${ctx.env.QCTL_ROOT || '/tank/rocky'}`,
+      `Tier-0 DEPLOY_KEY (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
+      `hg clone/pull as admin into ${ctx.osConfig.root}`,
     ]
   },
   /**
@@ -64,7 +64,7 @@ export default {
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('hg-clone', 'must run as root')
 
-    const vcs = (ctx.env.QCTL_REPO_VCS || 'hg').trim()
+    const vcs = (ctx.osConfig.repo.vcs || 'hg').trim()
     if (vcs !== 'hg') {
       throw new StageError(
         'hg-clone',
@@ -72,22 +72,16 @@ export default {
       )
     }
 
-    const repoDir = ctx.env.QCTL_ROOT?.trim() || '/tank/rocky'
-    const hgUrl = ctx.env.QCTL_REPO_URL?.trim() || 'ssh://git@heptapod.lsystems.fr/qraynaud/rocky'
-    const hgBranch = ctx.env.QCTL_REPO_BRANCH?.trim() || ''
-    const hgBin = ctx.env.QCTL_HG_BIN?.trim() || '/usr/local/bin/hg'
-    const deployHost =
-      ctx.env.ROCKY_DEPLOY_SSH_HOST?.trim()
-      || ctx.env.ROCKY_HEPTAPOD_HOST?.trim()
-      || 'heptapod.lsystems.fr'
+    const repoDir = ctx.osConfig.root?.trim() || '/tank/rocky'
+    const hgUrl = ctx.osConfig.repo.url?.trim() || 'ssh://git@heptapod.lsystems.fr/qraynaud/rocky'
+    const hgBranch = ctx.osConfig.repo.branch?.trim() || ''
+    const hgBin = ctx.paths.hgBin?.trim() || '/usr/local/bin/hg'
+    const deployHost = ctx.paths.deploySshHost?.trim() || 'heptapod.lsystems.fr'
 
     try {
       const admin = await resolveAdmin(ctx)
-      const deployKeyPath =
-        ctx.env.ROCKY_DEPLOY_KEY?.trim()
-        || ctx.env.ROCKY_HEPTAPOD_KEY?.trim()
-        || join(admin.home, '.ssh', 'deploy_key')
-      const sshConfig = ctx.env.ROCKY_SSH_CONFIG?.trim() || join(admin.home, '.ssh', 'config')
+      const deployKeyPath = join(admin.home, '.ssh', 'deploy_key')
+      const sshConfig = ctx.paths.sshConfig?.trim() || join(admin.home, '.ssh', 'config')
 
       const hgVer = await ctx.exec([hgBin, 'version', '-q'])
       if (hgVer.code !== 0) {
@@ -95,7 +89,7 @@ export default {
       }
       ctx.log(`rocky-hg: using hg: ${hgBin} (${hgVer.stdout.trim()})`)
 
-      const deployRaw = envString(ctx.env, 'DEPLOY_KEY')
+      const deployRaw = secretString(ctx.secrets, 'DEPLOY_KEY')
       if (!deployRaw) {
         throw new Error(
           'DEPLOY_KEY empty — set provision repo.deploy_key (!env) so seed can inject Tier-0',

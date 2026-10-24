@@ -28,6 +28,7 @@ describe('provisionAppliance', () => {
       appsGid: 900,
       appsSubuid: { start: 900000, count: 65536 },
       appsSubgid: { start: 900000, count: 65536 },
+      repo: { vcs: 'git' },
       guestBin: '/x',
       platformModulePath: '/x',
       platformBasename: 'p.mjs',
@@ -42,5 +43,7 @@ describe('provisionAppliance', () => {
     expect(scripts).toHaveLength(1)
     expect(scripts[0]).toContain('APPS_USER="apps"')
     expect(scripts[0]).toContain('900000')
+    expect(scripts[0]).toContain('/etc/qctl/config.json')
+    expect(scripts[0]).toContain('"root": "/tank/rocky"')
   })
 })

@@ -1,9 +1,9 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { createContext } from '../context.js'
+import { createTestContext, testSeedWithDisks } from '../context.test-helpers.js'
 import { StageError } from '../errors.js'
 import zfsDrill from './zfs-drill.js'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -20,25 +20,29 @@ afterEach(() => {
 
 const tankOptions = {
   pool: { ashift: 12, autotrim: 'off', autoexpand: 'on', failmode: 'continue' },
-  dataset: { compression: 'lz4', atime: 'off', xattr: 'sa', special_small_blocks: 0 },
+  dataset: {
+    compression: 'lz4',
+    atime: 'off',
+    xattr: 'sa',
+    special_small_blocks: 0,
+  },
   acl: { acltype: 'posix', aclmode: 'passthrough', aclinherit: 'passthrough' },
 }
 
 describe('zfs-drill stage', () => {
   test('exports name and plan', () => {
     expect(zfsDrill.name).toBe('zfs-drill')
-    const ctx = createContext({ env: { QCTL_ENV: 'dev' }, log: () => {} })
+    const ctx = createTestContext({ log: () => {} })
     expect(zfsDrill.plan(ctx).some((l) => /disks\.json|export/i.test(l))).toBe(true)
   })
 
-  test('plan notes skip when ROCKY_SKIP_ZFS_DRILL=1', () => {
-    const ctx = createContext({ env: { ROCKY_SKIP_ZFS_DRILL: '1' }, log: () => {} })
+  test('plan notes skip when skipZfsDrill flag set', () => {
+    const ctx = createTestContext({ flags: { skipZfsDrill: true }, log: () => {} })
     expect(zfsDrill.plan(ctx)).toEqual(['skipped (ROCKY_SKIP_ZFS_DRILL=1)'])
   })
 
   test('run requires root', async () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       isRoot: () => false,
     })
@@ -48,21 +52,17 @@ describe('zfs-drill stage', () => {
   test('skips when no tanks in disks.json', async () => {
     const dir = makeTempDir()
     temps.push(dir)
-    const disksPath = join(dir, 'disks.json')
-    writeFileSync(
-      disksPath,
-      JSON.stringify({
-        os: { id: 'os' },
-        data: {},
-        tanks: {},
-        members: [],
-        encryptedTankIds: [],
-      }),
-    )
+    const disks = {
+      os: { id: 'os' },
+      data: {},
+      tanks: {},
+      members: [],
+      encryptedTankIds: [],
+    }
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: { ROCKY_DISKS_JSON: disksPath },
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -78,30 +78,26 @@ describe('zfs-drill stage', () => {
     mkdirSync(mountTank, { recursive: true })
     const canary = join(mountTank, '.rocky-canary')
     writeFileSync(canary, 'canary-body\n')
-    const disksPath = join(dir, 'disks.json')
-    writeFileSync(
-      disksPath,
-      JSON.stringify({
-        os: { id: 'os' },
-        data: {},
-        tanks: {
-          tank: {
-            id: 'tank',
-            mount: mountTank,
-            options: tankOptions,
-            vdevs: {
-              data0: {
-                role: 'data',
-                type: 'single',
-                members: { 'rocky-data0': { id: 'rocky-data0' } },
-              },
+    const disks = {
+      os: { id: 'os' },
+      data: {},
+      tanks: {
+        tank: {
+          id: 'tank',
+          mount: mountTank,
+          options: tankOptions,
+          vdevs: {
+            data0: {
+              role: 'data',
+              type: 'single',
+              members: { 'rocky-data0': { id: 'rocky-data0' } },
             },
           },
         },
-        members: [],
-        encryptedTankIds: [],
-      }),
-    )
+      },
+      members: [],
+      encryptedTankIds: [],
+    }
 
     /** @type {string[][]} */
     const execs = []
@@ -111,12 +107,26 @@ describe('zfs-drill stage', () => {
     mkdirSync(cacheDir, { recursive: true })
     // Non-empty cache so tankEnableBootUnlock does not poll for zed.
     writeFileSync(join(cacheDir, 'tank'), 'tank\t/mnt\n')
-    const ctx = createContext({
-      env: {
-        ROCKY_DISKS_JSON: disksPath,
-        ROCKY_ZFS_LIST_CACHE_DIR: cacheDir,
-        ROCKY_TANK_MOUNT_RETRY_MS: '0',
-      },
+    const initState = join(dir, 'init-state.json')
+    writeFileSync(
+      initState,
+      JSON.stringify({
+        version: 1,
+        tanks: {
+          tank: {
+            mount: mountTank,
+            canary: {
+              line: 'canary-body\n',
+              writtenAt: '2020-01-01T00:00:00.000Z',
+            },
+          },
+        },
+      }),
+    )
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
+      flags: { tankMountRetryMs: 0 },
+      paths: { zfsListCacheDir: cacheDir, initState },
       log: () => {},
       isRoot: () => true,
       exec: async (argv) => {
@@ -166,5 +176,9 @@ describe('zfs-drill stage', () => {
       true,
     )
     expect(execs.some((a) => a[0] === 'zpool' && a[1] === 'import')).toBe(true)
+    const state = JSON.parse(readFileSync(initState, 'utf8'))
+    expect(state.tanks.tank.canary.line).toBe('canary-body\n')
+    expect(state.tanks.tank.canary.writtenAt).toBe('2020-01-01T00:00:00.000Z')
+    expect(state.tanks.tank.canary.drillVerifiedAt).toMatch(/^\d{4}-/)
   })
 })

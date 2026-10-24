@@ -3,26 +3,31 @@
  */
 import { z } from 'zod'
 
-const pkgName = z.string().trim().min(1)
+/** Package / path token: non-empty, no whitespace (incl. padded laziness). */
+const pkgName = z.string().regex(/^\S+$/, 'must be non-empty with no whitespace')
 
-/** `packages.pipx` entry: bare package spec or `{ package, inject? }`. */
-export const packagesPipxItemSchema = z.union([
-  pkgName,
-  z.strictObject({
-    package: pkgName,
-    inject: z.array(pkgName).optional(),
-  }),
-])
+/** Long pipx form (always the parse output shape). */
+const packagesPipxObjectSchema = z.strictObject({
+  package: pkgName,
+  inject: pkgName.array().default([]),
+})
+
+/**
+ * `packages.pipx` entry: bare package spec → `{ package, inject: [] }`, or the object form.
+ */
+export const packagesPipxItemSchema = pkgName
+  .transform((name) => ({ package: name, inject: /** @type {string[]} */ ([]) }))
+  .or(packagesPipxObjectSchema)
 
 /**
  * `packages.http` entry: download URL → binary.
  */
 export const packagesHttpItemSchema = z
   .strictObject({
-    url: z.string().trim().url(),
+    url: z.url(),
     bin: pkgName.optional(),
-    dest: z.string().trim().min(1).optional(),
-    test: z.string().trim().min(1).optional(),
+    dest: z.string().min(1).optional(),
+    test: z.string().min(1).optional(),
   })
   .refine((data) => data.bin != null || data.dest != null, {
     message: 'need bin (zip member / /usr/local/bin name) or dest (absolute path)',
@@ -30,59 +35,31 @@ export const packagesHttpItemSchema = z
   })
 
 /**
+ * @typedef {object} NormalizedHttpItem
+ * @property {string} url
+ * @property {string} [bin]
+ * @property {string} [dest]
+ * @property {string} [test]
+ */
+
+/**
  * @typedef {object} NormalizedPackages
  * @property {string[]} distro
  * @property {{ package: string, inject: string[] }[]} pipx
- * @property {{ url: string, bin: string | null, dest: string | null, test: string | null }[]} http
+ * @property {NormalizedHttpItem[]} http
  */
-
-export const packagesManifestSchema = z.strictObject({
-  distro: z.array(pkgName).optional(),
-  pipx: z.array(packagesPipxItemSchema).optional(),
-  http: z.array(packagesHttpItemSchema).optional(),
-})
-
-/** Empty normalized manifest. */
-export function emptyPackages() {
-  return { distro: /** @type {string[]} */ ([]), pipx: [], http: [] }
-}
 
 /**
- * @param {z.infer<typeof packagesManifestSchema> | null | undefined} raw
- * @returns {NormalizedPackages}
+ * Provision / capability packages → normalized on parse
+ * (`undefined` / `{}` → empty lists; pipx strings → objects).
  */
-export function normalizePackages(raw) {
-  const distro = (raw?.distro || []).map((s) => String(s).trim()).filter(Boolean)
-  /** @type {{ package: string, inject: string[] }[]} */
-  const pipx = []
-  for (const item of raw?.pipx || []) {
-    if (typeof item === 'string') {
-      const p = item.trim()
-      if (p) pipx.push({ package: p, inject: [] })
-      continue
-    }
-    const p = String(item?.package || '').trim()
-    if (!p) continue
-    const inject = (item.inject || []).map((s) => String(s).trim()).filter(Boolean)
-    pipx.push({ package: p, inject })
-  }
-  /** @type {{ url: string, bin: string | null, dest: string | null, test: string | null }[]} */
-  const http = []
-  for (const item of raw?.http || []) {
-    const url = String(item?.url || '').trim()
-    if (!url) continue
-    const bin = item.bin != null ? String(item.bin).trim() : ''
-    const dest = item.dest != null ? String(item.dest).trim() : ''
-    const test = item.test != null ? String(item.test).trim() : ''
-    http.push({
-      url,
-      bin: bin || null,
-      dest: dest || null,
-      test: test || null,
-    })
-  }
-  return { distro, pipx, http }
-}
+export const packagesManifestSchema = z
+  .strictObject({
+    distro: pkgName.array().default([]),
+    pipx: packagesPipxItemSchema.array().default([]),
+    http: packagesHttpItemSchema.array().default([]),
+  })
+  .prefault({})
 
 /**
  * Merge manifests (later lists append; pipx/http: later entry wins on same package/bin name).
@@ -94,12 +71,7 @@ export function mergePackages(...parts) {
   const distro = []
   /** @type {Map<string, { package: string, inject: string[] }>} */
   const pipxByName = new Map()
-  /**
-   * @type {Map<
-   *   string,
-   *   { url: string, bin: string | null, dest: string | null, test: string | null }
-   * >}
-   */
+  /** @type {Map<string, NormalizedHttpItem>} */
   const httpByKey = new Map()
 
   for (const part of parts) {

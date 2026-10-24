@@ -1,13 +1,6 @@
-import { createContext, envWithQctlEnv, spawnCapture } from './context.js'
+import { createContext, spawnCapture } from './context.js'
+import { createTestContext, testOsConfig } from './context.test-helpers.js'
 import { describe, expect, test } from 'bun:test'
-
-describe('envWithQctlEnv', () => {
-  test('preserves an explicit QCTL_ENV', () => {
-    const env = envWithQctlEnv({ QCTL_ENV: 'prod', X: '1' })
-    expect(env.QCTL_ENV).toBe('prod')
-    expect(env.X).toBe('1')
-  })
-})
 
 describe('spawnCapture', () => {
   test('captures stdout/stderr and exit code', async () => {
@@ -25,12 +18,16 @@ describe('spawnCapture', () => {
 })
 
 describe('createContext', () => {
+  test('requires osConfig or seedConfig', () => {
+    expect(() => createContext({ log: () => {} })).toThrow(/osConfig or seedConfig required/)
+  })
+
   test('defaults profile and dryRun; applies overrides', () => {
     const log = () => {}
     const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
       dryRun: true,
       profile: 'init-tank',
+      osConfig: testOsConfig(),
       log,
     })
     expect(ctx.profile).toBe('init-tank')
@@ -39,5 +36,37 @@ describe('createContext', () => {
     expect(typeof ctx.isRoot).toBe('function')
     expect(typeof ctx.runBash).toBe('function')
     expect(typeof ctx.exec).toBe('function')
+  })
+
+  test('secrets, paths, flags, and osConfig are plain fields (no env bag)', () => {
+    const ctx = createContext({
+      osConfig: testOsConfig({ root: '/x' }),
+      secrets: { A: '1', B: '  ' },
+      paths: { initState: '/tmp/s.json' },
+      flags: { skipZfsDrill: true },
+      log: () => {},
+    })
+    expect(ctx.osConfig.root).toBe('/x')
+    expect(ctx.secrets).toEqual({ A: '1' })
+    expect(ctx.paths.initState).toBe('/tmp/s.json')
+    expect(ctx.flags.skipZfsDrill).toBe(true)
+    expect('env' in ctx).toBe(false)
+  })
+
+  test('runBash propagates secrets into the child env', async () => {
+    const ctx = createContext({
+      osConfig: testOsConfig(),
+      secrets: { QCTL_TEST_SECRET: 'sek' },
+      log: () => {},
+    })
+    const r = await ctx.exec(['bash', '-c', 'printf %s "$QCTL_TEST_SECRET"'])
+    expect(r.stdout).toBe('sek')
+  })
+})
+
+describe('createTestContext', () => {
+  test('supplies default testOsConfig', () => {
+    const ctx = createTestContext({ log: () => {} })
+    expect(ctx.osConfig.root).toBe('/tank/rocky')
   })
 })

@@ -1,23 +1,8 @@
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
-
 import { capabilitiesForProfile } from './capabilities.js'
 import { installInitPackages } from './install-packages.js'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
-/** @import { DisksJson, PlatformModule } from '@qctl/shared' */
-
-/** @type {string[]} */
-const temps = []
-
-afterEach(() => {
-  while (temps.length) {
-    const dir = temps.pop()
-    if (dir) removeTempDir(dir)
-  }
-})
+/** @import { DisksJson, PlatformModule, SeedConfig } from '@qctl/shared' */
 
 /**
  * @param {string} profile
@@ -92,20 +77,19 @@ function sampleDisks(opts = {}) {
 }
 
 /**
- * @param {string} dir
  * @param {DisksJson} disks
+ * @param {Record<string, unknown>} [packages]
+ * @returns {SeedConfig}
  */
-function writeDisks(dir, disks) {
-  const path = join(dir, 'disks.json')
-  writeFileSync(path, JSON.stringify(disks))
-  return path
+function seedWith(disks, packages) {
+  return /** @type {SeedConfig} */ (
+    /** @type {unknown} */ ({ disks, ...(packages ? { packages } : {}) })
+  )
 }
 
 describe('installInitPackages', () => {
   test('dry-run resolves capabilities without installing', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const disksJson = writeDisks(dir, sampleDisks({ fs: 'xfs', tanks: true }))
+    const seedConfig = seedWith(sampleDisks({ fs: 'xfs', tanks: true }))
     /** @type {string[]} */
     const lines = []
     const platform = fakePlatform('default')
@@ -115,7 +99,7 @@ describe('installInitPackages', () => {
     const manifest = await installInitPackages({
       profile: 'default',
       dryRun: true,
-      env: { QCTL_ENV: 'dev', ROCKY_DISKS_JSON: disksJson },
+      seedConfig,
       log: (line) => lines.push(line),
       loadPlatform: async () => /** @type {PlatformModule} */ (/** @type {never} */ (platform)),
     })
@@ -124,12 +108,12 @@ describe('installInitPackages', () => {
     expect(lines.some((l) => l.includes('dry-run'))).toBe(true)
   })
 
-  test('default profile merges packages.json extras', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const packagesJson = join(dir, 'packages.json')
-    writeFileSync(packagesJson, JSON.stringify({ distro: ['nano'] }))
-    const disksJson = writeDisks(dir, sampleDisks({ fs: 'xfs', tanks: false }))
+  test('default profile merges seed packages extras', async () => {
+    const seedConfig = seedWith(sampleDisks({ fs: 'xfs', tanks: false }), {
+      distro: ['nano'],
+      pipx: [],
+      http: [],
+    })
     /** @type {string[]} */
     const installed = []
     const platform = fakePlatform('default')
@@ -138,11 +122,7 @@ describe('installInitPackages', () => {
     }
     const manifest = await installInitPackages({
       profile: 'default',
-      env: {
-        QCTL_ENV: 'dev',
-        ROCKY_PACKAGES_JSON: packagesJson,
-        ROCKY_DISKS_JSON: disksJson,
-      },
+      seedConfig,
       log: () => {},
       loadPlatform: async () => /** @type {PlatformModule} */ (/** @type {never} */ (platform)),
     })
@@ -152,18 +132,12 @@ describe('installInitPackages', () => {
     expect(manifest.distro).toContain('nano')
   })
 
-  test('init-tank also merges packages.json extras (incl. http)', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const packagesJson = join(dir, 'packages.json')
-    writeFileSync(
-      packagesJson,
-      JSON.stringify({
-        distro: ['nano'],
-        http: [{ url: 'https://example.com/x', bin: 'x' }],
-      }),
-    )
-    const disksJson = writeDisks(dir, sampleDisks({ fs: 'xfs', tanks: true }))
+  test('init-tank also merges seed packages extras (incl. http)', async () => {
+    const seedConfig = seedWith(sampleDisks({ fs: 'xfs', tanks: true }), {
+      distro: ['nano'],
+      pipx: [],
+      http: [{ url: 'https://example.com/x', bin: 'x' }],
+    })
     /** @type {string[]} */
     const installed = []
     const platform = fakePlatform('init-tank')
@@ -175,31 +149,27 @@ describe('installInitPackages', () => {
     const manifest = await installInitPackages({
       profile: 'init-tank',
       dryRun: true,
-      env: { ROCKY_PACKAGES_JSON: packagesJson, ROCKY_DISKS_JSON: disksJson },
+      seedConfig,
       log: (l) => lines.push(l),
       loadPlatform: async () => /** @type {PlatformModule} */ (/** @type {never} */ (platform)),
     })
     expect(manifest.distro).toContain('nano')
     expect(manifest.distro).toContain('xfs')
     expect(manifest.distro).toContain('zfs')
-    expect(manifest.http).toEqual([
-      { url: 'https://example.com/x', bin: 'x', dest: null, test: null },
-    ])
+    expect(manifest.http).toEqual([{ url: 'https://example.com/x', bin: 'x' }])
     expect(lines.some((l) => /http=1/.test(l))).toBe(true)
     expect(installed).toEqual([])
   })
 
-  test('data-only disks.json does not request zfs', async () => {
-    const dir = makeTempDir()
-    temps.push(dir)
-    const disksJson = writeDisks(dir, sampleDisks({ fs: 'ext4', tanks: false }))
+  test('data-only seed disks does not request zfs', async () => {
+    const seedConfig = seedWith(sampleDisks({ fs: 'ext4', tanks: false }))
     /** @type {string[]} */
     const lines = []
     const platform = fakePlatform('init-tank')
     await installInitPackages({
       profile: 'init-tank',
       dryRun: true,
-      env: { ROCKY_DISKS_JSON: disksJson },
+      seedConfig,
       log: (l) => lines.push(l),
       loadPlatform: async () => /** @type {PlatformModule} */ (/** @type {never} */ (platform)),
     })

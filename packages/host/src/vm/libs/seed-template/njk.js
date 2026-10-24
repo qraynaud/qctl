@@ -10,10 +10,9 @@ import { die } from '../../../lib/util.js'
 
 /** @import { Environment } from 'nunjucks' */
 /** @import { YamlMapping, YamlValue } from '@qctl/shared' */
-/** @import { buildVars } from './vars.js' */
+/** @import { SeedVars } from './vars.js' */
 
 /** @typedef {YamlMapping} CloudConfig */
-/** @typedef {Awaited<ReturnType<typeof buildVars>>} SeedVars */
 /**
  * Parsed seed YAML while `OMIT` sentinels may still be present.
  * @typedef {YamlValue | typeof OMIT | SeedNode[] | { [key: string]: SeedNode }} SeedNode

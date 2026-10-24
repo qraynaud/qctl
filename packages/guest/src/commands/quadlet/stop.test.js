@@ -21,7 +21,7 @@ describe('quadlet stop command', () => {
   })
 
   test('handler runs runStartStop with stop', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     const runStartStop = spyOn(lifecycleMod, 'runStartStop').mockImplementation(() => {})

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 
-import { createContext } from '../../context.js'
+import { createTestContext } from '../../context.test-helpers.js'
 import {
   ensureTankPassphraseFromBootstrap,
   installTankPassphrase,
@@ -41,13 +41,9 @@ describe('ensureTankPassphraseFromBootstrap', () => {
     const files = mockCredFs()
     const cred = '/mock/tank_passphrase'
 
-    const ctx = createContext({
-      env: {
-        QCTL_ENV: 'dev',
-        tank_passphrase_tank: 'lab-pass',
-        ROCKY_TANK_CRED_FILE: cred,
-        QCTL_ZFS_POOL: 'tank',
-      },
+    const ctx = createTestContext({
+      secrets: { tank_passphrase_tank: 'lab-pass' },
+      paths: { tankCredFile: cred },
       log: () => {},
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -64,11 +60,8 @@ describe('ensureTankPassphraseFromBootstrap', () => {
 
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: {
-        QCTL_BOOTSTRAP_DIR: '/mock/missing',
-        ROCKY_TANK_CRED_FILE: cred,
-      },
+    const ctx = createTestContext({
+      paths: { tankCredFile: cred },
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -83,8 +76,8 @@ describe('ensureTankPassphraseFromBootstrap', () => {
   test('installTankPassphrase writes 0400 file', async () => {
     const files = mockCredFs()
     const cred = '/mock/subdir/tank_passphrase'
-    const ctx = createContext({
-      env: { ROCKY_TANK_CRED_FILE: cred },
+    const ctx = createTestContext({
+      paths: { tankCredFile: cred },
       log: () => {},
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
     })
@@ -96,11 +89,9 @@ describe('ensureTankPassphraseFromBootstrap', () => {
   test('reseeds per-pool tank_passphrase_<poolId> into credstore', async () => {
     const files = mockCredFs()
     const base = '/mock/credstore'
-    const ctx = createContext({
-      env: {
-        ROCKY_CREDSTORE_DIR: base,
-        tank_passphrase_cold: 'cold-secret',
-      },
+    const ctx = createTestContext({
+      paths: { credstoreDir: base },
+      secrets: { tank_passphrase_cold: 'cold-secret' },
       log: () => {},
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -113,8 +104,7 @@ describe('ensureTankPassphraseFromBootstrap', () => {
 
 describe('tankAssertZfsMounted', () => {
   test('accepts findmnt zfs + mounted=yes', async () => {
-    const ctx = createContext({
-      env: {},
+    const ctx = createTestContext({
       log: () => {},
       exec: async (argv) => {
         if (argv[0] === 'findmnt') {
@@ -130,8 +120,7 @@ describe('tankAssertZfsMounted', () => {
   })
 
   test('rejects when path is not a mountpoint', async () => {
-    const ctx = createContext({
-      env: {},
+    const ctx = createTestContext({
       log: () => {},
       exec: async (argv) => {
         if (argv[0] === 'findmnt') return { code: 1, stdout: '', stderr: '' }
@@ -142,8 +131,7 @@ describe('tankAssertZfsMounted', () => {
   })
 
   test('rejects when zfs mounted=no', async () => {
-    const ctx = createContext({
-      env: {},
+    const ctx = createTestContext({
       log: () => {},
       exec: async (argv) => {
         if (argv[0] === 'findmnt') {

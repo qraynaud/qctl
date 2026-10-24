@@ -1,22 +1,42 @@
+import { SEED_PROFILE, osConfigSchema } from '@qctl/shared'
+
 import { execInAppliance } from './exec-in.js'
 import { log, logDim } from './util.js'
 
 /** @import { LocalContext } from './context.js' */
 
 /**
- * Bootstrap apps user, nested podman, volumes, dummy vlan2 (CI script port).
+ * Bootstrap apps user, nested podman, volumes, dummy vlan2, and `/etc/qctl/config.json`
+ * (same day-2 identity contract as VM guest load-seed).
  * `/etc/subuid`+`/etc/subgid` match provision `users.apps` exactly.
  * @param {LocalContext} ctx
  * @returns {Promise<void>}
  */
 export async function provisionAppliance(ctx) {
-  log('provision apps user + linger')
+  log('provision apps user + linger + OS config')
   const user = ctx.appsUsername
   const uid = ctx.appsUid
   const gid = ctx.appsGid
   const home = `/home/${user}`
   const subUidLast = ctx.appsSubuid.start + ctx.appsSubuid.count - 1
   const subGidLast = ctx.appsSubgid.start + ctx.appsSubgid.count - 1
+
+  const os = osConfigSchema.parse({
+    env: ctx.env,
+    root: '/tank/rocky',
+    repo: ctx.repo,
+    quadletUser: user,
+    apps: {
+      username: user,
+      uid,
+      gid,
+      subuid: ctx.appsSubuid,
+      subgid: ctx.appsSubgid,
+    },
+    timezone: 'Europe/Paris',
+    profile: SEED_PROFILE.APPLIANCE,
+  })
+  const osJson = JSON.stringify(os, null, 2)
 
   const script = `
 set -euo pipefail
@@ -38,9 +58,13 @@ id "$APPS_USER" >/dev/null 2>&1 || useradd -u ${uid} -g "$APPS_USER" -m -d ${JSO
 sed -i "/^\${APPS_USER}:/d" /etc/subuid /etc/subgid 2>/dev/null || true
 usermod --add-subuids "${ctx.appsSubuid.start}-${subUidLast}" "$APPS_USER"
 usermod --add-subgids "${ctx.appsSubgid.start}-${subGidLast}" "$APPS_USER"
-mkdir -p /usr/local/lib/rocky
+mkdir -p /usr/local/lib/rocky /etc/qctl
 printf '%s\\n' "APP_ROOT=/tank/rocky/volumes" \\
   > /usr/local/lib/rocky/local-overrides.env
+cat > /etc/qctl/config.json <<'EOF'
+${osJson}
+EOF
+chmod 0644 /etc/qctl/config.json
 export APP_ROOT=/tank/rocky/volumes
 mkdir -p "${home}/.config/containers/containers.conf.d"
 cp /etc/containers/containers.conf.d/90-ci-uts.conf \\

@@ -27,13 +27,7 @@ First-boot / debug / plugin tooling (`_internal_init`, `_internal_list`,
 ### `qctl quadlet …`
 
 Generate and manage Quadlet units from the instance repo. Requires root (passwordless
-`sudo`); re-execs with an explicit `--root`.
-
-Shared option:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--root` | `$QCTL_ROOT`, else cwd walk-up, else `/tank/rocky` | Instance root |
+`sudo`).
 
 | Subcommand | Description |
 |------------|-------------|
@@ -54,19 +48,16 @@ qctl quadlet down caddy active-directory
 ### `qctl secret …`
 
 Resolve unit-schema `@sensitive` values through the varlock graph and compare or write
-Podman secrets. Prefers root via passwordless sudo (shared plugin cache + rootful store);
-without sudo, operates on the rootless store only.
+Podman secrets. Prefers root via passwordless sudo; without sudo, operates on the
+rootless store only.
 
-Shared options:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--root` | `$QCTL_ROOT`, else cwd walk-up, else `/tank/rocky` | Instance root |
-| `--env` | (detect) | Override guest `QCTL_ENV` for schema `@import` (host seed sets it from the provision profile) |
+| Option | Description |
+|--------|-------------|
+| `--env` | Override env label for schema `@import` |
 
 | Subcommand | Description |
 |------------|-------------|
-| `check` | Compare graph-resolved `@sensitive` values to Podman secrets (`qctl.sha256` labels); exit 1 on drift |
+| `check` | Compare graph values to Podman secrets; exit 1 on drift |
 | `sync` | Create/replace Podman secrets from the graph (skip unchanged) |
 
 #### `qctl secret sync`
@@ -74,24 +65,15 @@ Shared options:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--dry-run` | `false` | Print actions only |
-| `--restart` | `false` | Restart apps whose secrets changed (omit from `ExecStartPre`) |
-
-Podman secret name = schema key as-is (`CADDY_DNS` → `CADDY_DNS`). Store follows each
-app’s `engine:` (rootful → rootful store; else rootless). Tag `# @tag(cross-engine)` to
-write into both stores. Unit schemas: `applications/<app>/<unit>/.env.schema` and
-`common/<lib>/.env.schema`.
+| `--restart` | `false` | Restart apps whose secrets changed |
 
 ```bash
 qctl secret check
 qctl secret sync
 qctl secret sync --restart
-qctl secret check && qctl secret sync --restart
 ```
 
-Day-2 after vault changes: `check` then `sync --restart`. Quadlet hook:
-`ExecStartPre=qctl secret sync` (root from `$QCTL_ROOT` / walk-up / `/tank/rocky`).
-
-See [docs/secrets.md](../../docs/secrets.md).
+After vault changes: `check` then `sync --restart`. See [docs/secrets.md](../../docs/secrets.md).
 
 ## Develop
 

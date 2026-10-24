@@ -1,10 +1,24 @@
 /**
- * Unmask + start sshd/firewalld/cockpit/podman/QGA; apply DNAT from ports.json
+ * Unmask + start sshd/firewalld/cockpit/podman/QGA; apply DNAT from seed ports
  * via platform.networking.
  */
 import { StageError } from '../errors.js'
 
+/** @import { PlatformNetworkCtx } from '@qctl/shared' */
 /** @import { StageContext } from '../context.js' */
+
+/**
+ * @param {StageContext} ctx
+ * @returns {PlatformNetworkCtx}
+ */
+function networkCtx(ctx) {
+  return {
+    log: ctx.log,
+    exec: ctx.exec,
+    ports: ctx.ports,
+    routeLocalnetConf: ctx.paths.routeLocalnetConf,
+  }
+}
 
 export default {
   name: 'start-services',
@@ -13,7 +27,7 @@ export default {
    * @param {StageContext} ctx
    */
   plan(ctx) {
-    const dnatPlan = ctx.platform?.networking?.planApplyDnat?.(ctx) ?? [
+    const dnatPlan = ctx.platform?.networking?.planApplyDnat?.(networkCtx(ctx)) ?? [
       'platform.networking.applyDnat',
     ]
     return [
@@ -57,7 +71,7 @@ export default {
         if (r.code !== 0) throw new Error(`firewall-cmd add-service ${svc} failed`)
       }
 
-      await applyDnat(ctx)
+      await applyDnat(networkCtx(ctx))
 
       r = await ctx.exec(['firewall-cmd', '--reload'])
       if (r.code !== 0) throw new Error(`firewall-cmd --reload failed`)

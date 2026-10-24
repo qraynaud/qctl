@@ -37,11 +37,16 @@ Seed units:
 
 ## `qctl _internal_list` / `qctl _internal_stage`
 
-List or run a single init stage (debugging / resume).
+List or run a single init stage (debugging). Prefer
+`qctl _internal_init --from <stage>` for ordered resume after a failure.
 
-`rocky-tier0-seal.service` calls `qctl _internal_stage tier0-seal` before the
-init unit so `LoadCredentialEncrypted=` can load sealed Tier-0 files. The same
-stage is idempotent inside `_internal_init`.
+`_internal_stage` remounts cidata and loads `qctl-seed/` when available (same as
+init); otherwise it uses `/etc/qctl/config.json` only (disk/ports stages need the
+ISO seed).
+
+Tier-0 seal runs as the `tier0-seal` stage inside `_internal_init` (ISO
+`qctl-seed/tier0/*` → `/var/lib/qctl/tier0-pending` → `/etc/credstore.encrypted`).
+The stage is idempotent.
 
 ## `qctl _internal_plugins ensure`
 
@@ -52,7 +57,7 @@ varlock’s unresolved-plugin error.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--dir` | instance root / cwd | Directory used to locate `package.json` |
+| `--dir` | `/etc/qctl/config.json` `root` | Directory used to locate `package.json` |
 
 Guest installs are always **frozen**: require a committed `package-lock.json` and
 do not rewrite it. Generate/update the lockfile on the host with a non-frozen

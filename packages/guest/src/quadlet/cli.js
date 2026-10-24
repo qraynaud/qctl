@@ -10,23 +10,7 @@ import { ensureRoot } from './system.js'
 /** @import { QuadletContext } from './context.js' */
 
 /**
- * Add the common `--root` option.
- * @template {Argv} T
- * @param {T} yargs
- * @returns {T}
- */
-export function withRootOption(yargs) {
-  return /** @type {T} */ (
-    yargs.option('root', {
-      type: 'string',
-      describe: 'Instance root ($QCTL_ROOT, else cwd walk-up, else /tank/rocky)',
-    })
-  )
-}
-
-/**
  * @typedef {object} QuadletArgv
- * @property {string} [root]
  * @property {string | string[]} [app]
  * @property {string | string[]} [apps]
  * @property {boolean} [dryRun]
@@ -46,22 +30,17 @@ export function argvApps(argv) {
 }
 
 /**
- * Escalate to root, resolve the instance, run `fn`, map errors to exit codes.
- * @param {QuadletArgv} argv
+ * Escalate to root, resolve the instance from `/etc/qctl/config.json`, run `fn`.
  * @param {(ctx: QuadletContext) => void | Promise<void>} fn
  * @param {{ escalate?: boolean }} [opts]
  */
-export async function runQuadletCommand(argv, fn, opts = {}) {
+export async function runQuadletCommand(fn, opts = {}) {
   try {
-    const root = resolveInstanceRoot({
-      root: typeof argv.root === 'string' ? argv.root : undefined,
-    })
+    const root = resolveInstanceRoot()
     const ctx = createContext({ root })
     if (opts.escalate !== false) {
-      // Re-exec as root with an explicit --root so sudo's cwd/env cannot change resolution.
-      const userArgv = hideBin(process.argv)
-      const hasRoot = userArgv.some((a) => a === '--root' || a.startsWith('--root='))
-      ensureRoot(hasRoot ? userArgv : [...userArgv, '--root', root], ctx.sys)
+      // Re-exec as root; instance root comes from OS config (not argv).
+      ensureRoot(hideBin(process.argv), ctx.sys)
     }
     await fn(ctx)
   } catch (e) {

@@ -1,4 +1,4 @@
-import { createContext } from '../context.js'
+import { createTestContext } from '../context.test-helpers.js'
 import registryLogin, {
   parseContainerRegistryValue,
   parseRegistriesJson,
@@ -32,8 +32,7 @@ describe('registry-login stage', () => {
   test('logs skip when ROCKY_REGISTRIES empty', async () => {
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: { PATH: '/usr/bin', QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -47,12 +46,8 @@ describe('registry-login stage', () => {
     const calls = []
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: {
-        PATH: '/usr/bin',
-        QCTL_ENV: 'dev',
-        ROCKY_REGISTRIES: JSON.stringify(['ghcr.io|alice|secret']),
-      },
+    const ctx = createTestContext({
+      secrets: { ROCKY_REGISTRIES: JSON.stringify(['ghcr.io|alice|secret']) },
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async (argv) => {

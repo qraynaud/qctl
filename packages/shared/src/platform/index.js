@@ -6,7 +6,7 @@
  *
  * Types: {@link ./platform-types.ts}
  */
-import { emptyPackages, mergePackages, normalizePackages } from '../packages/manifest.js'
+import { mergePackages, packagesManifestSchema } from '../packages/manifest.js'
 
 /** @import { NormalizedPackages } from '../packages/manifest.js' */
 /**
@@ -71,13 +71,13 @@ export function expandCapabilities(map, wanted) {
 export function packagesForCapabilities(map, wanted, extra) {
   const caps = expandCapabilities(map, wanted)
   const parts = caps.map((c) =>
-    normalizePackages({
+    packagesManifestSchema.parse({
       distro: map[c].distro,
       pipx: map[c].pipx,
     }),
   )
   if (extra) parts.push(extra)
-  return parts.length === 0 ? emptyPackages() : mergePackages(...parts)
+  return mergePackages(...parts)
 }
 
 /**
@@ -88,7 +88,7 @@ export function packagesForCapabilities(map, wanted, extra) {
  * @returns {string[]}
  */
 export function distroPackagesForCapabilities(map, wanted, extra) {
-  const extraManifest = extra ? normalizePackages({ distro: [...extra] }) : undefined
+  const extraManifest = extra ? packagesManifestSchema.parse({ distro: [...extra] }) : undefined
   return packagesForCapabilities(map, wanted, extraManifest).distro
 }
 

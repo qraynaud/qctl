@@ -12,22 +12,19 @@ import { createSystem, tryEnsureRoot } from '../quadlet/system.js'
 
 /**
  * @typedef {object} SecretArgv
- * @property {string} [root]
- * @property {string} [env]
+ * @property {string} [env] CLI override for env label (else OS config)
  * @property {boolean} [dryRun]
  * @property {boolean} [restart]
  */
 
 /**
- * @param {SecretArgv} argv
+ * Resolve instance from `/etc/qctl/config.json`, prefer root via sudo, then `fn`.
  * @param {(root: string) => void | Promise<void>} fn
  */
-export async function runSecretCommand(argv, fn) {
-  const root = resolveInstanceRoot({ root: typeof argv.root === 'string' ? argv.root : undefined })
+export async function runSecretCommand(fn) {
+  const root = resolveInstanceRoot()
   const sys = createSystem()
-  const userArgv = hideBin(process.argv)
-  const hasRoot = userArgv.some((a) => a === '--root' || a.startsWith('--root='))
   // Prefer root (plugin cache, rootful secrets, Tier-0). Re-exec exits on success.
-  tryEnsureRoot(hasRoot ? userArgv : [...userArgv, '--root', root], sys)
+  tryEnsureRoot(hideBin(process.argv), sys)
   await fn(root)
 }

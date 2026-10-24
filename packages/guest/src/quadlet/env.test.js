@@ -16,8 +16,17 @@ import {
 import { makeQuadletInstance, packageSchema, unitSchema } from './test/fixture.js'
 import { describe, expect, test } from 'bun:test'
 
-/** @param {string} root @param {string} seedDir */
-const ctxOf = (root, seedDir, env = {}) => ({ root, baseEnv: { PATH: '/bin', ...env }, seedDir })
+/**
+ * @param {string} root
+ * @param {string} seedDir
+ * @param {{ qctlEnv?: string, osConfig?: { env?: string } }} [extra]
+ */
+const ctxOf = (root, seedDir, extra = {}) => ({
+  root,
+  baseEnv: { PATH: '/bin' },
+  seedDir,
+  ...extra,
+})
 
 describe('name helpers', () => {
   test('path keys', () => {
@@ -74,15 +83,18 @@ describe('render env', () => {
     }
   })
 
-  test('QCTL_ENV: process env wins, else repo .env ENV=, else dev; selects .env.<ENV>', async () => {
+  test('env label: CLI/osConfig wins, else repo .env ENV=, else dev; selects .env.<ENV>', async () => {
     const fx = makeQuadletInstance()
     try {
       const seed = join(fx.sysDir, 'seed')
-      expect(detectQctlEnvFor(fx.root, { QCTL_ENV: 'prod' })).toBe('prod')
+      expect(detectQctlEnvFor(fx.root, { qctlEnv: 'prod' })).toBe('prod')
+      expect(detectQctlEnvFor(fx.root, { osConfigEnv: 'staging' })).toBe('staging')
       expect(detectQctlEnvFor(fx.root, {})).toBe('dev')
       expect(detectQctlEnvFor(join(fx.root, 'nope'), {})).toBe('dev')
       writeFile(fx.root, '.env', 'ENV=prod\n')
       expect(detectQctlEnvFor(fx.root, {})).toBe('prod')
+      // Ambient QCTL_ENV must not win over OS config / .env.
+      expect(detectQctlEnvFor(fx.root, { osConfigEnv: 'dev' })).toBe('dev')
 
       const prod = await loadRenderEnv(ctxOf(fx.root, seed), join(fx.root, 'applications/web'))
       expect(prod.qctlEnv).toBe('prod')
@@ -90,7 +102,7 @@ describe('render env', () => {
       expect(prod.scope.APP_ROOT).toBe('/tank/apps')
       expect(prod.scope.VERSION).toBe('2.0')
       const dev = await loadRenderEnv(
-        ctxOf(fx.root, seed, { QCTL_ENV: 'dev' }),
+        ctxOf(fx.root, seed, { qctlEnv: 'dev' }),
         join(fx.root, 'applications/web'),
       )
       expect(dev.scope.FQDN).toBe('x.localhost')

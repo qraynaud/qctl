@@ -1,6 +1,6 @@
 import * as fsp from 'node:fs/promises'
 
-import { createContext } from '../context.js'
+import { createTestContext, testOsConfig } from '../context.test-helpers.js'
 import adminUser from './admin-user.js'
 import { describe, expect, spyOn, test } from 'bun:test'
 
@@ -11,19 +11,17 @@ describe('admin-user stage', () => {
     spyOn(fsp, 'writeFile').mockImplementation(async (p, data) => {
       files.set(String(p), String(data))
     })
+    spyOn(fsp, 'mkdir').mockImplementation(async () => undefined)
     spyOn(fsp, 'chmod').mockImplementation(async () => undefined)
 
     /** @type {string[]} */
     const logs = []
     /** @type {string[][]} */
     const calls = []
-    const ctx = createContext({
-      env: {
-        PATH: process.env.PATH,
-        QCTL_ENV: 'dev',
-        ROCKY_ADMIN_SSH_KEYS: '/mock/keys',
-        ROCKY_SUDOERS_DROPIN: '/mock/sudoers',
-      },
+    const ctx = createTestContext({
+      osConfig: testOsConfig(),
+      seedConfig: /** @type {any} */ ({ adminSshAuthorizedKeys: 'ssh-ed25519 AAAA test' }),
+      paths: { adminKeys: '/mock/keys', sudoersDropin: '/mock/sudoers' },
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async (argv) => {

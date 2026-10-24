@@ -20,7 +20,7 @@
  */
 export function capabilitiesForProfile(profile, opts = {}) {
   /** @type {string[]} */
-  const caps = ['curl', 'jq', 'unzip']
+  const caps = ['curl', 'jq', 'unzip', 'host-tools']
 
   const disks = opts.disks
   if (disks) {

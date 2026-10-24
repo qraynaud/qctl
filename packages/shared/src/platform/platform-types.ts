@@ -5,6 +5,8 @@
  * Guest/host Zod: `./schema.js` (`parsePlatformModule`).
  */
 
+import type { PortsMap } from '../networking/ports-types.ts'
+
 export type PlatformCapabilityRecipe = {
   /** Other capability keys in the same map */
   needs?: string[]
@@ -32,6 +34,12 @@ export type PlatformPackagesMap = Record<RequiredPlatformCapability, PlatformCap
 export type PlatformInstallOpts = {
   log?: (line: string) => void
   env?: Record<string, string | undefined>
+  /**
+   * When true, platform may run a full distro upgrade before installs.
+   * Appliance cloud-init does `dnf upgrade` in runcmd instead — do not enable
+   * this under a waited `rocky-first-boot` oneshot (systemd upgrade resets D-Bus).
+   */
+  upgrade?: boolean
 }
 
 /**
@@ -39,9 +47,12 @@ export type PlatformInstallOpts = {
  * the guest loads the staged platform module and calls them from init stages.
  */
 export type PlatformNetworkCtx = {
-  env: Record<string, string | undefined>
   log: (line: string) => void
   exec: (argv: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
+  /** Ports from ISO seed config (`qctl-seed/config.json`). */
+  ports?: PortsMap
+  /** Test override for route_localnet sysctl drop-in path. */
+  routeLocalnetConf?: string
 }
 
 export type PlatformNetworking = {

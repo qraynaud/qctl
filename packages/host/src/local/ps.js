@@ -51,9 +51,7 @@ export async function handler(argv) {
   const apps = argvApps(argv)
   const r = await execInAppliance(
     ctx,
-    apps.length
-      ? `cd /tank/rocky && qctl quadlet ps ${apps.map(shellQuote).join(' ')}`
-      : 'cd /tank/rocky && qctl quadlet ps',
+    apps.length ? `qctl quadlet ps ${apps.map(shellQuote).join(' ')}` : 'qctl quadlet ps',
     { nothrow: true },
   )
   console.log(String(r.stdout).trimEnd() || chalk.dim('(no quadlet output)'))

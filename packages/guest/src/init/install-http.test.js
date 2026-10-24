@@ -44,7 +44,7 @@ describe('installHttpPackages', () => {
     temps.push(dir)
     const dest = join(dir, 'bin', 'tool')
     const url = serveBytes('#!/bin/sh\necho ok\n')
-    await installHttpPackages([{ url, bin: null, dest, test: null }], {
+    await installHttpPackages([{ url, dest }], {
       log: () => {},
       env: {},
     })
@@ -68,7 +68,7 @@ describe('installHttpPackages', () => {
     const bytes = await Bun.file(zipPath).bytes()
     const url = serveBytes(bytes, 'application/zip')
     const outDir = join(dir, 'out')
-    await installHttpPackages([{ url, bin: 'bw', dest: null, test: null }], {
+    await installHttpPackages([{ url, bin: 'bw' }], {
       log: () => {},
       env: { ROCKY_PACKAGES_BIN_DIR: outDir },
     })
@@ -84,7 +84,6 @@ describe('installHttpPackages', () => {
       [
         {
           url,
-          bin: null,
           dest,
           test: 'test -x "$APP" && test "$(cat "$APP")" = "payload"',
         },

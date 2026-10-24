@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs'
 
-import { ensurePackageDependencies, findInstanceRoot, findPackageRoot } from '@qctl/shared'
+import { ensurePackageDependencies, findPackageRoot } from '@qctl/shared'
+
+import { tryReadOsConfig } from '../../os-config.js'
+import { resolveInstanceRoot } from '../../quadlet/context.js'
+import { detectQctlEnvFor } from '../../quadlet/env.js'
 
 /** @import { Argv } from 'yargs' */
 
@@ -16,7 +20,7 @@ export function builder(yargs) {
     .option('dir', {
       type: 'string',
       describe:
-        'Directory to start from when locating package.json (default: instance root or cwd)',
+        'Directory to start from when locating package.json (default: /etc/qctl/config.json root)',
     })
     .epilogue(
       'Varlock loads third-party plugins from node_modules. qctl runs an in-process '
@@ -35,10 +39,15 @@ export function builder(yargs) {
  * @param {PluginsEnsureArgv} argv
  */
 export async function handler(argv) {
-  const start =
-    typeof argv.dir === 'string' && argv.dir.trim()
-      ? argv.dir.trim()
-      : findInstanceRoot(process.cwd()) || process.cwd()
+  let start
+  try {
+    start =
+      typeof argv.dir === 'string' && argv.dir.trim() ? argv.dir.trim() : resolveInstanceRoot()
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exitCode = 1
+    return
+  }
 
   if (!existsSync(start)) {
     console.error(`qctl _internal_plugins ensure: missing dir ${start}`)
@@ -57,8 +66,10 @@ export async function handler(argv) {
   }
 
   try {
+    const os = tryReadOsConfig()
+    const qctlEnv = detectQctlEnvFor(pkgRoot, { osConfigEnv: os?.env })
     const { installed } = await ensurePackageDependencies(pkgRoot, {
-      qctlEnv: process.env.QCTL_ENV,
+      qctlEnv,
       env: process.env,
       frozen: true,
     })

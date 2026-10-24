@@ -52,7 +52,7 @@ On-box VW **container** data belongs on `/tank`.
 `/vw` survived with a previously synced Bitwarden CLI vault:
 
 1. New OS + seed with Tier-0 systemd creds (`@tag(guest)` on `provision/.env.*`).
-2. First-boot mounts `/vw` → `@initVw` offline unlock → re-seed tank key from bootstrap
+2. First-boot mounts `/vw` → `@initVw` offline unlock → re-seed tank key from ISO Tier-0
    if needed → import/mount `tank` (stock ZFS units).
 3. Start Quadlets (on-box VW data already on `/tank`). No hand-paste of the pool key; VW
    server need not be up.
@@ -60,16 +60,16 @@ On-box VW **container** data belongs on `/tank`.
 ## Path B — `/vw` empty or lost
 
 1. Restore a reachable Vaultwarden (e.g. restic → temp host; point DNS), **or** use
-   personal/prod VW (`serverUrl` on `@initVw` in `bootstrap/.env.prod`).
+   personal/prod VW (`serverUrl` on `@initVw` in `provision/.env.prod`).
 2. Rebuild Rocky; `@initVw` apikey login+sync into `/vw` (first graph resolve that needs VW).
 3. `tank-import` writes `tank_passphrase_<poolId>` → unlock pools → Quadlets.
    If private images: ensure `@tag(container-registry)` bindings apply (`registry-login`).
 
 ## Fallback
 
-Workstation that previously synced VW: copy Tier-0 into seed creds (or a small recovery
-script that injects them). Avoid pasting pool passphrases by hand if the bootstrap
-graph can still resolve `tank_passphrase_<poolId>` / provision `!env`.
+Workstation that previously synced VW: copy Tier-0 into ISO `qctl-seed/tier0` (or a small
+recovery script that injects them). Avoid pasting pool passphrases by hand if provision
+`!env` / VW can still resolve `tank_passphrase_<poolId>`.
 
 ## Worst
 

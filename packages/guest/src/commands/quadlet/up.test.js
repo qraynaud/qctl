@@ -21,7 +21,7 @@ describe('quadlet up command', () => {
   })
 
   test('handler runs runUp with dry-run and app filter', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     const runUp = spyOn(upMod, 'runUp').mockImplementation(async () => {})
@@ -30,7 +30,7 @@ describe('quadlet up command', () => {
   })
 
   test('handler omits apps when none given', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     const runUp = spyOn(upMod, 'runUp').mockImplementation(async () => {})

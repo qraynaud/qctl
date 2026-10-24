@@ -1,6 +1,6 @@
 import { packagesMapWithRequired } from '@qctl/shared'
 
-import { createContext } from '../context.js'
+import { createTestContext } from '../context.test-helpers.js'
 import { StageError } from '../errors.js'
 import networkUp from './network-up.js'
 import { describe, expect, test } from 'bun:test'
@@ -9,8 +9,7 @@ const stubPackages = packagesMapWithRequired()
 
 describe('network-up stage', () => {
   test('plan uses platform.networking.planEnsureUp when present', () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       platform: {
         id: 'fake',
@@ -26,8 +25,7 @@ describe('network-up stage', () => {
 
   test('run calls ensureUp', async () => {
     let called = false
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       platform: {
         id: 'fake',
@@ -45,10 +43,13 @@ describe('network-up stage', () => {
   })
 
   test('run fails when networking.ensureUp is missing', async () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
-      platform: { id: 'fake', packages: stubPackages, installPackages: async () => {} },
+      platform: {
+        id: 'fake',
+        packages: stubPackages,
+        installPackages: async () => {},
+      },
     })
     await expect(networkUp.run(ctx)).rejects.toBeInstanceOf(StageError)
   })

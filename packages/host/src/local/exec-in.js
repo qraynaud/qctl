@@ -8,13 +8,13 @@ export const LOCAL_APP_ROOT = '/tank/rocky/volumes'
 
 /**
  * Env passed into every `podman exec` for guest qctl.
+ * Identity (root / env / apps) comes from `/etc/qctl/config.json` written by provision —
+ * do not inject `QCTL_ROOT` / `QCTL_ENV` here.
  * @param {LocalContext} ctx
  * @returns {Record<string, string>}
  */
 export function applianceExecEnv(ctx) {
   return {
-    QCTL_ENV: ctx.env,
-    QCTL_ROOT: '/tank/rocky',
     QCTL_PLATFORM_MODULE: `/usr/local/lib/qctl/${ctx.platformBasename}`,
     QCTL_LIB_DIR: '/usr/local/lib/qctl',
     APP_ROOT: LOCAL_APP_ROOT,

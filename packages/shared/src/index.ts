@@ -27,4 +27,13 @@ export type {
   PlatformStageContext,
   QctlRole,
 } from './roles.js'
+export type {
+  OsConfig,
+  SeedAppsUser,
+  SeedConfig,
+  SeedInitTank,
+  SeedProfile,
+  SeedRepo,
+  SeedSubidRange,
+} from './seed/config-types.ts'
 export type { YamlMapping, YamlValue } from './yaml.js'

@@ -3,7 +3,7 @@
  * `registry|username|token` from provision `registries:`).
  */
 import { StageError } from '../errors.js'
-import { detectQctlEnv, envString } from './lib/credentials.js'
+import { detectQctlEnv, secretString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -120,7 +120,7 @@ export default {
    */
   plan(ctx) {
     return [
-      `Tier-0 ROCKY_REGISTRIES (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      `Tier-0 ROCKY_REGISTRIES (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'each registry|user|token → podman login (root + apps)',
     ]
   },
@@ -132,7 +132,7 @@ export default {
 
     let lines
     try {
-      lines = parseRegistriesJson(envString(ctx.env, 'ROCKY_REGISTRIES'))
+      lines = parseRegistriesJson(secretString(ctx.secrets, 'ROCKY_REGISTRIES'))
     } catch (err) {
       throw new StageError('registry-login', err instanceof Error ? err.message : String(err))
     }
@@ -141,7 +141,7 @@ export default {
       return
     }
 
-    const appsUser = ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
+    const appsUser = ctx.osConfig.quadletUser?.trim() || 'apps'
     let n = 0
     for (let i = 0; i < lines.length; i++) {
       const label = `registries[${i}]`

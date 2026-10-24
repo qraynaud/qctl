@@ -18,6 +18,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
+import { tryReadOsConfig } from '../os-config.js'
 import { readEngine } from '../quadlet/apps/index.js'
 import { createContext } from '../quadlet/context.js'
 import { detectQctlEnvFor } from '../quadlet/env.js'
@@ -48,8 +49,9 @@ import { loadSensitiveItems } from './varlock.js'
  * @property {boolean} [restart]   restart apps that consume secrets we updated
  * @property {string} [qctlEnv]
  *   sets `QCTL_ENV` for schema `@import(..., enabled=…)`
- *   (default: $QCTL_ENV, else repo `.env` ENV=, else dev)
- * @property {Record<string, string | undefined>} [env]
+ *   (default: CLI → `/etc/qctl/config.json` → repo `.env` ENV= → `dev`)
+ * @property {string} [quadletUser] apps username (default: OS config / `apps`)
+ * @property {Record<string, string | undefined>} [env] ambient spawn env only
  * @property {number} [uid]
  * @property {PodmanRunner} [podman]
  * @property {(msg: string) => void} [log]
@@ -127,11 +129,11 @@ export function schemaDirIsRootful(root, schemaDir) {
  * Default podman access: root drives both stores (rootless via runuser as the apps user);
  * non-root can only drive its own rootless store.
  * @param {number} uid
- * @param {Record<string, string | undefined>} env
+ * @param {string} [quadletUser] apps username from OS config (default `apps`)
  * @returns {PodmanRunner}
  */
-export function defaultPodman(uid, env) {
-  const user = env.QCTL_QUADLET_USER ?? 'apps'
+export function defaultPodman(uid, quadletUser = 'apps') {
+  const user = quadletUser.trim() || 'apps'
   return {
     run(engine, args, opts = {}) {
       if (engine === 'rootful') {
@@ -185,8 +187,10 @@ export async function syncAll(o) {
   const env = o.env ?? process.env
   const uid = o.uid ?? process.getuid?.() ?? 0
   const log = o.log ?? ((m) => console.log(`secret-sync: ${m}`))
-  const podman = o.podman ?? defaultPodman(uid, env)
-  const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, env)
+  const os = tryReadOsConfig()
+  const quadletUser = o.quadletUser ?? os?.quadletUser ?? 'apps'
+  const podman = o.podman ?? defaultPodman(uid, quadletUser)
+  const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, { osConfigEnv: os?.env })
 
   const dirs = discoverSchemaDirs(o.root)
   if (dirs.length === 0)

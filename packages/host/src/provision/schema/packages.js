@@ -1,37 +1,18 @@
 import { z } from 'zod'
 
-import {
-  MERCURIAL_PIPX_DEFAULT,
-  normalizePackages as normalizePackagesShared,
-  packagesHttpItemSchema,
-  packagesPipxItemSchema,
-} from '@qctl/shared'
+import { MERCURIAL_PIPX_DEFAULT, packagesManifestSchema } from '@qctl/shared'
 
 /** @import { NormalizedPackages as SharedNormalizedPackages } from '@qctl/shared' */
-
-export { packagesHttpItemSchema, packagesPipxItemSchema }
 
 /** Re-export pin used by seed tests / cloud-init packages.json. */
 export const HG_PIPX_DEFAULT = MERCURIAL_PIPX_DEFAULT
 
-const pkgName = z.string().trim().min(1)
-
 /** @typedef {SharedNormalizedPackages} NormalizedPackages */
 
-/**
- * Field defaults + `.prefault({})` + transform to canonical NormalizedPackages
- * (pipx strings → `{ package, inject }`, http nullables).
- */
-export const packagesSchema = z
-  .strictObject({
-    distro: z.array(pkgName).default(() => []),
-    pipx: z.array(packagesPipxItemSchema).default(() => []),
-    http: z.array(packagesHttpItemSchema).default(() => []),
-  })
-  .prefault({})
-  .transform((p) => normalizePackagesShared(p))
+/** Provision `packages:` → normalized via shared {@link packagesManifestSchema}. */
+export const packagesSchema = packagesManifestSchema
 
-/** YAML `null` → omit, then `packagesSchema` prefault. */
+/** YAML `null` → omit, then {@link packagesSchema} prefault. */
 export const packagesFieldSchema = z
   .unknown()
   .optional()

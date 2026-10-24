@@ -62,7 +62,11 @@ export async function redefineDomainXml(connect, name, transform, label) {
 }
 
 /**
- * Wait out "in shutdown", then destroy if running/paused so define can change hardware.
+ * Wait out "in shutdown", then stop the domain so define can change hardware.
+ * Prefers ACPI shutdown (lets guest flush) before `destroy` — after cloud-init
+ * Final Stage the host often redefines serial immediately; a hard destroy can
+ * truncate `init-state.json` / lose `first-boot.done` and remask SSH on reboot.
+ *
  * @param {string} connect
  * @param {string} name
  * @param {string} reason
@@ -82,6 +86,18 @@ export async function stopDomainForRedefine(connect, name, reason) {
   }
   if (state === 'running' || state === 'paused') {
     console.log(chalk.cyan(`vm: stopping ${name} to ${reason}…`))
+    if (state === 'running') {
+      await virsh(connect, 'shutdown', name).nothrow()
+      const gracefulDeadline = Date.now() + 60_000
+      while (Date.now() < gracefulDeadline) {
+        state = await domainState(connect, name)
+        if (state === 'shut off') return
+        await sleep(1000)
+      }
+      state = await domainState(connect, name)
+      if (state === 'shut off') return
+      console.log(chalk.yellow(`vm: ACPI shutdown slow — virsh destroy ${name}`))
+    }
     const d = await virsh(connect, 'destroy', name).nothrow()
     if (d.exitCode !== 0) {
       die(`virsh destroy failed: ${String(d.stderr || d.stdout).trim()}`)

@@ -4,8 +4,9 @@
  */
 import { readFile } from 'node:fs/promises'
 
-import { loadDisksJson } from '../disks-json.js'
+import { resolveDisks } from '../disks-json.js'
 import { StageError } from '../errors.js'
+import { mergeInitState, readInitState, resolveInitStatePath } from '../state.js'
 import {
   mustExec,
   tankCanary,
@@ -44,10 +45,29 @@ async function drillOneTank(ctx, disks, poolId) {
     before = await readFile(canary, 'utf8')
   } catch {
     ctx.log(`zfs-drill: canary missing for ${poolId}; writing one before drill`)
-    await writeTankCanary(ctx, canary, tank.mount)
+    await writeTankCanary(ctx, { poolId, path: canary, mountPath: tank.mount })
     before = await readFile(canary, 'utf8')
   }
   if (!before.trim()) throw new Error(`canary empty at ${canary}`)
+  const prevCanary = readInitState(resolveInitStatePath(ctx.paths)).tanks?.[poolId]?.canary
+  if (prevCanary?.line && prevCanary.line !== before) {
+    throw new Error(
+      `canary init-state mismatch before drill (${poolId})\n  file: ${before}\n  state: ${prevCanary.line}`,
+    )
+  }
+  if (!prevCanary?.line) {
+    mergeInitState(
+      {
+        tanks: {
+          [poolId]: {
+            mount: tank.mount,
+            canary: { line: before, writtenAt: new Date().toISOString() },
+          },
+        },
+      },
+      { paths: ctx.paths },
+    )
+  }
   ctx.log(`zfs-drill: ${poolId} canary before export: ${before.replace(/\n/g, ' ').trim()}`)
 
   ctx.log(`zfs-drill: exporting ${poolId} (mirrors prod cold handoff)`)
@@ -76,6 +96,20 @@ async function drillOneTank(ctx, disks, poolId) {
       `canary mismatch after drill (${poolId})\n  before: ${before}\n  after:  ${after}`,
     )
   }
+  const verifiedAt = new Date().toISOString()
+  const writtenAt =
+    readInitState(resolveInitStatePath(ctx.paths)).tanks?.[poolId]?.canary?.writtenAt || verifiedAt
+  mergeInitState(
+    {
+      tanks: {
+        [poolId]: {
+          mount: tank.mount,
+          canary: { line: before, writtenAt, drillVerifiedAt: verifiedAt },
+        },
+      },
+    },
+    { paths: ctx.paths },
+  )
   ctx.log(`zfs-drill: ${poolId} canary intact after export→import→unlock`)
   await tankEnableBootUnlock(ctx, poolId, tank.mount)
   const status = await ctx.exec(['zpool', 'status', poolId])
@@ -91,7 +125,7 @@ export default {
    * @param {StageContext} ctx
    */
   plan(ctx) {
-    if (ctx.env.ROCKY_SKIP_ZFS_DRILL === '1') {
+    if (ctx.flags.skipZfsDrill) {
       return ['skipped (ROCKY_SKIP_ZFS_DRILL=1)']
     }
     return [
@@ -104,14 +138,14 @@ export default {
    * @param {StageContext} ctx
    */
   async run(ctx) {
-    if (ctx.env.ROCKY_SKIP_ZFS_DRILL === '1') {
+    if (ctx.flags.skipZfsDrill) {
       ctx.log('zfs-drill: skipped (ROCKY_SKIP_ZFS_DRILL=1)')
       return
     }
     if (!ctx.isRoot()) throw new StageError('zfs-drill', 'must run as root')
 
     try {
-      const disks = await loadDisksJson(ctx.env)
+      const disks = resolveDisks(ctx.seedConfig?.disks)
       if (!disks) throw new Error('disks.json missing — cannot run zfs-drill')
       const poolIds = Object.keys(disks.tanks)
       if (!poolIds.length) {

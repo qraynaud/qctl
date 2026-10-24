@@ -9,7 +9,8 @@ import { dirname } from 'node:path'
 import { tankPassphraseCredName } from '@qctl/shared'
 
 import { StageError } from '../../errors.js'
-import { envString } from './credentials.js'
+import { mergeInitState } from '../../state.js'
+import { secretString } from './credentials.js'
 
 /** @import { StageContext } from '../../context.js' */
 
@@ -23,9 +24,7 @@ export const CREDSTORE_DEFAULT = '/etc/credstore/rocky'
  */
 export function tankPool(ctx, poolId) {
   if (poolId?.trim()) return poolId.trim()
-  // Host init-tank sets QCTL_ZFS_POOL / QCTL_INIT_TANK_POOLS via seed env.
-  const fromList = ctx.env.QCTL_INIT_TANK_POOLS?.trim()?.split(',')[0]?.trim()
-  return ctx.env.QCTL_ZFS_POOL?.trim() || fromList || POOL_DEFAULT
+  return ctx.seedConfig?.initTank?.primaryPool?.trim() || POOL_DEFAULT
 }
 
 /**
@@ -34,7 +33,7 @@ export function tankPool(ctx, poolId) {
  */
 export function tankMount(ctx, mount) {
   if (mount?.trim()) return mount.trim()
-  return ctx.env.ROCKY_TANK_MOUNT?.trim() || MOUNT_DEFAULT
+  return ctx.paths.tankMount?.trim() || MOUNT_DEFAULT
 }
 
 /**
@@ -43,12 +42,9 @@ export function tankMount(ctx, mount) {
  * @param {string} [poolId]
  */
 export function tankCredFile(ctx, poolId) {
-  if (ctx.env.ROCKY_TANK_CRED_FILE?.trim()) return ctx.env.ROCKY_TANK_CRED_FILE.trim()
-  const dir = ctx.env.ROCKY_CREDSTORE_DIR?.trim() || CREDSTORE_DEFAULT
+  if (ctx.paths.tankCredFile?.trim()) return ctx.paths.tankCredFile.trim()
+  const dir = ctx.paths.credstoreDir?.trim() || CREDSTORE_DEFAULT
   const id = poolId?.trim() || tankPool(ctx)
-  if (ctx.env.ROCKY_TANK_CRED_NAME?.trim()) {
-    return `${dir}/${ctx.env.ROCKY_TANK_CRED_NAME.trim()}`
-  }
   return `${dir}/${tankPassphraseCredName(id)}`
 }
 
@@ -57,7 +53,6 @@ export function tankCredFile(ctx, poolId) {
  * @param {string} [poolId]
  */
 export function tankKeyLocation(ctx, poolId) {
-  if (ctx.env.ROCKY_TANK_KEYLOCATION?.trim()) return ctx.env.ROCKY_TANK_KEYLOCATION.trim()
   return `file://${tankCredFile(ctx, poolId)}`
 }
 
@@ -66,7 +61,7 @@ export function tankKeyLocation(ctx, poolId) {
  * @param {string} [mount]
  */
 export function tankCanary(ctx, mount) {
-  if (ctx.env.ROCKY_TANK_CANARY?.trim()) return ctx.env.ROCKY_TANK_CANARY.trim()
+  if (ctx.paths.tankCanary?.trim()) return ctx.paths.tankCanary.trim()
   return `${tankMount(ctx, mount)}/.rocky-canary`
 }
 
@@ -112,7 +107,7 @@ export async function ensureTankPassphraseFromBootstrap(ctx, stageName, poolId) 
     return credFile
   }
   const envKey = tankPassphraseCredName(id)
-  const pass = envString(ctx.env, envKey)
+  const pass = secretString(ctx.secrets, envKey)
   if (!pass) {
     throw new StageError(
       stageName,
@@ -226,10 +221,8 @@ export async function tankEnsureMounted(ctx, poolId, mountPath) {
   const pool = tankPool(ctx, poolId)
   const mount = tankMount(ctx, mountPath)
   const unit = await tankMountUnit(ctx, mount)
-  const attemptsRaw = Number(ctx.env.ROCKY_TANK_MOUNT_ATTEMPTS)
-  const attempts = Number.isFinite(attemptsRaw) && attemptsRaw >= 1 ? Math.floor(attemptsRaw) : 20
-  const delayRaw = Number(ctx.env.ROCKY_TANK_MOUNT_RETRY_MS)
-  const delayMs = Number.isFinite(delayRaw) ? Math.max(0, delayRaw) : 250
+  const attempts = Math.max(1, Math.floor(ctx.flags.tankMountAttempts ?? 20))
+  const delayMs = Math.max(0, ctx.flags.tankMountRetryMs ?? 250)
   /** @type {Error | null} */
   let lastErr = null
 
@@ -323,7 +316,7 @@ export async function tankImportPool(ctx, poolId, mountPath) {
  */
 export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
   const pool = tankPool(ctx, poolId)
-  const cacheDir = ctx.env.ROCKY_ZFS_LIST_CACHE_DIR?.trim() || '/etc/zfs/zfs-list.cache'
+  const cacheDir = ctx.paths.zfsListCacheDir?.trim() || '/etc/zfs/zfs-list.cache'
   const cache = `${cacheDir}/${pool}`
   await fsp.mkdir(cacheDir, { recursive: true })
   if (!fs.existsSync(cache)) {
@@ -360,16 +353,37 @@ export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
 }
 
 /**
+ * Write canary bytes onto the tank dataset (for ZFS drill) and record in init-state.
+ *
  * @param {StageContext} ctx
- * @param {string} [path]
- * @param {string} [mountPath]
+ * @param {{
+ *   poolId: string,
+ *   path?: string,
+ *   mountPath?: string,
+ *   line?: string,
+ * }} opts
+ * @returns {Promise<{ path: string, line: string }>}
  */
-export async function writeTankCanary(ctx, path, mountPath) {
-  const canary = path || tankCanary(ctx, mountPath)
-  await fsp.mkdir(dirname(canary), { recursive: true })
-  const line = `rocky tank canary ${new Date().toISOString()}\n`
-  await fsp.writeFile(canary, line, { mode: 0o644 })
-  await ctx.exec(['sync', canary])
-  ctx.log(`tank: canary → ${canary}`)
-  return canary
+export async function writeTankCanary(ctx, opts) {
+  const poolId = opts.poolId.trim()
+  const mount = tankMount(ctx, opts.mountPath)
+  const path = opts.path || tankCanary(ctx, mount)
+  const writtenAt = new Date().toISOString()
+  const line = opts.line ?? `rocky tank canary ${writtenAt}\n`
+  await fsp.mkdir(dirname(path), { recursive: true })
+  await fsp.writeFile(path, line, { mode: 0o644 })
+  await ctx.exec(['sync', path])
+  mergeInitState(
+    {
+      tanks: {
+        [poolId]: {
+          mount,
+          canary: { line, writtenAt },
+        },
+      },
+    },
+    { paths: ctx.paths },
+  )
+  ctx.log(`tank: canary → init-state + ${path}`)
+  return { path, line }
 }

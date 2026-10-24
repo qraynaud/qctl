@@ -13,6 +13,20 @@ export const rockyPackagesMap = definePackagesMap({
   curl: { distro: ['curl'] },
   jq: { distro: ['jq'] },
   unzip: { distro: ['unzip'] },
+  /**
+   * Host tooling formerly installed only in cloud-init runcmd (tar for
+   * ssh-host-keys, restorecon helpers, cockpit/python deps).
+   */
+  'host-tools': {
+    distro: [
+      'python3',
+      'tar',
+      'bash-completion',
+      'policycoreutils-python-utils',
+      'python3-dateutil',
+      'sqlite',
+    ],
+  },
   pipx: { distro: ['pipx'] },
   git: { distro: ['git'] },
   mercurial: {
