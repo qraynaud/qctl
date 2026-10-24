@@ -17,11 +17,11 @@
     "access": "public"
   },
   "peerDependencies": {
-    "varlock": "^1.22.0"
+    "varlock": "^1.23.0"
   },
   "devDependencies": {
-    "varlock": "^1.22.0",
-    "zod": "^4.6.5"
+    "varlock": "^1.23.0",
+    "zod": "^4.6.7"
   },
   "scripts": {
     "build": "bun run build.js",

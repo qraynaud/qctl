@@ -190,7 +190,7 @@ Proxmox VMs use PVE `tpmstate0` instead — no host `swtpm` required there.
 | Subcommand | Description |
 |------------|-------------|
 | `qctl vm seed` | Build NoCloud ISO in-process (embeds guest binaries; no host ISO tools) |
-| `qctl vm download` | Download/cache the pinned Rocky 9 cloud image |
+| `qctl vm download` | Download/cache the pinned Rocky 10 cloud image |
 | `qctl vm up [apps…]` | Start/create VM; with apps/`--all`, wait for SSH then guest `quadlet up` |
 | `qctl vm down [apps…]` | Bare: ACPI shut down VM; with apps/`--all`: guest `quadlet down` only |
 | `qctl vm destroy` | Delete the VM (and disks unless `--keep-persistent`) |

@@ -62,7 +62,7 @@ async function ensureZfs(log, env) {
   }
   log('rocky-packages: installing ZoL (zfs-release + zfs-kmod)')
   const dist = await run(['rpm', '--eval', '%{dist}'], env)
-  const distTag = dist.stdout.trim() || '.el9'
+  const distTag = dist.stdout.trim() || '.el10'
   const urls = [
     `https://zfsonlinux.org/epel/zfs-release-3-0${distTag}.noarch.rpm`,
     `https://zfsonlinux.org/epel/zfs-release-2-3${distTag}.noarch.rpm`,

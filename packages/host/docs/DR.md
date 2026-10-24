@@ -1,6 +1,6 @@
 # Disaster recovery
 
-Rebuild the **OS** from the same Rocky 9 cloud image + cloud-init recipe. Prefer
+Rebuild the **OS** from the same Rocky 10 cloud image + cloud-init recipe. Prefer
 reattaching surviving **`/vw`** and **`tank`** disks so Path A can unlock without a
 Vaultwarden server.
 

@@ -21,12 +21,12 @@
     "check-version": "bun run ci/check-version.js"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.3",
     "@types/bun": "latest",
     "@types/npmcli__arborist": "^6.3.3",
     "@types/yargs": "^17.0.35",
     "comment-parser": "^1.4.9",
-    "knip": "^6.41.0",
+    "knip": "^6.43.0",
     "typescript": "^7.0.2",
     "yargs": "^18.2.0",
     "zx": "^8.8.5"

@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 
 describe('@qctl/platform-rocky module', () => {
   test('exports CLOUD_IMAGE pin', () => {
-    expect(CLOUD_IMAGE.file).toMatch(/^Rocky-9-GenericCloud-Base-.*\.qcow2$/)
+    expect(CLOUD_IMAGE.file).toMatch(/^Rocky-10-GenericCloud-Base-.*\.qcow2$/)
     expect(CLOUD_IMAGE.url).toContain(CLOUD_IMAGE.file)
     expect(CLOUD_IMAGE.sha256).toMatch(/^[a-f0-9]{64}$/)
   })

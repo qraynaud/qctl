@@ -1,4 +1,4 @@
-# Cloud-init (Rocky 9)
+# Cloud-init (Rocky 10)
 
 Shared templates for the appliance VM: workstation **NoCloud** seed and **Proxmox**
 cloud-init. Same [`user-data.yaml`](../seed/cloud-init/user-data.yaml) intent on both;
@@ -58,7 +58,7 @@ qctl vm seed --allow-missing-tier0 --allow-missing-files
 qctl vm seed
 ```
 
-## Rocky 9 cloud image (pin)
+## Rocky 10 cloud image (pin)
 
 Use **GenericCloud Base** x86_64 (not EC2-specific). Root filesystem is **XFS**.
 
@@ -71,11 +71,12 @@ The pin lives in `@qctl/platform-rocky` as [`cloud-image.json`](../../platform-r
 `CLOUD_IMAGE`. Override with `QCTL_ROCKY_CLOUD_IMAGE` pointing at a JSON file
 of the same shape.
 
-Directory: https://download.rockylinux.org/pub/rocky/9/images/x86_64/
+Directory: https://download.rockylinux.org/pub/rocky/10.2/images/x86_64/
 
-Prefer the **dated** filename (not `.latest`) so a silent upstream bump does not
+Use the **minor-version** path (`10.2/`, not rolling `10/`) and a **dated**
+filename (not `.latest`) so a silent upstream bump does not break the pin or
 change lab hashes. Bump `packages/platform-rocky/cloud-image.json` deliberately
-when you want a newer 9.x cloud image.
+when you want a newer 10.x cloud image.
 
 Cache downloads under `~/.cache/qctl/images/`.
 

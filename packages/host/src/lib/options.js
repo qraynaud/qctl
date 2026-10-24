@@ -144,7 +144,7 @@ export const sharedBoot = (y) =>
     })
     .option('osinfo', {
       type: 'string',
-      default: 'rocky9',
+      default: 'rocky10',
       describe: 'osinfo short-id (workstation)',
     })
     .option('cidata', {
