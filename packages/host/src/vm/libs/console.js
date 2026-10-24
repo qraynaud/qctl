@@ -121,11 +121,27 @@ export function createSerialLineSink(opts = {}) {
 }
 
 /**
+ * Optional `unit.service - ` / `unit.target - ` prefix (systemd ≥257 StatusUnitFormat=combined).
+ * @type {string}
+ */
+const UNIT_DASH = '(?:[\\w@.:\\\\-]+\\s+-\\s+)?'
+
+const CLOUD_FINAL_FAIL = new RegExp(`Failed to start ${UNIT_DASH}Cloud-init:\\s*Final Stage`, 'i')
+const CLOUD_FINAL_OK = new RegExp(
+  `\\[\\s*OK\\s*\\]\\s*Finished ${UNIT_DASH}Cloud-init:\\s*Final Stage`,
+  'i',
+)
+const MULTI_USER_OK = new RegExp(
+  `\\[\\s*OK\\s*\\]\\s*Reached target\\s+${UNIT_DASH}(Multi-User System|Graphical Interface)`,
+  'i',
+)
+
+/**
  * Guest-side failures that mean init-tank will never power off.
  * Do NOT match every systemd [FAILED] (e.g. masked sshd is expected).
  */
 export const INIT_TANK_FATAL_PATTERNS = [
-  /Failed to start Cloud-init: Final Stage/i,
+  CLOUD_FINAL_FAIL,
   /Failed to start Rocky init-tank/i,
   /rocky-init-tank:\s*ERROR:/i,
   // StageError format from guest `qctl _internal_init` (`stage <name>: …`)
@@ -148,16 +164,20 @@ export function matchInitTankFatal(line) {
 }
 
 /**
- * Appliance `vm up`: wait for cloud-final success/failure only.
- * Do not treat final_message or "Reached target Cloud-init" as OK — those can
- * still appear after a failed Final Stage.
+ * Appliance `vm up`: wait for cloud-final success/failure.
+ *
+ * Prefer systemd's Finished line (legacy description-only, or ≥257
+ * `unit.service - Description`). Rocky 10 serial often never shows `[  OK  ]`
+ * status (console goes elsewhere after many `systemctl daemon-reexec` during
+ * `dnf upgrade`), so also accept our seed `final_message` marker — it runs as
+ * the last Final Stage module and is mirrored to the serial console.
  *
  * @param {string} line
  * @returns {SerialOutcome | null}
  */
 export function classifyCloudInitOutcome(line) {
   const plain = stripAnsi(line)
-  if (/Failed to start Cloud-init:\s*Final Stage/i.test(plain)) {
+  if (CLOUD_FINAL_FAIL.test(plain)) {
     return { status: 'fail', line: plain.trim() }
   }
   if (/Failed to start Rocky appliance first-boot/i.test(plain)) {
@@ -167,7 +187,11 @@ export function classifyCloudInitOutcome(line) {
   if (/rocky-(?:vw|tank|baseline):\s*ERROR:/i.test(plain)) {
     return { status: 'fail', line: plain.trim() }
   }
-  if (/\[\s*OK\s*\]\s*Finished Cloud-init:\s*Final Stage/i.test(plain)) {
+  if (CLOUD_FINAL_OK.test(plain)) {
+    return { status: 'ok', line: plain.trim() }
+  }
+  // Seed final_message (packages/host/seed/cloud-init/user-data.yaml) — last Final Stage module.
+  if (/Expect disks:\s*OS \+ \/vw/i.test(plain)) {
     return { status: 'ok', line: plain.trim() }
   }
   return null
@@ -188,7 +212,7 @@ export function classifyRebootReady(line) {
   if (/Failed to start\s+.*(?:tank|Rocky)/i.test(plain)) {
     return { status: 'fail', line: plain.trim() }
   }
-  if (/\[\s*OK\s*\]\s*Reached target\s+(Multi-User System|Graphical Interface)/i.test(plain)) {
+  if (MULTI_USER_OK.test(plain)) {
     return { status: 'ok', line: plain.trim() }
   }
   return null
