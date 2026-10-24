@@ -21,7 +21,7 @@ function mockSpawn(codeFor) {
       stdout: new ReadableStream({
         start(c) {
           if (args[0] === 'rpm' && args[1] === '--eval') {
-            c.enqueue(new TextEncoder().encode('.el9\n'))
+            c.enqueue(new TextEncoder().encode('.el10\n'))
           }
           c.close()
         },

@@ -1,5 +1,5 @@
 /**
- * Pinned Rocky 9 GenericCloud-Base (XFS) for `qctl vm download` / virt-install.
+ * Pinned Rocky 10 GenericCloud-Base (XFS) for `qctl vm download` / virt-install.
  * Bundled into `qctl-platform-rocky.mjs`; host loads `CLOUD_IMAGE` from that plugin.
  */
 import pin from '../cloud-image.json' with { type: 'json' }

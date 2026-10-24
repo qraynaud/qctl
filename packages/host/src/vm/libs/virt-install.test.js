@@ -54,7 +54,7 @@ describe('buildVirtInstallArgs', () => {
         cockpit: { port: 9090, forward: 9090 },
       },
       network: 'default',
-      osinfo: 'rocky9',
+      osinfo: 'rocky10',
       serialTcpPort: 5555,
     })
     expect(args[0]).toBe('virt-install')
@@ -97,7 +97,7 @@ describe('buildVirtInstallArgs', () => {
         cockpit: { port: 9090, forward: 9090 },
       },
       network: 'default',
-      osinfo: 'rocky9',
+      osinfo: 'rocky10',
       bootDiskPath: '/vms/rocky/init-tank-boot.qcow2',
     })
     const joined = args.join(' ')

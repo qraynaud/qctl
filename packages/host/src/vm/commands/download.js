@@ -70,7 +70,7 @@ export async function downloadImage({ force, env, target }) {
 }
 
 export const command = 'download'
-export const describe = 'Download/cache the pinned Rocky 9 cloud qcow2'
+export const describe = 'Download/cache the pinned Rocky 10 cloud qcow2'
 
 /**
  * @param {Argv} yargs
