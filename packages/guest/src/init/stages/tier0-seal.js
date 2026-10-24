@@ -6,6 +6,7 @@ import { chmod, mkdir, readdir, rm, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { StageError } from '../errors.js'
+import { TIER0_PENDING_DIR_DEFAULT } from '../load-seed-config.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -39,8 +40,8 @@ export default {
    * @param {StageContext} ctx
    */
   plan(ctx) {
-    const pending = ctx.env.ROCKY_TIER0_PENDING?.trim() || '/var/lib/rocky/tier0-pending'
-    const enc = ctx.env.ROCKY_TIER0_ENCRYPTED?.trim() || '/etc/credstore.encrypted'
+    const pending = ctx.paths.tier0Pending?.trim() || TIER0_PENDING_DIR_DEFAULT
+    const enc = ctx.paths.tier0Encrypted?.trim() || '/etc/credstore.encrypted'
     return [`seal ${pending}/* → ${enc}/* via systemd-creds --with-key=auto`]
   },
   /**
@@ -49,8 +50,8 @@ export default {
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('tier0-seal', 'must run as root')
 
-    const pendingDir = ctx.env.ROCKY_TIER0_PENDING?.trim() || '/var/lib/rocky/tier0-pending'
-    const encDir = ctx.env.ROCKY_TIER0_ENCRYPTED?.trim() || '/etc/credstore.encrypted'
+    const pendingDir = ctx.paths.tier0Pending?.trim() || TIER0_PENDING_DIR_DEFAULT
+    const encDir = ctx.paths.tier0Encrypted?.trim() || '/etc/credstore.encrypted'
 
     try {
       const names = new Set([

@@ -3,13 +3,20 @@
  * Encrypted pools: Tier-0 `tank_passphrase_<poolId>` → credstore key file.
  */
 import { existsSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { join } from 'node:path'
 
 import { buildZpoolCreateArgv } from '@qctl/shared'
 
-import { loadDisksJson } from '../disks-json.js'
+import { resolveDisks } from '../disks-json.js'
 import { StageError } from '../errors.js'
+import {
+  INIT_TANK_STAMP,
+  mergeInitState,
+  readInitState,
+  resolveInitStatePath,
+  resolveQctlVarDir,
+  writeThinStamp,
+} from '../state.js'
 import { detectQctlEnv } from './lib/credentials.js'
 import { diskBySerial } from './lib/disk-by-serial.js'
 import {
@@ -57,13 +64,8 @@ async function resolveTankVdevs(ctx, tank) {
  * @returns {string[]}
  */
 function poolsToCreate(ctx, disks) {
-  const poolsEnv = ctx.env.QCTL_INIT_TANK_POOLS?.trim()
-  if (poolsEnv) {
-    return poolsEnv
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  }
+  const configured = ctx.seedConfig?.initTank?.pools
+  if (configured?.length) return configured.map((s) => s.trim()).filter(Boolean)
   return Object.keys(disks.tanks)
 }
 
@@ -85,7 +87,7 @@ async function createOneTank(ctx, disks, poolId) {
   if (await tankPoolImported(ctx, poolId)) {
     throw new Error(
       `pool ${poolId} already imported — aborting`
-        + (ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
+        + (ctx.seedConfig?.initTank?.force === true
           ? ' (host -f should have wiped members)'
           : ' (pass host init-tank -f to recreate)'),
     )
@@ -93,7 +95,7 @@ async function createOneTank(ctx, disks, poolId) {
   if (await tankPoolImportable(ctx, poolId)) {
     throw new Error(
       `pool ${poolId} is importable on these disks — aborting`
-        + (ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
+        + (ctx.seedConfig?.initTank?.force === true
           ? ' (host -f should have wiped members)'
           : ' (pass host init-tank -f to recreate)'),
     )
@@ -116,7 +118,7 @@ async function createOneTank(ctx, disks, poolId) {
   )
   await mustExec(ctx, argv, `zpool create ${tank.id}`)
 
-  await writeTankCanary(ctx, `${tank.mount}/.rocky-canary`, tank.mount)
+  await writeTankCanary(ctx, { poolId: tank.id, mountPath: tank.mount })
   await tankEnableBootUnlock(ctx, tank.id, tank.mount)
 
   const status = await ctx.exec(['zpool', 'status', tank.id])
@@ -137,10 +139,10 @@ export default {
   plan(ctx) {
     return [
       'require ROCKY_TANK_CREATE_I_UNDERSTAND=yes',
-      'read disks.json tanks (+ QCTL_INIT_TANK_POOLS filter)',
-      `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      'read disks.json tanks (+ seed initTank.pools filter)',
+      `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'zpool create from vdev role registry (options.pool / dataset / acl; no child datasets)',
-      'export + stamp',
+      'export + init-state + thin init-tank-done stamp (no disk-root ok marker)',
     ]
   },
   /**
@@ -148,28 +150,31 @@ export default {
    */
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('tank-create', 'must run as root')
-    if (ctx.env.ROCKY_TANK_CREATE_I_UNDERSTAND !== 'yes') {
+    if (!ctx.flags.tankCreateConfirmed) {
       throw new StageError(
         'tank-create',
         'refusing to create: set ROCKY_TANK_CREATE_I_UNDERSTAND=yes (dedicated init VM / empty disks only)',
       )
     }
 
-    const stamp = ctx.env.QCTL_INIT_TANK_STAMP?.trim() || '/var/lib/rocky/init-tank-done'
-    const okMarker = ctx.env.QCTL_INIT_TANK_OK?.trim() || '/vw/.rocky-init-tank-ok'
-    const force = ctx.env.QCTL_INIT_TANK_FORCE === 'yes'
+    const stamp =
+      ctx.paths.initTankStamp?.trim() || join(resolveQctlVarDir(ctx.paths), INIT_TANK_STAMP)
+    const force = ctx.seedConfig?.initTank?.force === true
+    const state = readInitState(resolveInitStatePath(ctx.paths))
 
-    if (existsSync(stamp) && !force) {
-      ctx.log(`tank-create: already done (${stamp}) — skipping create`)
+    if ((existsSync(stamp) || state.initTank?.completedAt) && !force) {
+      ctx.log(
+        `tank-create: already done (${state.initTank?.completedAt || stamp}) — skipping create`,
+      )
       return
     }
 
     try {
-      const disks = await loadDisksJson(ctx.env)
+      const disks = resolveDisks(ctx.seedConfig?.disks)
       if (!disks) throw new Error('disks.json missing — cannot create tanks')
       const poolIds = poolsToCreate(ctx, disks)
       if (!poolIds.length) {
-        ctx.log('tank-create: no tanks in disks.json / QCTL_INIT_TANK_POOLS — nothing to create')
+        ctx.log('tank-create: no tanks in disks.json / seed initTank.pools — nothing to create')
         return
       }
 
@@ -190,10 +195,17 @@ export default {
       }
 
       const when = new Date().toISOString()
-      await mkdir(dirname(stamp), { recursive: true })
-      await writeFile(stamp, `${when}\n`, { mode: 0o644 })
-      await mkdir(dirname(okMarker), { recursive: true })
-      await writeFile(okMarker, `${when}\n`, { mode: 0o644 })
+      mergeInitState(
+        {
+          profile: 'init-tank',
+          initTank: { completedAt: when, pools: poolIds, force },
+        },
+        { paths: ctx.paths },
+      )
+      writeThinStamp(INIT_TANK_STAMP, `${when}\n`, {
+        paths: ctx.paths,
+        primaryPath: stamp,
+      })
       ctx.log(
         `tank-create: created + exported OK (${poolIds.join(', ')}); `
           + `later boots re-seed ${tankCredFile(ctx, poolIds[0])} from bootstrap`,

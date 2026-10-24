@@ -1,6 +1,6 @@
 /**
  * Host baseline: timezone, linger, apps subids/podman socket, ZFS module,
- * offline firewall. Data volumes: {@link ./data-mounts.js}.
+ * sshd drops, offline firewall. Data volumes: {@link ./data-mounts.js}.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -14,7 +14,15 @@ import { StageError } from '../errors.js'
  * @returns {string}
  */
 function appsUser(ctx) {
-  return ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
+  return ctx.osConfig.quadletUser?.trim() || 'apps'
+}
+
+/**
+ * @param {StageContext} ctx
+ * @returns {string}
+ */
+function resolveTimezone(ctx) {
+  return ctx.osConfig.timezone?.trim() || ctx.seedConfig?.timezone?.trim() || 'Europe/Paris'
 }
 
 /**
@@ -114,16 +122,14 @@ async function ensureAppsJournalGroup(ctx) {
  */
 async function ensureAppsSubids(ctx) {
   const user = appsUser(ctx)
-  const uidCount = Number(ctx.env.QCTL_APPS_SUBID_COUNT || 32768) || 32768
-  const gidCount =
-    Number(ctx.env.QCTL_APPS_SUBGID_COUNT || ctx.env.QCTL_APPS_SUBID_COUNT || 32768) || 32768
+  const { subuid: subUidCfg, subgid: subGidCfg } = ctx.osConfig.apps
   const subuid = await Bun.file('/etc/subuid')
     .text()
     .catch(() => '')
   const userLine = new RegExp(`^${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`, 'm')
   if (!userLine.test(subuid)) {
-    const start = Number(ctx.env.QCTL_APPS_SUBID_START) || nextSubidStart('/etc/subuid')
-    const end = start + uidCount - 1
+    const start = subUidCfg.start || nextSubidStart('/etc/subuid')
+    const end = start + subUidCfg.count - 1
     ctx.log(`rocky-baseline: usermod --add-subuids ${start}-${end} ${user}`)
     await must(ctx, 'usermod', '--add-subuids', `${start}-${end}`, user)
   }
@@ -131,11 +137,8 @@ async function ensureAppsSubids(ctx) {
     .text()
     .catch(() => '')
   if (!userLine.test(subgid)) {
-    const start =
-      Number(ctx.env.QCTL_APPS_SUBGID_START)
-      || Number(ctx.env.QCTL_APPS_SUBID_START)
-      || nextSubidStart('/etc/subgid')
-    const end = start + gidCount - 1
+    const start = subGidCfg.start || nextSubidStart('/etc/subgid')
+    const end = start + subGidCfg.count - 1
     ctx.log(`rocky-baseline: usermod --add-subgids ${start}-${end} ${user}`)
     await must(ctx, 'usermod', '--add-subgids', `${start}-${end}`, user)
   }
@@ -192,13 +195,13 @@ export default {
    * @param {StageContext} ctx
    */
   plan(ctx) {
-    const tz = ctx.env.ROCKY_TIMEZONE?.trim() || 'Europe/Paris'
+    const tz = resolveTimezone(ctx)
     const user = appsUser(ctx)
     return [
       `timedatectl set-timezone ${tz}`,
       'login.defs SUB_*_COUNT=0 + umask 022',
       `linger ${user} + subids + podman.socket`,
-      'modprobe zfs; firewall-offline-cmd ssh/cockpit/http/https',
+      'modprobe zfs; sshd drops; firewall-offline-cmd ssh/cockpit/http/https',
     ]
   },
   /**
@@ -206,7 +209,7 @@ export default {
    */
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('host-baseline', 'must run as root')
-    const tz = ctx.env.ROCKY_TIMEZONE?.trim() || 'Europe/Paris'
+    const tz = resolveTimezone(ctx)
     const user = appsUser(ctx)
 
     try {
@@ -240,6 +243,14 @@ umask 022
       await mkdir('/etc/modules-load.d', { recursive: true })
       await writeFile('/etc/modules-load.d/zfs.conf', 'zfs\n')
       await must(ctx, 'modprobe', 'zfs')
+
+      await mkdir('/etc/ssh/sshd_config.d', { recursive: true })
+      await writeFile(
+        '/etc/ssh/sshd_config.d/50-rocky-no-root.conf',
+        'PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n',
+      )
+      await writeFile('/etc/ssh/sshd_config.d/00-rocky-lab-ssh.conf', 'GSSAPIAuthentication no\n')
+      ctx.log('rocky-baseline: sshd drops (no root/password; GSSAPI off)')
 
       for (const svc of ['ssh', 'cockpit', 'http', 'https']) {
         await must(ctx, 'firewall-offline-cmd', `--add-service=${svc}`)

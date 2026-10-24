@@ -7,6 +7,7 @@ export const REQUIRED_PLATFORM_CAPABILITIES = Object.freeze(
     'curl',
     'jq',
     'unzip',
+    'host-tools',
     'zfs',
     'xfsprogs',
     'pipx',

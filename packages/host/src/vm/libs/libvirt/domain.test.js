@@ -76,9 +76,31 @@ describe('redefineDomainXml', () => {
 })
 
 describe('stopDomainForRedefine', () => {
-  test('destroys when running', async () => {
+  test('ACPI shutdown when running (no destroy if guest stops)', async () => {
     /** @type {string[]} */
     const cmds = []
+    let state = 'running'
+    spyOn(virshMod, 'virsh').mockImplementation(
+      routeVirsh((_c, cmd) => {
+        cmds.push(cmd)
+        if (cmd === 'domstate') return virshReply(0, state)
+        if (cmd === 'shutdown') {
+          state = 'shut off'
+          return virshReply(0)
+        }
+        return virshReply(0)
+      }),
+    )
+    await stopDomainForRedefine('qemu:///session', 'a', 'test')
+    expect(cmds).toContain('shutdown')
+    expect(cmds).not.toContain('destroy')
+  })
+
+  test('falls back to destroy when ACPI does not stop the guest', async () => {
+    /** @type {string[]} */
+    const cmds = []
+    const sleepMod = await import('../wait.js')
+    const sleepSpy = spyOn(sleepMod, 'sleep').mockResolvedValue(undefined)
     spyOn(virshMod, 'virsh').mockImplementation(
       routeVirsh((_c, cmd) => {
         cmds.push(cmd)
@@ -86,7 +108,19 @@ describe('stopDomainForRedefine', () => {
         return virshReply(0)
       }),
     )
-    await stopDomainForRedefine('qemu:///session', 'a', 'test')
+    const realNow = Date.now
+    let t = 1_000_000
+    Date.now = () => {
+      t += 35_000
+      return t
+    }
+    try {
+      await stopDomainForRedefine('qemu:///session', 'a', 'test')
+    } finally {
+      Date.now = realNow
+      sleepSpy.mockRestore()
+    }
+    expect(cmds).toContain('shutdown')
     expect(cmds).toContain('destroy')
   })
 
@@ -102,6 +136,7 @@ describe('stopDomainForRedefine', () => {
     )
     await stopDomainForRedefine('qemu:///session', 'a', 'test')
     expect(cmds).not.toContain('destroy')
+    expect(cmds).not.toContain('shutdown')
   })
 })
 

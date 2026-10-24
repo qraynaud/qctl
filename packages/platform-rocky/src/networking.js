@@ -1,26 +1,26 @@
 /**
- * Rocky OS networking: NetworkManager egress + firewalld DNAT from ports.json.
+ * Rocky OS networking: NetworkManager egress + firewalld DNAT from seed ports.
  * Guest stages call these via `platform.networking` after dynamic import.
  */
-import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 
 import { dnatEntriesFromPorts, portsSchema } from '@qctl/shared'
 
 /** @import { PlatformNetworkCtx, PlatformNetworking, PortsMap } from '@qctl/shared' */
 
-const DEFAULT_PORTS_JSON = '/usr/local/lib/rocky/ports.json'
 const DEFAULT_ROUTE_LOCALNET_CONF = '/etc/sysctl.d/90-rocky-route-localnet.conf'
+const EGRESS_HOST = '1.1.1.1'
+const EGRESS_IFACE = 'eth0'
+const EGRESS_WAIT_SECS = 120
 
 /**
- * @param {PlatformNetworkCtx} ctx
+ * @param {PlatformNetworkCtx} _ctx
  * @returns {string[]}
  */
-export function planEnsureUp(ctx) {
-  const host = ctx.env.QCTL_EGRESS_HOST?.trim() || '1.1.1.1'
-  const iface = ctx.env.QCTL_EGRESS_IFACE?.trim() || 'eth0'
-  const wait = ctx.env.QCTL_EGRESS_WAIT_SECS?.trim() || '120'
-  return [`ping ${host}; on miss: nmcli/dhclient ${iface}, wait up to ${wait}s`]
+export function planEnsureUp(_ctx) {
+  return [
+    `ping ${EGRESS_HOST}; on miss: nmcli/dhclient ${EGRESS_IFACE}, wait up to ${EGRESS_WAIT_SECS}s`,
+  ]
 }
 
 /**
@@ -29,37 +29,45 @@ export function planEnsureUp(ctx) {
  * @param {PlatformNetworkCtx} ctx
  */
 export async function ensureUp(ctx) {
-  const host = ctx.env.QCTL_EGRESS_HOST?.trim() || '1.1.1.1'
-  const waitSecs = Math.max(1, Number(ctx.env.QCTL_EGRESS_WAIT_SECS || 120) || 120)
-  const iface = ctx.env.QCTL_EGRESS_IFACE?.trim() || 'eth0'
-
   /**
    * @returns {Promise<boolean>}
    */
   async function egressOk() {
-    const r = await ctx.exec(['ping', '-c1', '-W2', host])
+    const r = await ctx.exec(['ping', '-c1', '-W2', EGRESS_HOST])
     return r.code === 0
   }
 
   if (await egressOk()) {
-    ctx.log(`rocky-network: egress OK (${host})`)
+    ctx.log(`rocky-network: egress OK (${EGRESS_HOST})`)
     return
   }
 
-  ctx.log(`rocky-network: no egress to ${host} — bringing up ${iface}`)
+  ctx.log(`rocky-network: no egress to ${EGRESS_HOST} — bringing up ${EGRESS_IFACE}`)
   await ctx.exec(['nmcli', 'networking', 'on'])
-  await ctx.exec(['nmcli', 'device', 'connect', iface])
-  await ctx.exec(['dhclient', '-1', iface])
+  await ctx.exec(['nmcli', 'device', 'connect', EGRESS_IFACE])
+  await ctx.exec(['dhclient', '-1', EGRESS_IFACE])
 
-  const tries = Math.max(1, Math.floor(waitSecs / 2))
+  const tries = Math.max(1, Math.floor(EGRESS_WAIT_SECS / 2))
   for (let i = 0; i < tries; i++) {
     if (await egressOk()) {
-      ctx.log(`rocky-network: egress OK (${host})`)
+      ctx.log(`rocky-network: egress OK (${EGRESS_HOST})`)
       return
     }
     await Bun.sleep(2000)
   }
-  ctx.log(`rocky-network: WARN: no egress to ${host} after ${waitSecs}s (continuing)`)
+  ctx.log(
+    `rocky-network: WARN: no egress to ${EGRESS_HOST} after ${EGRESS_WAIT_SECS}s (continuing)`,
+  )
+}
+
+/**
+ * Ports come only from ISO seed (`ctx.ports`).
+ * @param {PlatformNetworkCtx} ctx
+ * @returns {{ ports: PortsMap, source: string } | null}
+ */
+function resolvePortsMap(ctx) {
+  if (!ctx.ports) return null
+  return { ports: portsSchema.parse(ctx.ports), source: 'seed config' }
 }
 
 /**
@@ -67,44 +75,37 @@ export async function ensureUp(ctx) {
  * @returns {string[]}
  */
 export function planApplyDnat(ctx) {
-  const portsJson = ctx.env.QCTL_PORTS_JSON?.trim() || DEFAULT_PORTS_JSON
-  return [`DNAT from ${portsJson} (firewalld → 127.0.0.1)`]
+  if (ctx.ports) {
+    return ['DNAT from seed config ports (firewalld → 127.0.0.1)']
+  }
+  return ['DNAT skipped (no seed ports)']
 }
 
 /**
- * Apply firewalld DNAT forwards from seed-injected `ports.json` (entries with `dnat`).
+ * Apply firewalld DNAT forwards from seed ports (entries with `dnat`).
  * @param {PlatformNetworkCtx} ctx
  */
 export async function applyDnat(ctx) {
-  const portsJson = ctx.env.QCTL_PORTS_JSON?.trim() || DEFAULT_PORTS_JSON
-  if (!fs.existsSync(portsJson)) {
-    ctx.log(`rocky-services: no ${portsJson} — skipping DNAT forwards`)
+  const resolved = resolvePortsMap(ctx)
+  if (!resolved) {
+    ctx.log('rocky-services: no seed ports — skipping DNAT forwards')
     return
   }
-
-  /** @type {PortsMap} */
-  let ports
-  try {
-    ports = portsSchema.parse(JSON.parse(await fsp.readFile(portsJson, 'utf8')))
-  } catch (err) {
-    throw new Error(
-      `DNAT: failed to read ${portsJson}: ${err instanceof Error ? err.message : err}`,
-    )
-  }
+  const { ports, source } = resolved
 
   const dnats = dnatEntriesFromPorts(ports)
   if (!dnats.length) {
-    ctx.log(`rocky-services: no ports with dnat in ${portsJson} — skipping`)
+    ctx.log(`rocky-services: no ports with dnat in ${source} — skipping`)
     return
   }
 
-  ctx.log(`rocky-services: applying ${dnats.length} DNAT forward(s) from ${portsJson} → 127.0.0.1`)
+  ctx.log(`rocky-services: applying ${dnats.length} DNAT forward(s) from ${source} → 127.0.0.1`)
 
-  const routeLocalnet = ctx.env.QCTL_ROUTE_LOCALNET_CONF?.trim() || DEFAULT_ROUTE_LOCALNET_CONF
+  const routeLocalnet = ctx.routeLocalnetConf?.trim() || DEFAULT_ROUTE_LOCALNET_CONF
   await fsp.writeFile(
     routeLocalnet,
     [
-      '# Rocky: firewalld DNAT → 127.0.0.1 (rootless PublishPort); from ports.json',
+      '# Rocky: firewalld DNAT → 127.0.0.1 (rootless PublishPort); from seed ports',
       'net.ipv4.conf.all.route_localnet=1',
       'net.ipv4.conf.default.route_localnet=1',
       '',
@@ -118,7 +119,6 @@ export async function applyDnat(ctx) {
   for (const { name, port, dnat } of dnats) {
     const bare = `port=${port}:proto=tcp:toport=${dnat}`
     const withAddr = `${bare}:toaddr=127.0.0.1`
-    // Best-effort remove of prior rules (missing → non-zero; ignore).
     await ctx.exec(['firewall-cmd', '--permanent', `--remove-forward-port=${bare}`])
     await ctx.exec(['firewall-cmd', '--permanent', `--remove-forward-port=${withAddr}`])
     const add = await ctx.exec(['firewall-cmd', '--permanent', `--add-forward-port=${withAddr}`])

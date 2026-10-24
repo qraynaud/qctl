@@ -21,7 +21,7 @@ describe('quadlet ps command', () => {
   })
 
   test('handler passes app filter when apps are given', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     const runPs = spyOn(lifecycleMod, 'runPs').mockImplementation(() => {})
@@ -30,7 +30,7 @@ describe('quadlet ps command', () => {
   })
 
   test('handler lists all when apps omitted', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     const runPs = spyOn(lifecycleMod, 'runPs').mockImplementation(() => {})

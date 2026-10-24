@@ -1,5 +1,5 @@
 /**
- * Guest `disks.json` (seed inject) — resolved topology without tank passphrases.
+ * Guest disks layout (ISO seed config) — resolved topology without tank passphrases.
  * Passphrases stay in Tier-0 only (`tank_passphrase_<poolId>`).
  */
 import { z } from 'zod'

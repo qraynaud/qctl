@@ -1,9 +1,9 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { createContext } from '../context.js'
+import { createTestContext, testSeedWithDisks } from '../context.test-helpers.js'
 import { StageError } from '../errors.js'
 import tankImport from './tank-import.js'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -22,7 +22,12 @@ afterEach(() => {
 
 const tankOptions = {
   pool: { ashift: 12, autotrim: 'off', autoexpand: 'on', failmode: 'continue' },
-  dataset: { compression: 'lz4', atime: 'off', xattr: 'sa', special_small_blocks: 0 },
+  dataset: {
+    compression: 'lz4',
+    atime: 'off',
+    xattr: 'sa',
+    special_small_blocks: 0,
+  },
   acl: { acltype: 'posix', aclmode: 'passthrough', aclinherit: 'passthrough' },
 }
 
@@ -68,29 +73,23 @@ function writeDisks(dir, opts = {}) {
     }
     if (encrypted) encryptedTankIds.push('cold')
   }
-  const path = join(dir, 'disks.json')
-  writeFileSync(
-    path,
-    JSON.stringify({
-      os: { id: 'os' },
-      data: {},
-      tanks,
-      members: [],
-      encryptedTankIds,
-    }),
-  )
-  return path
+  return {
+    os: { id: 'os' },
+    data: {},
+    tanks,
+    members: [],
+    encryptedTankIds,
+  }
 }
 
 describe('tank-import stage', () => {
   test('plan mentions disks.json + never create', () => {
-    const ctx = createContext({ env: {}, log: () => {} })
+    const ctx = createTestContext({ log: () => {} })
     expect(tankImport.plan(ctx).some((l) => /never create|disks\.json/i.test(l))).toBe(true)
   })
 
   test('run requires root', async () => {
-    const ctx = createContext({
-      env: {},
+    const ctx = createTestContext({
       log: () => {},
       isRoot: () => false,
     })
@@ -100,21 +99,17 @@ describe('tank-import stage', () => {
   test('skips when disks.json has no tanks', async () => {
     const dir = makeTempDir()
     temps.push(dir)
-    const disksPath = join(dir, 'disks.json')
-    writeFileSync(
-      disksPath,
-      JSON.stringify({
-        os: { id: 'os' },
-        data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs' } },
-        tanks: {},
-        members: [],
-        encryptedTankIds: [],
-      }),
-    )
+    const disks = {
+      os: { id: 'os' },
+      data: { vw: { id: 'vw', mount: '/vw', fs: 'xfs' } },
+      tanks: {},
+      members: [],
+      encryptedTankIds: [],
+    }
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: { ROCKY_DISKS_JSON: disksPath },
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
@@ -126,7 +121,7 @@ describe('tank-import stage', () => {
   test('reseeds key and imports when pool is importable', async () => {
     const dir = makeTempDir()
     temps.push(dir)
-    const disksPath = writeDisks(dir)
+    const disks = writeDisks(dir)
     const credDir = join(dir, 'credstore')
     mkdirSync(credDir, { recursive: true })
     const cacheDir = join(dir, 'zfs-list.cache')
@@ -137,14 +132,11 @@ describe('tank-import stage', () => {
     const execs = []
     /** @type {string[]} */
     const logs = []
-    const ctx = createContext({
-      env: {
-        QCTL_ENV: 'dev',
-        ROCKY_DISKS_JSON: disksPath,
-        ROCKY_CREDSTORE_DIR: credDir,
-        ROCKY_ZFS_LIST_CACHE_DIR: cacheDir,
-        tank_passphrase_tank: 'lab-pass',
-      },
+    const initState = join(dir, 'init-state.json')
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
+      secrets: { tank_passphrase_tank: 'lab-pass' },
+      paths: { credstoreDir: credDir, zfsListCacheDir: cacheDir, initState },
       log: (l) => logs.push(l),
       isRoot: () => true,
       exec: async (argv) => {
@@ -201,12 +193,15 @@ describe('tank-import stage', () => {
     expect(execs.some((a) => a[0] === 'systemctl' && a.includes('zfs-zed.service'))).toBe(true)
     expect(logs.some((l) => /verified tank mounted/i.test(l))).toBe(true)
     expect(logs.some((l) => l.includes('tank-import: done'))).toBe(true)
+    const state = JSON.parse(readFileSync(initState, 'utf8'))
+    expect(state.tanks.tank.canary.line).toBeTruthy()
+    expect(state.tanks.tank.importedAt).toMatch(/^\d{4}-/)
   })
 
   test('imports multiple tanks from disks.json', async () => {
     const dir = makeTempDir()
     temps.push(dir)
-    const disksPath = writeDisks(dir, { multi: true })
+    const disks = writeDisks(dir, { multi: true })
     const credDir = join(dir, 'credstore')
     mkdirSync(credDir, { recursive: true })
     const cacheDir = join(dir, 'zfs-list.cache')
@@ -216,13 +211,13 @@ describe('tank-import stage', () => {
 
     /** @type {string[]} */
     const imported = []
-    const ctx = createContext({
-      env: {
-        ROCKY_DISKS_JSON: disksPath,
-        ROCKY_CREDSTORE_DIR: credDir,
-        ROCKY_ZFS_LIST_CACHE_DIR: cacheDir,
-        tank_passphrase_tank: 'a',
-        tank_passphrase_cold: 'b',
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
+      secrets: { tank_passphrase_tank: 'a', tank_passphrase_cold: 'b' },
+      paths: {
+        credstoreDir: credDir,
+        zfsListCacheDir: cacheDir,
+        initState: join(dir, 'init-state.json'),
       },
       log: () => {},
       isRoot: () => true,
@@ -268,17 +263,17 @@ describe('tank-import stage', () => {
   test('fails when mount path is not a zfs mount', async () => {
     const dir = makeTempDir()
     temps.push(dir)
-    const disksPath = writeDisks(dir, { encrypted: false })
+    const disks = writeDisks(dir, { encrypted: false })
     const cacheDir = join(dir, 'zfs-list.cache')
     mkdirSync(cacheDir, { recursive: true })
     writeFileSync(join(cacheDir, 'tank'), 'tank\t/mnt\n')
 
-    const ctx = createContext({
-      env: {
-        ROCKY_DISKS_JSON: disksPath,
-        ROCKY_ZFS_LIST_CACHE_DIR: cacheDir,
-        ROCKY_TANK_MOUNT_ATTEMPTS: '2',
-        ROCKY_TANK_MOUNT_RETRY_MS: '0',
+    const ctx = createTestContext({
+      ...testSeedWithDisks(disks),
+      flags: { tankMountAttempts: 2, tankMountRetryMs: 0 },
+      paths: {
+        zfsListCacheDir: cacheDir,
+        initState: join(dir, 'init-state.json'),
       },
       log: () => {},
       isRoot: () => true,

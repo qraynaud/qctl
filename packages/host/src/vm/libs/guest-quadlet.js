@@ -1,5 +1,6 @@
 /**
  * Guest `qctl quadlet …` over SSH (same endpoint as sync / vm shell).
+ * Instance root comes from guest `/etc/qctl/config.json` (no `--root`).
  */
 import { chalk } from 'zx'
 
@@ -46,8 +47,7 @@ export async function guestQuadletUp(ep, apps) {
     },
     async (conn) => {
       for (const app of list) await ensureTankDirs(conn, app)
-      const root = shellQuote(ep.remoteDir || '/tank/rocky')
-      await sshExecOk(conn, `qctl quadlet up --root ${root} ${list.map(shellQuote).join(' ')}`)
+      await sshExecOk(conn, `qctl quadlet up ${list.map(shellQuote).join(' ')}`)
     },
   )
 }
@@ -68,8 +68,7 @@ export async function guestQuadletUpAll(ep) {
     },
     async (conn) => {
       await ensureTankDirs(conn)
-      const root = shellQuote(ep.remoteDir || '/tank/rocky')
-      await sshExecOk(conn, `qctl quadlet up --root ${root}`)
+      await sshExecOk(conn, 'qctl quadlet up')
     },
   )
 }
@@ -91,11 +90,7 @@ export async function guestQuadletDown(ep, apps) {
       identity: ep.identity,
     },
     async (conn) => {
-      const root = shellQuote(ep.remoteDir || '/tank/rocky')
-      await sshExec(
-        conn,
-        `qctl quadlet down --root ${root} ${list.map(shellQuote).join(' ')} || true`,
-      )
+      await sshExec(conn, `qctl quadlet down ${list.map(shellQuote).join(' ')} || true`)
     },
   )
 }
@@ -110,10 +105,7 @@ export async function guestQuadletDown(ep, apps) {
  */
 export async function guestQuadletPs(ep, apps = []) {
   const list = apps.map(String).filter(Boolean)
-  const root = shellQuote(ep.remoteDir || '/tank/rocky')
-  const cmd = list.length
-    ? `qctl quadlet ps --root ${root} ${list.map(shellQuote).join(' ')}`
-    : `qctl quadlet ps --root ${root}`
+  const cmd = list.length ? `qctl quadlet ps ${list.map(shellQuote).join(' ')}` : 'qctl quadlet ps'
   /** @type {{ code: number, stdout: string, stderr: string }} */
   let r = { code: 1, stdout: '', stderr: '' }
   await withSsh(

@@ -9,13 +9,12 @@
 #   QCTL_PLATFORM_MODULE       → /etc/environment.d/90-qctl-platform.conf
 #   quadlet                    → /usr/local/bin/quadlet             (thin → qctl quadlet)
 #   varlock-local-encrypt      → /usr/local/bin/varlock-local-encrypt  (SEA sibling for qctl)
-#   (first-boot secrets are Tier-0 LoadCredentialEncrypted from provision seed — no bootstrap/)
 #   bash-completion            → /usr/share/bash-completion/completions/quadlet
 #
 # No varlock CLI — guest uses the graph API embedded in `qctl-guest` (installed as `qctl`).
+# Instance root for day-2 commands comes from `/etc/qctl/config.json` (guest load-seed).
 #
 # Override the source dir with QCTL_GUEST_SRC (tests / manual re-install).
-# Override the instance root for the quadlet wrapper with QCTL_ROOT (default /tank/rocky).
 set -euo pipefail
 
 log() { echo "rocky-install-qctl: $*"; }
@@ -24,7 +23,6 @@ die() { echo "rocky-install-qctl: ERROR: $*" >&2; exit 1; }
 BIN_DIR="${QCTL_BIN_DIR:-/usr/local/bin}"
 LIB_DIR="${QCTL_LIB_DIR:-/usr/local/lib/qctl}"
 COMPLETIONS_DIR="${QCTL_COMPLETIONS_DIR:-/usr/share/bash-completion/completions}"
-INSTANCE_ROOT="${QCTL_ROOT:-/tank/rocky}"
 MNT=""
 
 cleanup() {
@@ -77,16 +75,20 @@ main() {
   cat >"$BIN_DIR/quadlet" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-export QCTL_ROOT="\${QCTL_ROOT:-${INSTANCE_ROOT}}"
 exec "${BIN_DIR}/qctl" quadlet "\$@"
 EOF
   chmod 0755 "$BIN_DIR/quadlet"
-  log "installed $BIN_DIR/quadlet → qctl quadlet (QCTL_ROOT default ${INSTANCE_ROOT})"
+  log "installed $BIN_DIR/quadlet → qctl quadlet"
 
   cat >"$COMPLETIONS_DIR/quadlet" <<'EOF'
 # bash-completion for /usr/local/bin/quadlet → qctl quadlet
 _quadlet_apps() {
-  local repo=${QCTL_ROOT:-/tank/rocky} d
+  local repo=/tank/rocky d
+  if [[ -f /etc/qctl/config.json ]]; then
+    local from_cfg
+    from_cfg="$(sed -n 's/.*"root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /etc/qctl/config.json | head -1)"
+    [[ -n "$from_cfg" ]] && repo="$from_cfg"
+  fi
   [[ -d "$repo/applications" ]] || return 0
   for d in "$repo/applications"/*/app.yaml; do
     [[ -f "$d" ]] || continue
@@ -106,9 +108,9 @@ _quadlet() {
     up | down | enable | start | stop | restart | ps)
       if [[ "$cur" == -* ]]; then
         case "$cmd" in
-          up) mapfile -t COMPREPLY < <(compgen -W "--dry-run -n --root --help" -- "$cur") ;;
-          enable) mapfile -t COMPREPLY < <(compgen -W "--no-install --root --help" -- "$cur") ;;
-          *) mapfile -t COMPREPLY < <(compgen -W "--root --help" -- "$cur") ;;
+          up) mapfile -t COMPREPLY < <(compgen -W "--dry-run -n --help" -- "$cur") ;;
+          enable) mapfile -t COMPREPLY < <(compgen -W "--no-install --help" -- "$cur") ;;
+          *) mapfile -t COMPREPLY < <(compgen -W "--help" -- "$cur") ;;
         esac
       else
         mapfile -t COMPREPLY < <(compgen -W "$(_quadlet_apps)" -- "$cur")

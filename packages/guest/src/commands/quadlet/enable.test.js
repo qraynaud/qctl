@@ -23,7 +23,7 @@ describe('quadlet enable command', () => {
   test('handler runs runEnable with install flag', async () => {
     /** @type {Array<{ app: string, install: boolean }>} */
     const calls = []
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     spyOn(enableMod, 'runEnable').mockImplementation(async (_ctx, opts) => {

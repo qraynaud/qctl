@@ -2,8 +2,9 @@
  * Import + unlock ZFS tanks from disks.json. Never creates or destroys a pool.
  * Encrypted pools: Tier-0 `tank_passphrase_<poolId>` → credstore key file.
  */
-import { loadDisksJson } from '../disks-json.js'
+import { resolveDisks } from '../disks-json.js'
 import { StageError } from '../errors.js'
+import { mergeInitState } from '../state.js'
 import { detectQctlEnv } from './lib/credentials.js'
 import {
   ensureTankPassphraseFromBootstrap,
@@ -55,7 +56,15 @@ async function importOneTank(ctx, disks, poolId) {
   // rely on zfs-drill alone (it can be skipped) for reboot remount.
   await tankEnableBootUnlock(ctx, poolId, tank.mount)
 
-  await writeTankCanary(ctx, undefined, tank.mount)
+  await writeTankCanary(ctx, { poolId, mountPath: tank.mount })
+  mergeInitState(
+    {
+      tanks: {
+        [poolId]: { mount: tank.mount, importedAt: new Date().toISOString() },
+      },
+    },
+    { paths: ctx.paths },
+  )
 
   // Final gate before later stages (hg-clone): must be a real ZFS mount, not
   // an OS-disk placeholder under tank.mount.
@@ -79,10 +88,10 @@ export default {
   plan(ctx) {
     return [
       'read disks.json tanks',
-      `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'import/unlock each pool (never create); mount from topology',
       'enable zfs-list.cache / zfs-load-key@<pool> for reboot remount',
-      'write canary under each mount',
+      'write canary under each mount + record in init-state',
       'assert each tank.mount is zfs + zfs mounted=yes (fail closed)',
     ]
   },
@@ -94,7 +103,7 @@ export default {
     ctx.log('tank-import: start (import-only; never creates)')
 
     try {
-      const disks = await loadDisksJson(ctx.env)
+      const disks = resolveDisks(ctx.seedConfig?.disks)
       if (!disks) throw new Error('disks.json missing — cannot import tanks')
       const poolIds = Object.keys(disks.tanks)
       if (!poolIds.length) {

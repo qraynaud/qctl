@@ -1,6 +1,6 @@
 import { packagesMapWithRequired } from '@qctl/shared'
 
-import { createContext } from '../context.js'
+import { createTestContext } from '../context.test-helpers.js'
 import { StageError } from '../errors.js'
 import startServices from './start-services.js'
 import { describe, expect, test } from 'bun:test'
@@ -9,8 +9,7 @@ const stubPackages = packagesMapWithRequired()
 
 describe('start-services stage', () => {
   test('plan includes unmask and dnat lines', () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       platform: {
         id: 'fake',
@@ -25,8 +24,7 @@ describe('start-services stage', () => {
   })
 
   test('run requires root', async () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       isRoot: () => false,
       platform: {
@@ -40,11 +38,14 @@ describe('start-services stage', () => {
   })
 
   test('run fails without applyDnat', async () => {
-    const ctx = createContext({
-      env: { QCTL_ENV: 'dev' },
+    const ctx = createTestContext({
       log: () => {},
       isRoot: () => true,
-      platform: { id: 'fake', packages: stubPackages, installPackages: async () => {} },
+      platform: {
+        id: 'fake',
+        packages: stubPackages,
+        installPackages: async () => {},
+      },
     })
     await expect(startServices.run(ctx)).rejects.toThrow(/applyDnat/)
   })

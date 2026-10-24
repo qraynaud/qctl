@@ -41,7 +41,7 @@ export async function quadletUp(ctx, apps) {
   if (!list.length) return
   log(`quadlet up ${list.join(' ')}`)
   for (const app of list) await ensureTankDirs(ctx, app)
-  await execInAppliance(ctx, `cd /tank/rocky && qctl quadlet up ${list.map(shellQuote).join(' ')}`)
+  await execInAppliance(ctx, `qctl quadlet up ${list.map(shellQuote).join(' ')}`)
 }
 
 /**
@@ -51,7 +51,7 @@ export async function quadletUp(ctx, apps) {
 export async function quadletUpAll(ctx) {
   log('quadlet up (all apps)')
   await ensureTankDirs(ctx)
-  await execInAppliance(ctx, 'cd /tank/rocky && qctl quadlet up')
+  await execInAppliance(ctx, 'qctl quadlet up')
 }
 
 /**
@@ -63,11 +63,9 @@ export async function quadletDown(ctx, apps) {
   const list = (Array.isArray(apps) ? apps : [apps]).map(String).filter(Boolean)
   if (!list.length) return
   log(`quadlet down ${list.join(' ')}`)
-  await execInAppliance(
-    ctx,
-    `cd /tank/rocky && qctl quadlet down ${list.map(shellQuote).join(' ')} || true`,
-    { nothrow: true },
-  )
+  await execInAppliance(ctx, `qctl quadlet down ${list.map(shellQuote).join(' ')} || true`, {
+    nothrow: true,
+  })
 }
 
 /**
@@ -103,7 +101,7 @@ export function allRowsUp(table) {
  * @returns {Promise<boolean>}
  */
 export async function anyQuadletUp(ctx) {
-  const r = await execInAppliance(ctx, 'cd /tank/rocky && qctl quadlet ps', {
+  const r = await execInAppliance(ctx, 'qctl quadlet ps', {
     nothrow: true,
   })
   return anyRowUp(String(r.stdout))
@@ -115,7 +113,7 @@ export async function anyQuadletUp(ctx) {
  * @returns {Promise<string>}
  */
 async function quadletPsAll(ctx) {
-  const r = await execInAppliance(ctx, 'cd /tank/rocky && qctl quadlet ps', { nothrow: true })
+  const r = await execInAppliance(ctx, 'qctl quadlet ps', { nothrow: true })
   return String(r.stdout)
 }
 
@@ -134,11 +132,9 @@ export async function waitQuadletHealthy(ctx, apps, attempts = 90) {
   log(`wait for ${label} healthy`)
   let table = ''
   for (let i = 0; i < attempts; i++) {
-    const r = await execInAppliance(
-      ctx,
-      `cd /tank/rocky && qctl quadlet ps ${list.map(shellQuote).join(' ')}`,
-      { nothrow: true },
-    )
+    const r = await execInAppliance(ctx, `qctl quadlet ps ${list.map(shellQuote).join(' ')}`, {
+      nothrow: true,
+    })
     table = String(r.stdout)
     if (allRowsUp(table)) {
       logDim(`${label} healthy`)

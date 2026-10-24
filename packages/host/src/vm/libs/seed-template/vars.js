@@ -140,12 +140,12 @@ export async function buildVars({
     /** `appliance` | `init-tank` — switches deltas in the shared user-data.yaml */
     profile: seedProfile,
     is_init_tank: seedProfile === 'init-tank',
-    // Empty → !template omits write_files entry for vlan-parents.env
+    /** Seed-tree VLAN parents (also materialised by guest load-seed). */
     vlan_parent_env: parentLines.length ? `${parentLines.join('\n')}\n` : '',
-    /** Sorted Tier-0 keys (provision → guest) for LoadCredentialEncrypted templates. */
+    /** Sorted Tier-0 keys (provision → guest) for `qctl-seed/tier0/` + seed config. */
     guest_credential_keys: guestKeys,
     has_guest_credentials: guestKeys.length > 0,
-    /** Canonical disks for seed inject (passphrases stay in Tier-0 only). */
+    /** Canonical disks for seed-tree config (passphrases stay in Tier-0 only). */
     resolved_disks: resolvedDisks,
     /** init-tank: comma-separated pool ids for guest zpool create. */
     init_tank_pools: pools.join(','),
@@ -189,3 +189,5 @@ export async function buildVars({
   if (repoBranch) console.log(chalk.dim(`  provision.repo.branch: ${repoBranch}`))
   return ctx
 }
+
+/** @typedef {Awaited<ReturnType<typeof buildVars>>} SeedVars */

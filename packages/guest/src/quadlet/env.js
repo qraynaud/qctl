@@ -62,21 +62,37 @@ function sourceSeedEnv(scope, file) {
 }
 
 /**
- * Which `QCTL_ENV` to load graphs with.
- * @param {{ root: string, baseEnv: Scope }} ctx
+ * Which env label to load graphs with (`QCTL_ENV` inside varlock only).
+ * Preference: CLI / ctx override → `/etc/qctl/config.json` → repo `.env` `ENV=` → `dev`.
+ * Does **not** read ambient `process.env.QCTL_ENV`.
+ *
+ * @param {{
+ *   root: string,
+ *   qctlEnv?: string,
+ *   osConfig?: { env?: string },
+ * }} ctx
  * @returns {string}
  */
 export function detectQctlEnv(ctx) {
-  return detectQctlEnvFor(ctx.root, ctx.baseEnv)
+  return detectQctlEnvFor(ctx.root, {
+    qctlEnv: ctx.qctlEnv,
+    osConfigEnv: ctx.osConfig?.env,
+  })
 }
 
 /**
  * @param {string} root instance root
- * @param {Scope} baseEnv
+ * @param {{
+ *   qctlEnv?: string,
+ *   osConfigEnv?: string,
+ * }} [opts]
  * @returns {string}
  */
-export function detectQctlEnvFor(root, baseEnv) {
-  if (baseEnv.QCTL_ENV) return baseEnv.QCTL_ENV
+export function detectQctlEnvFor(root, opts = {}) {
+  const fromCli = opts.qctlEnv?.trim()
+  if (fromCli) return fromCli
+  const fromOs = opts.osConfigEnv?.trim()
+  if (fromOs) return fromOs
   const link = join(root, '.env')
   if (existsSync(link)) {
     /** @type {Scope} */
@@ -92,9 +108,18 @@ export function detectQctlEnvFor(root, baseEnv) {
 }
 
 /**
+ * @typedef {object} EnvLoadCtx
+ * @property {string} root
+ * @property {Scope} baseEnv ambient spawn/varlock env (not identity)
+ * @property {string} seedDir
+ * @property {string} [qctlEnv]
+ * @property {{ env?: string }} [osConfig]
+ */
+
+/**
  * Fresh render env: process env + seed-baked derived keys. No graph values yet.
  * Template path builtin `${__DIRNAME}` is applied in {@link substitute}, not here.
- * @param {{ root: string, baseEnv: Scope, seedDir: string }} ctx
+ * @param {EnvLoadCtx} ctx
  * @param {string} qctlEnv
  * @returns {RenderEnv}
  */
@@ -119,7 +144,7 @@ function seedRenderEnv(ctx, qctlEnv) {
 /**
  * Load the varlock graph for `dir` (non-sensitive items only) into the render env.
  * @param {RenderEnv} renv
- * @param {{ baseEnv: Scope, seedDir: string }} ctx
+ * @param {Pick<EnvLoadCtx, 'baseEnv' | 'seedDir'>} ctx
  * @param {string} dir directory holding `.env.schema`
  */
 async function applyGraph(renv, ctx, dir) {
@@ -198,7 +223,7 @@ function assertPackageRootNoSensitive(renv, pkgDir) {
 
 /**
  * Repo-level render env when the repo root has a `.env.schema`.
- * @param {{ root: string, baseEnv: Scope, seedDir: string }} ctx
+ * @param {EnvLoadCtx} ctx
  * @returns {Promise<RenderEnv>}
  */
 export async function loadRepoEnv(ctx) {
@@ -209,7 +234,7 @@ export async function loadRepoEnv(ctx) {
 
 /**
  * Package-root render env for Quadlet `${VAR}` substitution.
- * @param {{ root: string, baseEnv: Scope, seedDir: string }} ctx
+ * @param {EnvLoadCtx} ctx
  * @param {string} pkgDir applications/<app>
  * @returns {Promise<RenderEnv>}
  */
@@ -231,7 +256,7 @@ export async function loadRenderEnv(ctx, pkgDir) {
 /**
  * Network package render env: `networks/<n>/` directory graph when `.env.schema` exists,
  * otherwise the repo-root graph alone.
- * @param {{ root: string, baseEnv: Scope, seedDir: string }} ctx
+ * @param {EnvLoadCtx} ctx
  * @param {string} netFile absolute path to `.network` file
  * @returns {Promise<RenderEnv>}
  */

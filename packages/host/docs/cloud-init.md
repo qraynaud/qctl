@@ -38,9 +38,9 @@ Matches prod appliance roles (lab uses tiny qcow2s; same counts and serials):
 | `!template "…"` | Inline **Nunjucks**. Context: `provision.*` = provision YAML; seed-only `env`, `instance_id`, `profile` / `is_init_tank`, `admin_ssh_authorized_keys`, …. Empty output drops that `write_files` entry. Filter: `named`. |
 | `!file path` | Embed seed-kit `<path>` (`lib/…`, `first-boot/…`). Nunjucks only if the file contains `{{` / `{%`; empty render drops the entry. |
 
-Bake `provision/<env>.yaml` into seed as `provision.*` (e.g. `ports.json` for guest DNAT,
-`vlan-parents.env`, `QCTL_APPS_SUBID_*` / `QCTL_APPS_SUBGID_*` for `/etc/subuid` +
-`/etc/subgid`) — no YAML parsing on the guest.
+Bake `provision/<env>.yaml` into ISO `qctl-seed/config.json` (disks, ports, packages,
+VLAN parents, apps identity, admin SSH keys) plus `qctl-seed/tier0/*` — guest
+`qctl _internal_init` loads them. Cloud-init only bootstraps install + init units.
 Appliance users under `users` are optional. Defaults: `admin` (uid/gid 1000; password
 omitted → key-only sudo with seed SSH keys / host pubkey fallback) and `apps`
 (uid/gid 900; subuid/subgid `<id>×1000:32768`). `gid` defaults to `uid` when omitted.
@@ -110,45 +110,39 @@ Proxmox.
 
 ## Required secrets / tokens
 
-Rendered into user-data / systemd credentials by `qctl vm seed`:
+Staged onto cidata by `qctl vm seed` (not cloud-init `write_files`):
 
 | Input | Source | Consumed as |
 |-------|--------|-------------|
-| Admin SSH public key(s) | `ssh.authorized_keys` in `provision/<env>.yaml` (or `~/.ssh` fallback) | `/etc/rocky/admin_ssh_authorized_keys`; `admin-user` stage installs on VW admin (not root) |
-| Tier-0 VW credentials | `provision/.env.*` keys with `@tag(guest)` | `/etc/credstore.encrypted/*` + `LoadCredentialEncrypted` on `rocky-first-boot` |
-| Pre-clone / registry secrets | [`bootstrap/`](../../bootstrap/) | Baked into seed; used before `hg-clone` |
+| Admin SSH public key(s) | `ssh.authorized_keys` in `provision/<env>.yaml` (or `~/.ssh` fallback) | ISO `qctl-seed/config.json` → `/etc/rocky/admin_ssh_authorized_keys`; `admin-user` installs on VW admin (not root) |
+| Tier-0 guest credentials | `provision/.env.*` keys with `@tag(guest)` | ISO `qctl-seed/tier0/<KEY>` → pending → `/etc/credstore.encrypted/*` (`tier0-seal` stage) |
 | Tank passphrase(s) | Prefer omit from seed | `tank-import` / `tank-create` re-seed `/etc/credstore/rocky/tank_passphrase_<poolId>` from Tier-0 |
 
 `apps` has **no** SSH keys and **no** sudo. Cockpit/sudo/SSH admin comes from VW Login
-`rocky` (`admin-user` stage; `sshd` starts in `start-services`). Root SSH is disabled. Host bootstrap
-secrets live on that same Login (fields + attachments). Pool key SoT is field `tank-passphrase`;
-the stable on-disk file is for ZFS `keylocation=file://`. SSH host keys SoT is attachment
-`ssh-host-keys.tar.gz`. Registry auth: bootstrap `.env.<env>` keys with
-`@tag(container-registry)` and value `registry|username|token` — `registry-login`
-stage runs `podman login` for root and `apps`.
+`rocky` (`admin-user` stage; `sshd` starts in `start-services`). Root SSH is disabled
+(`host-baseline` sshd drops). Pool key SoT is field `tank-passphrase`; the stable
+on-disk file is for ZFS `keylocation=file://`. SSH host keys SoT is attachment
+`ssh-host-keys.tar.gz`. Registry auth: `@tag(container-registry)` values
+`registry|username|token` — `registry-login` runs `podman login` for root and `apps`.
 
-Heptapod deploy key is bootstrap `DEPLOY_KEY` (prod: `vw("rocky", attachment="heptapod-deploy-key")`).
-The `hg-clone` stage writes it under the **admin** `~/.ssh/deploy_key`, then
-`hg clone|pull` as that user into `/tank/rocky`. The selected provision profile’s
-`env` bakes `QCTL_ENV` into `/etc/environment.d/91-rocky-env.conf` (first-boot /
-init-tank units load it). Provision
-`repo.vcs` (`git`|`hg`, default `git`) is baked as `QCTL_REPO_VCS`. Optional
-`repo.branch` → `QCTL_REPO_BRANCH`. On **appliance** seed
-(`vm up`), `repo.vcs: hg` also adds mercurial+hg-evolve to `packages.pipx` and stock
+Heptapod deploy key is Tier-0 `DEPLOY_KEY` (prod: `vw("rocky", attachment="heptapod-deploy-key")`).
+`hg-clone` writes it under the **admin** `~/.ssh/deploy_key`, then `hg clone|pull` into
+`/tank/rocky`. Identity (`QCTL_ENV`, repo vcs/url/branch, apps subids) is written to
+`/etc/qctl/config.json` by guest load-seed (no `91-rocky-env.conf`). On **appliance**
+seed (`vm up`), `repo.vcs: hg` also adds mercurial+hg-evolve to `packages.pipx` and stock
 `/etc/mercurial/hgrc` via provision `files:` (override by listing that path yourself).
 Init-tank does not auto-add mercurial.
 
 ### `bw` unlock paths (before tanks)
 
-First-boot secrets come from seed Tier-0 (`tank_passphrase_<poolId>` from
+First-boot secrets come from ISO Tier-0 (`tank_passphrase_<poolId>` from
 `disks.tanks.*.passphrase`, `SSH_HOST_KEYS`, `ADMIN_*`, `DEPLOY_KEY`,
 `@tag(container-registry)`). Prod bindings use `@initVw` + `vw()`; lab uses literals.
 `bw` (if used) comes from provision `packages.http` / `packages.distro`. Extra installs:
-`packages.{distro,pipx,http}` in `provision/<env>.yaml` → seed `packages.json` → guest `qctl _internal_init`
-(appliance + init-tank). `pipx` is installed on the guest only when `packages.pipx` is
-non-empty.
-Day-2 Podman secrets: `qctl secret sync`. `/usr/local/bin/quadlet` is installed by
-`install-qctl-guest.sh`.
+`packages.{distro,pipx,http}` in `provision/<env>.yaml` → ISO seed config → guest
+`installInitPackages` (appliance + init-tank). `pipx` is installed only when
+`packages.pipx` is non-empty. Day-2 Podman secrets: `qctl secret sync`.
+`/usr/local/bin/quadlet` is installed by `install-qctl-guest.sh`.
 
 1. **Path A:** `/vw` already has CLI vault data → Tier-0 unlocks offline → `tank-import` re-seeds tank key file if missing → import/mount (VW need not be up). Keep the `/vw` disk across OS rebuilds.
 2. **Path B:** empty `/vw` → login+sync to a **reachable** VW → then same.
@@ -159,27 +153,30 @@ then mounts. Key file: `file:///etc/credstore/rocky/tank_passphrase_<poolId>`. V
 `zfs-load-key.service` is a `/dev/null` stub — do not unmask it; there is no real unit
 underneath.
 
-**Export/import drill (`zfs-drill` stage):** `zpool export` → import → unlock → verify `/tank/.rocky-canary`. Skip with `ROCKY_SKIP_ZFS_DRILL=1`.
+**Export/import drill (`zfs-drill` stage):** `zpool export` → import → unlock → verify
+tank canary (on-disk `.rocky-canary` + `init-state.json`). Skip with `ROCKY_SKIP_ZFS_DRILL=1`.
 
 Never put Vaultwarden CLI apodata (`@initVw(appDataDir=…)`) on encrypted `tank`.
 On-box VW **container** data belongs on `/tank`.
 
 ## After first boot (expectation)
 
-cloud-init installs the guest tooling from the NoCloud ISO (`lib/install-qctl-guest.sh`:
-`qctl-guest` → `/usr/local/bin/qctl`, `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/` (guest import),
-`varlock-local-encrypt` (SEA sibling for disk cache; no varlock CLI) under
-`/usr/local/lib/qctl/`. Instance `# @plugin` packages resolve from the repo
-`node_modules` (install via `qctl _internal_plugins ensure` / graph load), installs packages,
-enables linger for `apps`, installs OpenZFS, enables
-`rocky-tier0-seal` + `rocky-first-boot`, then **`wait-qctl-init.sh`** runs
-`systemctl start rocky-first-boot` (plain start — oneshot already waits for ExecStart;
-do not use `start --wait` with `RemainAfterExit=yes` or cloud-final hangs forever) and
-**requires** `/var/lib/rocky/first-boot.done`. If `qctl _internal_init` fails, that script exits
-non-zero so **`cloud-init status` is error** (not a false “done”). The same script is
-installed as `scripts/per-boot/90-rocky-wait-qctl-init.sh` so a reboot mid-runcmd cannot
-skip the gate: once the unit is enabled, every boot waits for the stamp until it exists.
-The unit runs **`qctl _internal_init`** (stages live in `qctl-guest`):
+cloud-init installs guest tooling from the NoCloud ISO (`lib/install-qctl-guest.sh`:
+`qctl-guest` → `/usr/local/bin/qctl`, `qctl-platform-rocky.mjs` → `/usr/local/lib/qctl/`,
+`varlock-local-encrypt` under `/usr/local/bin/`), enables `rocky-first-boot` (or
+`rocky-init-tank-prep`). Appliance runcmd runs **`dnf -y upgrade --refresh` before**
+enabling first-boot (so systemd/cloud-init are not upgraded under a waited oneshot).
+Then **`wait-qctl-init.sh`** does `systemctl start --no-block` and **polls** for
+`/var/lib/qctl/first-boot.done` (do not use blocking `systemctl start` / `start --wait`:
+`--wait` + `RemainAfterExit=yes` hangs forever; blocking `start` dies with D-Bus reset
+when the oneshot upgrades systemd, while qctl is still running). If the unit fails or
+finishes without a stamp, the script exits non-zero so **`cloud-init status` is error**.
+The same script is installed as `scripts/per-boot/90-rocky-wait-qctl-init.sh` so a reboot
+mid-runcmd cannot skip the gate: once the unit is enabled, every boot waits for the stamp
+until it exists.
+
+`qctl _internal_init` loads ISO `qctl-seed/`, writes `/etc/qctl/config.json`, installs
+packages, then runs stages:
 
 ```
 network-up → host-baseline → data-mounts → tier0-seal → ssh-host-keys → admin-user
@@ -189,12 +186,9 @@ network-up → host-baseline → data-mounts → tier0-seal → ssh-host-keys �
 `vm init-tank` runs `qctl _internal_init --profile init-tank`
 (`tier0-seal → data-mounts → tank-create → poweroff`).
 Resume after a failure with `qctl _internal_init --from <stage>`; preview with
-`qctl _internal_init --dry-run`.
-`rocky-tier0-seal.service` stays a separate unit (it must seal credentials *before*
-`LoadCredentialEncrypted=` on the init unit loads them) and calls
-`qctl _internal_stage tier0-seal`; the stage is idempotent inside `_internal_init`.
-Tier-0 / provision secrets are declared in `provision/.env.schema` (scaffold via
-host `qctl init`).
+`qctl _internal_init --dry-run`. Tier-0 seal is an in-process stage (no separate
+systemd unit). Tier-0 / provision secrets are declared in `provision/.env.schema`
+(scaffold via host `qctl init`).
 
 `qctl vm seed` builds `nocloud.iso` (volume label `cidata`, Joliet) in-process via
 `@gcu/iso9660` — no `genisoimage` / `xorriso` / FAT fallback.

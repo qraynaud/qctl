@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 
 describe('capabilitiesForProfile', () => {
   test('without disks: no zfs / fs caps', () => {
-    expect(capabilitiesForProfile('init-tank')).toEqual(['curl', 'jq', 'unzip'])
+    expect(capabilitiesForProfile('init-tank')).toEqual(['curl', 'jq', 'unzip', 'host-tools'])
   })
 
   test('init-tank + disks: fs union + zfs iff tanks', () => {
@@ -11,12 +11,12 @@ describe('capabilitiesForProfile', () => {
       capabilitiesForProfile('init-tank', {
         disks: { filesystems: ['xfs', 'ext4'], hasTanks: true },
       }),
-    ).toEqual(['curl', 'jq', 'unzip', 'xfs', 'ext4', 'zfs'])
+    ).toEqual(['curl', 'jq', 'unzip', 'host-tools', 'xfs', 'ext4', 'zfs'])
     expect(
       capabilitiesForProfile('init-tank', {
         disks: { filesystems: ['xfs'], hasTanks: false },
       }),
-    ).toEqual(['curl', 'jq', 'unzip', 'xfs'])
+    ).toEqual(['curl', 'jq', 'unzip', 'host-tools', 'xfs'])
   })
 
   test('default + hg requests mercurial (not git)', () => {

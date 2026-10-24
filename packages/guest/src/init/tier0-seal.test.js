@@ -3,9 +3,11 @@ import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { createContext } from './context.js'
+import { createTestContext } from './context.test-helpers.js'
 import { runStage } from './run-stage.js'
 import { describe, expect, test } from 'bun:test'
+
+/** @import { StagePaths } from './context.js' */
 
 describe('tier0-seal (JS, fake systemd-creds)', () => {
   /**
@@ -32,18 +34,16 @@ describe('tier0-seal (JS, fake systemd-creds)', () => {
     const shred = join(bin, 'shred')
     writeFileSync(shred, '#!/bin/bash\nrm -f "$2"\n')
     chmodSync(shred, 0o755)
-    const env = {
-      PATH: `${bin}:${process.env.PATH}`,
-      ROCKY_TIER0_PENDING: pending,
-      ROCKY_TIER0_ENCRYPTED: enc,
-    }
-    return { dir, pending, enc, env }
+    const env = { PATH: `${bin}:${process.env.PATH}` }
+    const paths = { tier0Pending: pending, tier0Encrypted: enc }
+    return { dir, pending, enc, env, paths }
   }
 
-  /** @param {Record<string, string>} env */
-  async function seal(env) {
-    const ctx = createContext({
-      env,
+  /** @param {{ env: Record<string, string>, paths: StagePaths }} t */
+  async function seal(t) {
+    const ctx = createTestContext({
+      spawnEnv: t.env,
+      paths: t.paths,
       isRoot: () => true,
     })
     await runStage('tier0-seal', ctx)
@@ -52,10 +52,10 @@ describe('tier0-seal (JS, fake systemd-creds)', () => {
   test('seals pending → credstore, removes plaintext; re-run is a no-op', async () => {
     const t = setup({ seedPending: true })
     try {
-      await seal(t.env)
+      await seal(t)
       expect(readFileSync(join(t.enc, 'VW_CLIENT_ID'), 'utf8')).toBe('secret-VW_CLIENT_ID\n')
       expect(existsSync(t.pending)).toBe(false)
-      await seal(t.env)
+      await seal(t)
       expect(existsSync(join(t.enc, 'VW_MASTER_PASSWORD'))).toBe(true)
     } finally {
       removeTempDir(t.dir)
@@ -65,7 +65,7 @@ describe('tier0-seal (JS, fake systemd-creds)', () => {
   test('nothing seeded at all → exit 0 (seed --allow-missing-tier0)', async () => {
     const t = setup({ seedPending: false })
     try {
-      await seal(t.env)
+      await seal(t)
       expect(existsSync(t.enc)).toBe(false)
     } finally {
       removeTempDir(t.dir)

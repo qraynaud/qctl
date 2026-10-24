@@ -47,9 +47,7 @@ export { findInstanceRoot, hasQctlProvision, isInstanceRoot } from './instance.j
 export { deepMerge, isYamlMapping } from './merge.js'
 export { dnatEntriesFromPorts, portEntrySchema, portsSchema } from './networking/ports.js'
 export {
-  emptyPackages,
   mergePackages,
-  normalizePackages,
   packagesHttpItemSchema,
   packagesIsEmpty,
   packagesManifestSchema,
@@ -108,6 +106,22 @@ export {
   resolveProfile,
   stripOppositeTarget,
 } from './provision/index.js'
+export {
+  QCTL_GUEST_ISO_DIR,
+  QCTL_OS_CONFIG_PATH,
+  QCTL_SEED_CONFIG_ISO_REL,
+  QCTL_SEED_ISO_DIR,
+  QCTL_SEED_TIER0_ISO_REL,
+  SEED_PROFILE,
+  osConfigSchema,
+  seedAppsUserSchema,
+  seedConfigSchema,
+  seedConfigToOsConfig,
+  seedInitTankSchema,
+  seedProfileSchema,
+  seedRepoSchema,
+  seedSubidRangeSchema,
+} from './seed/config.js'
 export {
   CONTAINER_REGISTRY_TAG,
   GUEST_TAG,

@@ -1,42 +1,16 @@
-import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 
 import { applyDnat, ensureUp, planApplyDnat, planEnsureUp, rockyNetworking } from './networking.js'
 import { describe, expect, spyOn, test } from 'bun:test'
 
-/**
- * @param {Record<string, string>} initial
- */
-function mockPortsFs(initial = {}) {
-  /** @type {Map<string, string>} */
-  const files = new Map(Object.entries(initial))
-  spyOn(fs, 'existsSync').mockImplementation((p) => files.has(String(p)))
-  // @ts-expect-error test stub returns utf8 string
-  spyOn(fsp, 'readFile').mockImplementation(async (/** @type {string} */ p) => {
-    const key = String(p)
-    const body = files.get(key)
-    if (body === undefined) {
-      const err = /** @type {NodeJS.ErrnoException} */ (new Error(`ENOENT: ${key}`))
-      err.code = 'ENOENT'
-      throw err
-    }
-    return body
-  })
-  spyOn(fsp, 'writeFile').mockImplementation(async (p, data) => {
-    files.set(String(p), String(data))
-  })
-  return files
-}
-
 describe('rocky networking', () => {
   test('plan helpers describe egress and DNAT', () => {
     const ctx = {
-      env: { QCTL_EGRESS_HOST: '8.8.8.8', QCTL_EGRESS_IFACE: 'eth1' },
       log: () => {},
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
     }
-    expect(planEnsureUp(ctx)[0]).toMatch(/8\.8\.8\.8/)
-    expect(planApplyDnat(ctx)[0]).toMatch(/ports\.json/)
+    expect(planEnsureUp(ctx)[0]).toMatch(/1\.1\.1\.1/)
+    expect(planApplyDnat(ctx)[0]).toMatch(/DNAT skipped/)
     expect(rockyNetworking.planEnsureUp).toBe(planEnsureUp)
   })
 
@@ -46,7 +20,6 @@ describe('rocky networking', () => {
     /** @type {string[][]} */
     const cmds = []
     await ensureUp({
-      env: { QCTL_EGRESS_HOST: '1.1.1.1' },
       log: (l) => logs.push(l),
       exec: async (argv) => {
         cmds.push(argv)
@@ -57,32 +30,52 @@ describe('rocky networking', () => {
     expect(cmds).toEqual([['ping', '-c1', '-W2', '1.1.1.1']])
   })
 
-  test('applyDnat skips when ports.json missing', async () => {
-    mockPortsFs()
+  test('applyDnat skips when seed ports missing', async () => {
     /** @type {string[]} */
     const logs = []
     await applyDnat({
-      env: { QCTL_PORTS_JSON: '/mock/missing-ports.json' },
       log: (l) => logs.push(l),
       exec: async () => ({ code: 0, stdout: '', stderr: '' }),
     })
-    expect(logs[0]).toMatch(/skipping DNAT/)
+    expect(logs[0]).toMatch(/no seed ports/)
   })
 
-  test('applyDnat skips when no dnat entries', async () => {
-    const portsJson = '/mock/ports.json'
-    mockPortsFs({
-      [portsJson]: JSON.stringify({
-        ssh: { port: 22, forward: 2222 },
-        cockpit: { port: 9090, forward: 9090 },
-      }),
-    })
+  test('applyDnat uses ctx.ports from seed', async () => {
+    spyOn(fsp, 'writeFile').mockImplementation(async () => {})
     /** @type {string[]} */
     const logs = []
     /** @type {string[][]} */
     const cmds = []
     await applyDnat({
-      env: { QCTL_PORTS_JSON: portsJson },
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+        https: { port: 443, dnat: 8443 },
+      },
+      log: (l) => logs.push(l),
+      exec: async (argv) => {
+        cmds.push(argv)
+        return { code: 0, stdout: '', stderr: '' }
+      },
+    })
+    expect(logs.some((l) => l.includes('seed config'))).toBe(true)
+    expect(
+      cmds.some((c) =>
+        c.includes('--add-forward-port=port=443:proto=tcp:toport=8443:toaddr=127.0.0.1'),
+      ),
+    ).toBe(true)
+  })
+
+  test('applyDnat skips when no dnat entries', async () => {
+    /** @type {string[]} */
+    const logs = []
+    /** @type {string[][]} */
+    const cmds = []
+    await applyDnat({
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+      },
       log: (l) => logs.push(l),
       exec: async (argv) => {
         cmds.push(argv)
@@ -94,18 +87,17 @@ describe('rocky networking', () => {
   })
 
   test('applyDnat writes sysctl and firewall-cmd for dnat ports', async () => {
-    const portsJson = '/mock/ports.json'
     const routeConf = '/mock/90-rocky-route-localnet.conf'
-    mockPortsFs({
-      [portsJson]: JSON.stringify({
-        ssh: { port: 22, forward: 2222 },
-        https: { port: 443, dnat: 8443 },
-      }),
-    })
+    spyOn(fsp, 'writeFile').mockImplementation(async () => {})
     /** @type {string[][]} */
     const cmds = []
     await applyDnat({
-      env: { QCTL_PORTS_JSON: portsJson, QCTL_ROUTE_LOCALNET_CONF: routeConf },
+      routeLocalnetConf: routeConf,
+      ports: {
+        ssh: { port: 22, forward: 2222 },
+        cockpit: { port: 9090, forward: 9090 },
+        https: { port: 443, dnat: 8443 },
+      },
       log: () => {},
       exec: async (argv) => {
         cmds.push(argv)

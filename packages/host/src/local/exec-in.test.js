@@ -17,6 +17,7 @@ describe('applianceExecEnv', () => {
       appsGid: 900,
       appsSubuid: { start: 900000, count: 65536 },
       appsSubgid: { start: 900000, count: 65536 },
+      repo: { vcs: 'git' },
       guestBin: '/x',
       platformModulePath: '/x',
       image: 'img',
@@ -27,8 +28,8 @@ describe('applianceExecEnv', () => {
       publishArgs: [],
       uidMapArgs: [],
     })
-    expect(env.QCTL_ENV).toBe('prod')
-    expect(env.QCTL_ROOT).toBe('/tank/rocky')
+    expect(env.QCTL_ENV).toBeUndefined()
+    expect(env.QCTL_ROOT).toBeUndefined()
     expect(env.QCTL_PLATFORM_MODULE).toBe('/usr/local/lib/qctl/qctl-platform-rocky.mjs')
     expect(env.APP_ROOT).toBe(LOCAL_APP_ROOT)
   })

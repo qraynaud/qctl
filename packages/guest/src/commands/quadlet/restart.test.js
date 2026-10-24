@@ -23,7 +23,7 @@ describe('quadlet restart command', () => {
   test('handler runs runRestart for each app', async () => {
     /** @type {string[]} */
     const restarted = []
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (_argv, fn) => {
+    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
       await fn(/** @type {QuadletContext} */ ({}))
     })
     spyOn(lifecycleMod, 'runRestart').mockImplementation((_ctx, app) => {

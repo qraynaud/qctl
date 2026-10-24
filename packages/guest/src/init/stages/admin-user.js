@@ -1,11 +1,13 @@
 /**
  * Create sudo/SSH admin from seed Tier-0 ADMIN_* (or key-only default "admin").
- * SSH pubkeys from seed `/etc/rocky/admin_ssh_authorized_keys`.
+ * SSH pubkeys from seed `/etc/rocky/admin_ssh_authorized_keys` (or `seedConfig`).
  */
+import { existsSync } from 'node:fs'
 import * as fsp from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 import { StageError } from '../errors.js'
-import { detectQctlEnv, envString } from './lib/credentials.js'
+import { detectQctlEnv, secretString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
 
@@ -164,7 +166,7 @@ export default {
    */
   plan(ctx) {
     return [
-      `Tier-0 ADMIN_* (QCTL_ENV=${detectQctlEnv(ctx.env)})`,
+      `Tier-0 ADMIN_* (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'ADMIN_USERNAME+PASSWORD → password sudo; else key-only admin + NOPASSWD',
       'install seed admin_ssh_authorized_keys; write /etc/rocky/admin-user',
     ]
@@ -175,18 +177,18 @@ export default {
   async run(ctx) {
     if (!ctx.isRoot()) throw new StageError('admin-user', 'must run as root')
 
-    const username = envString(ctx.env, 'ADMIN_USERNAME')
-    const password = envString(ctx.env, 'ADMIN_PASSWORD')
-    const defaultUser = ctx.env.ROCKY_ADMIN_DEFAULT_USER?.trim() || DEFAULT_USER
-    const appsUsername = ctx.env.QCTL_QUADLET_USER?.trim() || 'apps'
-    const keysSrc = ctx.env.ROCKY_ADMIN_SSH_KEYS?.trim() || ADMIN_KEYS_SRC_DEFAULT
-    const sudoers = ctx.env.ROCKY_SUDOERS_DROPIN?.trim() || SUDOERS_DROPIN_DEFAULT
+    const username = secretString(ctx.secrets, 'ADMIN_USERNAME')
+    const password = secretString(ctx.secrets, 'ADMIN_PASSWORD')
+    const defaultUser = DEFAULT_USER
+    const appsUsername = ctx.osConfig.quadletUser?.trim() || 'apps'
+    const keysSrc = ctx.paths.adminKeys?.trim() || ADMIN_KEYS_SRC_DEFAULT
+    const sudoers = ctx.paths.sudoersDropin?.trim() || SUDOERS_DROPIN_DEFAULT
 
     /** @type {{ mode: string, user: string, pass: string, uid: number, gid: number }} */
     let admin
     try {
-      const uid = parseId(envString(ctx.env, 'ADMIN_UID'), 'UID', DEFAULT_UID)
-      const gid = parseId(envString(ctx.env, 'ADMIN_GID'), 'GID', uid)
+      const uid = parseId(secretString(ctx.secrets, 'ADMIN_UID'), 'UID', DEFAULT_UID)
+      const gid = parseId(secretString(ctx.secrets, 'ADMIN_GID'), 'GID', uid)
       if (!password) {
         const user = username || defaultUser
         ctx.log(`rocky-admin-user: no ADMIN_PASSWORD — key-only '${user}'`)
@@ -207,10 +209,30 @@ export default {
         throw new Error(`invalid admin username ${JSON.stringify(admin.user)}`)
       }
       await ensureSudoers(ctx, admin.mode, admin.user, sudoers)
+      await ensureAdminKeysFile(ctx, keysSrc)
       await ensureAdminUser(ctx, admin, keysSrc)
     } catch (err) {
       throw new StageError('admin-user', err instanceof Error ? err.message : String(err))
     }
     ctx.log(`rocky-admin-user: user '${admin.user}' ready`)
   },
+}
+
+/**
+ * Prefer on-disk keys (load-seed / cloud-init); else write from `seedConfig`.
+ * @param {StageContext} ctx
+ * @param {string} keysSrc
+ */
+async function ensureAdminKeysFile(ctx, keysSrc) {
+  if (existsSync(keysSrc)) return
+  const body = ctx.seedConfig?.adminSshAuthorizedKeys
+  if (body == null || body === '') {
+    throw new Error(
+      `missing admin SSH keys at ${keysSrc} (and no seedConfig.adminSshAuthorizedKeys)`,
+    )
+  }
+  await fsp.mkdir(dirname(keysSrc), { recursive: true })
+  const text = body.endsWith('\n') ? body : `${body}\n`
+  await fsp.writeFile(keysSrc, text, { mode: 0o644 })
+  ctx.log(`rocky-admin-user: wrote ${keysSrc} from seed config`)
 }

@@ -1,49 +1,59 @@
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import {
-  DEFAULT_REPO_DIR,
-  DEFAULT_SEED_DIR,
-  createContext,
-  resolveInstanceRoot,
-} from './context.js'
+import { DEFAULT_SEED_DIR, createContext, resolveInstanceRoot } from './context.js'
 import { QuadletError } from './errors.js'
 import { cleanupQuadletFixture, makeContext, makeQuadletInstance } from './test/fixture.js'
 import { describe, expect, test } from 'bun:test'
 
+/**
+ * @param {string} path
+ * @param {string} root
+ */
+function writeOsConfig(path, root) {
+  writeFileSync(
+    path,
+    JSON.stringify({
+      env: 'dev',
+      root,
+      repo: { vcs: 'hg' },
+      quadletUser: 'apps',
+      apps: {
+        username: 'apps',
+        uid: 1000,
+        gid: 1000,
+        subuid: { start: 1, count: 1 },
+        subgid: { start: 1, count: 1 },
+      },
+      timezone: 'UTC',
+      profile: 'appliance',
+    }),
+  )
+}
+
 describe('quadlet context', () => {
-  test('resolveInstanceRoot: explicit root, QCTL_ROOT, walk-up; bad root dies', () => {
+  test('resolveInstanceRoot: OS config only; missing/invalid dies', () => {
     const fx = makeQuadletInstance()
     try {
-      expect(resolveInstanceRoot({ root: fx.root })).toBe(fx.root)
-      expect(resolveInstanceRoot({ env: { QCTL_ROOT: fx.root } })).toBe(fx.root)
+      const osPath = join(fx.sysDir, 'os-config.json')
+      writeOsConfig(osPath, fx.root)
+      expect(resolveInstanceRoot({ osConfigPath: osPath })).toBe(fx.root)
 
-      const nested = join(fx.root, 'applications/web')
-      expect(resolveInstanceRoot({ cwd: nested, env: {} })).toBe(fx.root)
+      expect(() => resolveInstanceRoot({ osConfigPath: join(fx.sysDir, 'missing.json') })).toThrow(
+        QuadletError,
+      )
+      expect(() => resolveInstanceRoot({ osConfigPath: join(fx.sysDir, 'missing.json') })).toThrow(
+        /missing instance root/,
+      )
 
-      expect(() => resolveInstanceRoot({ root: fx.sysDir })).toThrow(QuadletError)
-      expect(() => resolveInstanceRoot({ root: fx.sysDir })).toThrow(/not a qctl instance/)
-      expect(() => resolveInstanceRoot({ cwd: fx.sysDir, env: {} })).toThrow(/no qctl instance/)
+      writeOsConfig(osPath, fx.sysDir)
+      expect(() => resolveInstanceRoot({ osConfigPath: osPath })).toThrow(/not a qctl instance/)
     } finally {
       cleanupQuadletFixture(fx)
     }
   })
 
-  test('resolveInstanceRoot: QCTL_ROOT and DEFAULT_REPO_DIR', () => {
-    expect(DEFAULT_REPO_DIR).toBe('/tank/rocky')
-    const fx = makeQuadletInstance()
-    try {
-      expect(
-        resolveInstanceRoot({
-          cwd: fx.sysDir,
-          env: { QCTL_ROOT: fx.root },
-        }),
-      ).toBe(fx.root)
-    } finally {
-      cleanupQuadletFixture(fx)
-    }
-  })
-
-  test('createContext defaults seedDir and uses injected log/print', () => {
+  test('createContext defaults seedDir (no QCTL_SEED_DIR)', () => {
     const fx = makeQuadletInstance()
     try {
       const { sys } = makeContext(fx)
@@ -54,7 +64,8 @@ describe('quadlet context', () => {
       const ctx = createContext({
         root: fx.root,
         sys,
-        baseEnv: { PATH: '/bin', QCTL_SEED_DIR: '/custom-seed' },
+        baseEnv: { PATH: '/bin', QCTL_SEED_DIR: '/ignored' },
+        seedDir: '/custom-seed',
         log: (m) => logs.push(m),
         print: (m) => prints.push(m),
       })
@@ -65,7 +76,7 @@ describe('quadlet context', () => {
       expect(logs).toEqual(['hi'])
       expect(prints).toEqual(['out'])
 
-      const bare = createContext({ root: fx.root, sys, baseEnv: {} })
+      const bare = createContext({ root: fx.root, sys, baseEnv: { QCTL_SEED_DIR: '/ignored' } })
       expect(bare.seedDir).toBe(DEFAULT_SEED_DIR)
     } finally {
       cleanupQuadletFixture(fx)

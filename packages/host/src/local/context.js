@@ -24,6 +24,7 @@ import { die } from './util.js'
  * @property {number} appsGid
  * @property {{ start: number, count: number }} appsSubuid from provision
  * @property {{ start: number, count: number }} appsSubgid from provision
+ * @property {{ vcs: 'git' | 'hg', url?: string, branch?: string }} repo
  * @property {string} guestBin
  * @property {string} platformModulePath
  * @property {string} platformBasename
@@ -74,6 +75,11 @@ export async function createLocalContext(argv, opts = {}) {
   const appsGid = apps.gid
   const appsSubuid = apps.subuid
   const appsSubgid = apps.subgid
+  const repoRaw = /** @type {{ vcs?: string, url?: string, branch?: string }} */ (data.repo || {})
+  /** @type {{ vcs: 'git' | 'hg', url?: string, branch?: string }} */
+  const repo = { vcs: repoRaw.vcs === 'hg' ? 'hg' : 'git' }
+  if (repoRaw.url) repo.url = String(repoRaw.url)
+  if (repoRaw.branch) repo.branch = String(repoRaw.branch)
 
   const tooling = await ensureGuestTooling({
     env,
@@ -99,6 +105,7 @@ export async function createLocalContext(argv, opts = {}) {
     appsGid,
     appsSubuid,
     appsSubgid,
+    repo,
     guestBin: tooling.guestPath,
     platformModulePath: tooling.platformModulePath,
     platformBasename: basename(tooling.platformModulePath),

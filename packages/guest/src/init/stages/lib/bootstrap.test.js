@@ -1,33 +1,36 @@
-import { createContext, envWithQctlEnv } from '../../context.js'
+import { createTestContext, testOsConfig } from '../../context.test-helpers.js'
 import { detectQctlEnv } from './credentials.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('detectQctlEnv', () => {
-  test('uses QCTL_ENV when set', () => {
-    expect(detectQctlEnv({ QCTL_ENV: 'prod' })).toBe('prod')
-    expect(detectQctlEnv({ QCTL_ENV: '  dev  ' })).toBe('dev')
+  test('uses osConfig.env when set', () => {
+    expect(detectQctlEnv({ env: 'prod' })).toBe('prod')
+    expect(detectQctlEnv({ env: '  dev  ' })).toBe('dev')
   })
 
   test('defaults to dev when unset', () => {
+    expect(detectQctlEnv(undefined)).toBe('dev')
     expect(detectQctlEnv({})).toBe('dev')
-    expect(detectQctlEnv({ QCTL_ENV: '' })).toBe('dev')
-    expect(detectQctlEnv({ QCTL_ENV: '   ' })).toBe('dev')
+    expect(detectQctlEnv({ env: '' })).toBe('dev')
+    expect(detectQctlEnv({ env: '   ' })).toBe('dev')
   })
 })
 
-describe('envWithQctlEnv / createContext', () => {
-  test('fills QCTL_ENV when missing', () => {
-    const env = envWithQctlEnv({ FOO: '1' })
-    expect(env.QCTL_ENV).toBe('dev')
-    expect(env.FOO).toBe('1')
+describe('createTestContext', () => {
+  test('defaults osConfig + empty secrets/paths', () => {
+    const ctx = createTestContext({ log: () => {} })
+    expect(ctx.osConfig.env).toBe('dev')
+    expect(ctx.osConfig.root).toBe('/tank/rocky')
+    expect(ctx.secrets).toEqual({})
+    expect(ctx.paths).toEqual({})
   })
 
-  test('createContext normalizes QCTL_ENV on ctx.env', () => {
-    const ctx = createContext({
-      env: { QCTL_ROOT: '/tank/rocky' },
+  test('uses provided osConfig', () => {
+    const ctx = createTestContext({
+      osConfig: testOsConfig({ root: '/x', env: 'prod' }),
       log: () => {},
     })
-    expect(ctx.env.QCTL_ENV).toBe('dev')
-    expect(ctx.env.QCTL_ROOT).toBe('/tank/rocky')
+    expect(ctx.osConfig.root).toBe('/x')
+    expect(detectQctlEnv(ctx.osConfig)).toBe('prod')
   })
 })

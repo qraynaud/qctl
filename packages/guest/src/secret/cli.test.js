@@ -22,7 +22,7 @@ describe('runSecretCommand', () => {
     const tryEnsureRoot = spyOn(systemMod, 'tryEnsureRoot').mockImplementation(() => true)
     /** @type {string[]} */
     const seen = []
-    await runSecretCommand({ root: '/ignored-by-mock' }, async (root) => {
+    await runSecretCommand(async (root) => {
       seen.push(root)
     })
     expect(contextMod.resolveInstanceRoot).toHaveBeenCalled()

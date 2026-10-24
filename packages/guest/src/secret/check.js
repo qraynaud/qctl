@@ -2,6 +2,7 @@
  * `qctl secret check`: compare graph-resolved `@sensitive` values to Podman secrets
  * (via `qctl.sha256` labels written by `secret sync`). Exit 1 on drift.
  */
+import { tryReadOsConfig } from '../os-config.js'
 import { detectQctlEnvFor } from '../quadlet/env.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'
 import {
@@ -27,6 +28,7 @@ import { loadSensitiveItems } from './varlock.js'
  * @typedef {object} CheckOptions
  * @property {string} root
  * @property {string} [qctlEnv]
+ * @property {string} [quadletUser]
  * @property {Record<string, string | undefined>} [env]
  * @property {number} [uid]
  * @property {PodmanRunner} [podman]
@@ -41,8 +43,9 @@ export async function runSecretCheck(o) {
   const env = o.env ?? process.env
   const uid = o.uid ?? process.getuid?.() ?? 0
   const log = o.log ?? ((m) => console.log(`secret-check: ${m}`))
-  const podman = o.podman ?? defaultPodman(uid, env)
-  const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, env)
+  const os = tryReadOsConfig()
+  const podman = o.podman ?? defaultPodman(uid, o.quadletUser ?? os?.quadletUser ?? 'apps')
+  const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, { osConfigEnv: os?.env })
 
   const dirs = discoverSchemaDirs(o.root)
   if (dirs.length === 0)

@@ -5,11 +5,12 @@ import { packagesMapWithRequired } from '@qctl/shared'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
 import { capabilitiesForProfile } from './capabilities.js'
+import { testOsConfig } from './context.test-helpers.js'
 import { PLATFORM_MODULE_NAME } from './platform.js'
 import { runInit } from './run.js'
 import { describe, expect, test } from 'bun:test'
 
-/** @import { PlatformModule, PlatformPackagesMap } from '@qctl/shared' */
+/** @import { OsConfig, PlatformModule, PlatformPackagesMap, SeedConfig } from '@qctl/shared' */
 
 const ROOT = join(import.meta.dir, '../../../..')
 
@@ -83,7 +84,9 @@ function harness(over = {}) {
   const ran = []
   const deps = {
     skipPackages: true,
+    skipCidataSync: true,
     loadPlatform: async () => fakePlatform,
+    ctx: { osConfig: testOsConfig() },
     log: (/** @type {string} */ l) => out.push(l),
     logError: (/** @type {string} */ l) => err.push(l),
     runStage: async (/** @type {string} */ name) => {
@@ -130,7 +133,9 @@ describe('runInit', () => {
         { profile: 'init-tank' },
         {
           skipPackages: true,
+          skipCidataSync: true,
           loadPlatform: async () => fakePlatform,
+          ctx: { osConfig: testOsConfig() },
           runStage: async (name) => {
             ran.push(name)
           },
@@ -148,7 +153,9 @@ describe('runInit', () => {
         { profile: 'init-tank', dryRun: true },
         {
           skipPackages: true,
+          skipCidataSync: true,
           loadPlatform: async () => fakePlatform,
+          ctx: { osConfig: testOsConfig() },
           runStage: async (_name, ctx) => {
             flags.push(Boolean(ctx.dryRun))
           },
@@ -168,7 +175,9 @@ describe('runInit', () => {
         { profile: 'default' },
         {
           skipPackages: true,
+          skipCidataSync: true,
           loadPlatform: async () => fakePlatform,
+          ctx: { osConfig: testOsConfig() },
           logError: (l) => err.push(l),
           runStage: async (name) => {
             ran.push(name)
@@ -189,7 +198,9 @@ describe('runInit', () => {
         { profile: 'init-tank', from: 'tank-create' },
         {
           skipPackages: true,
+          skipCidataSync: true,
           loadPlatform: async () => fakePlatform,
+          ctx: { osConfig: testOsConfig() },
           runStage: async (name) => {
             ran.push(name)
           },
@@ -205,12 +216,125 @@ describe('runInit', () => {
         { profile: 'init-tank', from: 'nope' },
         {
           skipPackages: true,
+          skipCidataSync: true,
           loadPlatform: async () => fakePlatform,
+          ctx: { osConfig: testOsConfig() },
           logError: (l) => err.push(l),
         },
       ),
     ).toBe(1)
     expect(err.join('\n')).toMatch(/--from nope/)
+  })
+
+  test('cidata sync re-execs before loadPlatform when binary updates', async () => {
+    /** @type {string[]} */
+    const out = []
+    let loaded = false
+    let closed = false
+    let loadSeedCalled = false
+    const code = await runInit(
+      { profile: 'init-tank' },
+      {
+        skipPackages: true,
+        env: {},
+        log: (l) => out.push(l),
+        openCidata: async () => ({
+          root: '/tmp/cidata',
+          guestDir: '/tmp/cidata/qctl-guest',
+          seedDir: '/tmp/cidata/qctl-seed',
+          mounted: false,
+          close: async () => {
+            closed = true
+          },
+        }),
+        syncToolingFromIso: () => ({
+          disposition: 'reexec',
+          tooling: {
+            platformModulePath: '/usr/local/lib/qctl/qctl-platform-rocky.mjs',
+            binaryUpdated: true,
+            varlockUpdated: false,
+          },
+        }),
+        loadSeedFromIso: () => {
+          loadSeedCalled = true
+          throw new Error('load seed should not run before re-exec')
+        },
+        reexecAfterSelfUpdate: async () => 77,
+        loadPlatform: async () => {
+          loaded = true
+          return fakePlatform
+        },
+        runStage: async () => {
+          throw new Error('stages should not run')
+        },
+      },
+    )
+    expect(code).toBe(77)
+    expect(loaded).toBe(false)
+    expect(closed).toBe(true)
+    expect(loadSeedCalled).toBe(false)
+    expect(out.join('\n')).toMatch(/re-exec/)
+  })
+
+  test('cidata sync loads seed then continues into stages', async () => {
+    /** @type {string[]} */
+    const ran = []
+    /** @type {Record<string, string | undefined>} */
+    const env = {}
+    /** @type {unknown} */
+    let seenSeed
+    /** @type {OsConfig | undefined} */
+    let seenOs
+    expect(
+      await runInit(
+        { profile: 'init-tank' },
+        {
+          skipPackages: true,
+          env,
+          openCidata: async () => ({
+            root: '/tmp/cidata',
+            guestDir: '/tmp/cidata/qctl-guest',
+            seedDir: '/tmp/cidata/qctl-seed',
+            mounted: false,
+            close: async () => {},
+          }),
+          syncToolingFromIso: (_c, deps) => {
+            deps.env.QCTL_PLATFORM_MODULE = '/lib/qctl-platform-rocky.mjs'
+            return {
+              disposition: 'continue',
+              tooling: {
+                platformModulePath: '/lib/qctl-platform-rocky.mjs',
+                binaryUpdated: false,
+                varlockUpdated: false,
+              },
+            }
+          },
+          loadSeedFromIso: (_c, _deps) => {
+            const seed = /** @type {SeedConfig} */ (
+              /** @type {unknown} */ ({ env: 'dev', root: '/tank/rocky' })
+            )
+            const os = /** @type {OsConfig} */ (
+              /** @type {unknown} */ ({
+                env: 'dev',
+                root: '/tank/rocky',
+                quadletUser: 'apps',
+              })
+            )
+            return { seed, os, osConfigPath: '/etc/qctl/config.json', tier0Synced: [], secrets: {} }
+          },
+          loadPlatform: async () => fakePlatform,
+          runStage: async (name, ctx) => {
+            ran.push(name)
+            seenSeed = ctx.seedConfig
+            seenOs = ctx.osConfig
+          },
+        },
+      ),
+    ).toBe(0)
+    expect(ran).toEqual(INIT_TANK)
+    expect(env.QCTL_PLATFORM_MODULE).toBe('/lib/qctl-platform-rocky.mjs')
+    expect(seenOs?.root).toBe('/tank/rocky')
+    expect(seenSeed).toEqual({ env: 'dev', root: '/tank/rocky' })
   })
 })
 
@@ -241,8 +365,12 @@ describe('qctl _internal_init (CLI)', () => {
     const dir = makeTempDir()
     try {
       writeFakePlatformModule(dir)
+      const osPath = join(dir, 'config.json')
+      writeFileSync(osPath, JSON.stringify(testOsConfig()))
       const r = await runGuest(['_internal_init', '--profile', 'init-tank', '--dry-run'], {
         QCTL_PLATFORM_MODULE: join(dir, PLATFORM_MODULE_NAME),
+        QCTL_SKIP_CIDATA_SYNC: '1',
+        QCTL_OS_CONFIG: osPath,
       })
       expect(r.code).toBe(0)
       expect(r.stdout).toContain('== data-mounts')
@@ -257,6 +385,7 @@ describe('qctl _internal_init (CLI)', () => {
     const r = await runGuest(['_internal_init', '--dry-run'], {
       QCTL_PLATFORM_MODULE: '/nonexistent/qctl-platform-rocky.mjs',
       QCTL_LIB_DIR: '/nonexistent-lib',
+      QCTL_SKIP_CIDATA_SYNC: '1',
     })
     expect(r.code).toBe(1)
     expect(r.stderr).toMatch(/QCTL_PLATFORM_MODULE|qctl-platform-rocky\.mjs/)

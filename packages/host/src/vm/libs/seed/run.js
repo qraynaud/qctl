@@ -14,14 +14,9 @@ import { gcQctlCache, touchPath } from '../../../tooling/cache-gc.js'
 import { parsePlatformRef } from '../../../tooling/platform-ref.js'
 import { ensurePlatformSeedKit } from '../../../tooling/platform-tooling.js'
 import { renderNetworkConfigV2 } from '../guest-net.js'
-import {
-  injectGuestCredentialFiles,
-  injectPackagesManifest,
-  injectPorts,
-  injectProvisionFiles,
-  injectResolvedDisks,
-} from '../seed-template/inject.js'
+import { injectProvisionFiles } from '../seed-template/inject.js'
 import { renderTemplate } from '../seed-template/njk.js'
+import { buildSeedConfig, stageSeedTree } from '../seed-template/seed-tree.js'
 import { buildVars } from '../seed-template/vars.js'
 import { buildIso, readExistingInstanceId, resolveSeedPaths } from './iso.js'
 import { SEED_PROFILES, applySeedProfileDefaults } from './profiles.js'
@@ -108,21 +103,11 @@ export async function runSeed(argv) {
     initTankPools: argv.initTankPools,
     initTankForce: argv.initTankForce,
   })
-  const userData = injectPorts(
-    injectResolvedDisks(
-      injectPackagesManifest(
-        injectProvisionFiles(
-          injectGuestCredentialFiles(
-            renderTemplate(userDataPath, vars, allowMissingFiles),
-            vars.provision.guest,
-          ),
-          vars.provision.files || sec.files,
-        ),
-        vars.provision.packages || sec.packages,
-      ),
-      vars.resolved_disks,
-    ),
-    vars.provision.networking?.ports,
+  // Disks / ports / packages / Tier-0 / env live on ISO `qctl-seed/` (guest load-seed).
+  // Provision `files:` remain cloud-init write_files only.
+  const userData = injectProvisionFiles(
+    renderTemplate(userDataPath, vars, allowMissingFiles),
+    vars.provision.files || sec.files,
   )
   const meta = renderTemplate(path.join(cloud, 'meta-data.yaml'), vars, allowMissingFiles)
   const network = renderNetworkConfigV2(sec.uplinks, sec.vlans)
@@ -153,6 +138,19 @@ export async function runSeed(argv) {
       env,
       target,
     })
+
+    // Provision `files:` remain cloud-init-only (not in qctl-seed/config.json).
+    const seedConfig = buildSeedConfig(vars)
+    await stageSeedTree(stageDir, {
+      config: seedConfig,
+      tier0: /** @type {Record<string, string | Buffer>} */ (vars.provision.guest || {}),
+    })
+    console.log(
+      chalk.dim(
+        `  qctl-seed: config.json + tier0/${seedConfig.tier0Keys.length} key(s)`
+          + ` (${seedConfig.tier0Keys.join(', ') || 'none'})`,
+      ),
+    )
 
     await buildIso(stageDir, isoPath)
     // Drop legacy FAT seed if present from older qctl versions.

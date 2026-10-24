@@ -310,6 +310,8 @@ describe('host CLI', () => {
     expect(existsSync(join(keep, 'qctl-guest', 'bootstrap'))).toBe(false)
     expect(existsSync(join(keep, 'qctl-guest', 'qctl-guest'))).toBe(true)
     expect(existsSync(join(keep, 'qctl-guest', 'qctl-platform-rocky.mjs'))).toBe(true)
+    expect(existsSync(join(keep, 'qctl-seed', 'config.json'))).toBe(true)
+    expect(existsSync(join(keep, 'qctl-seed', 'tier0', 'tank_passphrase_tank'))).toBe(true)
     expect(readFileSync(join(keep, 'meta-data'), 'utf8')).toContain('rocky-dev')
     expect(existsSync(join(keep, 'network-config'))).toBe(true)
   })

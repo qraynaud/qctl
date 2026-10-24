@@ -67,20 +67,18 @@ describe('guest CLI', () => {
     }
   })
 
-  test('quadlet up --help documents --dry-run and --root', async () => {
+  test('quadlet up --help documents --dry-run (no --root)', async () => {
     const { stdout, code } = await runGuest(['quadlet', 'up', '--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('--dry-run')
-    expect(stdout).toContain('--root')
+    expect(stdout).not.toContain('--root')
   })
 
-  test('secret sync --help documents flags + naming convention', async () => {
+  test('secret sync --help documents flags', async () => {
     const { stdout, code } = await runGuest(['secret', 'sync', '--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('--dry-run')
     expect(stdout).toContain('--restart')
-    expect(stdout).toContain('engine:')
-    expect(stdout).toContain('@tag(cross-engine)')
   })
 
   test('secret check --help documents drift flow', async () => {
@@ -89,29 +87,23 @@ describe('guest CLI', () => {
     expect(stdout).toContain('secret sync --restart')
   })
 
-  test('quadlet outside an instance fails clearly (no sudo attempt)', async () => {
+  test('quadlet without OS config fails clearly (no sudo attempt)', async () => {
     const dir = makeTempDir()
     try {
-      const { stderr, code } = await runGuest(['quadlet', 'ps'], {
-        cwd: dir,
-        env: { QCTL_ROOT: '' },
-      })
+      const { stderr, code } = await runGuest(['quadlet', 'ps'], { cwd: dir })
       expect(code).toBe(1)
-      expect(stderr).toMatch(/no qctl instance found/)
+      expect(stderr).toMatch(/missing instance root|\/etc\/qctl\/config\.json/)
     } finally {
       removeTempDir(dir)
     }
   })
 
-  test('secret sync outside an instance fails clearly', async () => {
+  test('secret sync without OS config fails clearly', async () => {
     const dir = makeTempDir()
     try {
-      const { stderr, code } = await runGuest(['secret', 'sync'], {
-        cwd: dir,
-        env: { QCTL_ROOT: '' },
-      })
+      const { stderr, code } = await runGuest(['secret', 'sync'], { cwd: dir })
       expect(code).toBe(1)
-      expect(stderr).toMatch(/no qctl instance found/)
+      expect(stderr).toMatch(/missing instance root|\/etc\/qctl\/config\.json/)
     } finally {
       removeTempDir(dir)
     }

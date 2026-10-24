@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { ISOReader } from '@gcu/iso9660'
@@ -8,6 +8,7 @@ import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 import { initInstance } from '../../../init.js'
 import { clearEnvProvisionCache } from '../../../lib/load-config.js'
 import { getSeed, resetRepoRootCache } from '../../../lib/paths.js'
+import { workspaceSeedRoot } from '../../../seed-root.js'
 import { resolveSeedPaths } from './iso.js'
 import { runSeed } from './run.js'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -117,11 +118,79 @@ describe('seed ISO (@gcu/iso9660)', () => {
     expect(listed).toContain('/network-config')
     expect(listed).toContain('/qctl-guest/qctl-guest')
     expect(listed).toContain('/qctl-guest/qctl-platform-rocky.mjs')
+    expect(listed).toContain('/qctl-seed/config.json')
     expect(new TextDecoder().decode(reader.read('/qctl-guest/qctl-guest'))).toContain('echo guest')
+    const seedCfg = JSON.parse(new TextDecoder().decode(reader.read('/qctl-seed/config.json')))
+    expect(seedCfg.env).toBe('dev')
+    expect(seedCfg.root).toBeTruthy()
+    expect(Array.isArray(seedCfg.tier0Keys)).toBe(true)
 
     const paths = resolveSeedPaths('appliance', 'dev')
     expect(paths.imgPath).toContain('cidata.img')
     expect(await Bun.file(paths.imgPath).exists()).toBe(false)
     expect(getSeed()).toContain('repos')
+  })
+
+  test('packaged seed kit: slim user-data (no env/json/tier0 injectors; stamps under /var/lib/qctl)', async () => {
+    const base = /** @type {string} */ (temps[0])
+    const root = realpathSync(initInstance(join(base, 'inst')).root)
+    process.chdir(root)
+    process.env.QCTL_INSTANCE_ROOT = root
+    resetRepoRootCache()
+    clearEnvProvisionCache()
+
+    process.env.QCTL_ROCKY_SEED = workspaceSeedRoot()
+    const dist = join(base, 'dist')
+    mkdirSync(dist, { recursive: true })
+    writeFileSync(join(dist, 'qctl-guest'), '#!/bin/sh\necho guest\n')
+    writeFileSync(
+      join(dist, 'qctl-platform-rocky.mjs'),
+      [
+        "export const FILESYSTEMS = Object.freeze(['xfs', 'ext4'])",
+        "export const DEFAULT_FS = 'xfs'",
+        "export const OS_DISK = Object.freeze({ id: 'os', size: '20G' })",
+        'export const platform = { filesystems: FILESYSTEMS, defaultFs: DEFAULT_FS, osDisk: OS_DISK }',
+        '',
+      ].join('\n'),
+    )
+    process.env.QCTL_GUEST_DIST = dist
+    const home = join(base, 'home')
+    mkdirSync(join(home, '.ssh'), { recursive: true })
+    writeFileSync(join(home, '.ssh', 'id_ed25519.pub'), 'ssh-ed25519 AAAATEST test@example\n')
+    process.env.HOME = home
+
+    const keep = join(base, 'keep-cidata')
+    await runSeed({
+      seedProfile: 'appliance',
+      profile: 'lab',
+      env: 'dev',
+      target: 'workstation',
+      allowMissingTier0: true,
+      allowMissingFiles: true,
+      out: keep,
+    })
+
+    const userData = readFileSync(join(keep, 'user-data'), 'utf8')
+    expect(userData).toContain('/var/lib/qctl/first-boot.done')
+    expect(userData).toContain('rocky-first-boot.service')
+    expect(userData).toContain('install-qctl-guest.sh')
+    expect(userData).not.toContain('91-rocky-env.conf')
+    expect(userData).not.toContain('tier0-pending')
+    expect(userData).not.toContain('/usr/local/lib/rocky/disks.json')
+    expect(userData).not.toContain('/usr/local/lib/rocky/packages.json')
+    expect(userData).not.toContain('/usr/local/lib/rocky/ports.json')
+    expect(userData).not.toContain('rocky-tier0-seal.service')
+    expect(userData).not.toContain('timezone:')
+    expect(userData).not.toContain('modules-load.d/zfs.conf')
+    expect(userData).not.toContain('rocky-umask.sh')
+    expect(userData).not.toContain('sshd_config.d')
+    // Appliance runcmd may `dnf -y upgrade --refresh` before first-boot; no bulk
+    // package install / ZoL bootstrap belongs in user-data anymore.
+    expect(userData).toContain('dnf -y upgrade --refresh')
+    expect(userData).not.toContain('dnf install')
+    expect(userData).not.toContain('zfs-release')
+    expect(userData).not.toContain('cockpit-zfs')
+    expect(existsSync(join(keep, 'qctl-seed', 'config.json'))).toBe(true)
+    expect(existsSync(join(keep, 'qctl-seed', 'tier0', 'tank_passphrase_tank'))).toBe(true)
   })
 })

@@ -1,12 +1,14 @@
 /**
  * Mount every `disks.data` volume by serial (`id`): blank → mkfs(fs), existing → mount only.
+ * Progress is recorded in `/var/lib/qctl/init-state.json` (no disk-root ok markers).
  */
 import { existsSync } from 'node:fs'
-import { appendFile, mkdir, readdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { loadDisksJson } from '../disks-json.js'
+import { resolveDisks } from '../disks-json.js'
 import { StageError } from '../errors.js'
+import { mergeInitState } from '../state.js'
 
 /** @import { DisksJson } from '@qctl/shared' */
 /** @import { StageContext } from '../context.js' */
@@ -66,6 +68,27 @@ async function mkfsVolume(ctx, fs, label, dev) {
 
 /**
  * @param {StageContext} ctx
+ * @param {string} volId
+ * @param {string} mount
+ * @param {string} [uuid]
+ */
+function recordDataMount(ctx, volId, mount, uuid) {
+  mergeInitState(
+    {
+      dataMounts: {
+        [volId]: {
+          mount,
+          preparedAt: new Date().toISOString(),
+          ...(uuid ? { uuid } : {}),
+        },
+      },
+    },
+    { paths: ctx.paths },
+  )
+}
+
+/**
+ * @param {StageContext} ctx
  * @param {DisksJson['data'][string]} vol
  */
 async function mountDataVolume(ctx, vol) {
@@ -75,7 +98,7 @@ async function mountDataVolume(ctx, vol) {
   const mounted = await ctx.exec(['findmnt', '-n', mount])
   if (mounted.code === 0) {
     ctx.log(`rocky-data-mounts: ${mount} already mounted`)
-    await writeFile(join(mount, '.qctl-data-ok'), '')
+    recordDataMount(ctx, id, mount)
     return
   }
 
@@ -101,7 +124,7 @@ async function mountDataVolume(ctx, vol) {
   const uuid = uuidR.stdout.trim()
   if (!uuid) throw new Error(`no UUID for ${dev}`)
 
-  const fstabPath = ctx.env.ROCKY_FSTAB?.trim() || '/etc/fstab'
+  const fstabPath = ctx.paths.fstab?.trim() || '/etc/fstab'
   const fstab = await Bun.file(fstabPath)
     .text()
     .catch(() => '')
@@ -113,7 +136,7 @@ async function mountDataVolume(ctx, vol) {
 
   const m = await ctx.exec(['mount', mount])
   if (m.code !== 0) throw new Error(`mount ${mount} failed: ${m.stderr.trim()}`)
-  await writeFile(join(mount, '.qctl-data-ok'), '')
+  recordDataMount(ctx, id, mount, uuid)
   ctx.log(`rocky-data-mounts: ${mount} ready on ${dev}`)
 }
 
@@ -124,12 +147,13 @@ export default {
    * @param {StageContext} ctx
    */
   plan(ctx) {
-    const path = ctx.env.ROCKY_DISKS_JSON?.trim() || '/usr/local/lib/rocky/disks.json'
+    const path = ctx.seedConfig?.disks ? 'seed config disks' : 'seed disks (missing)'
     return [
       `read ${path}`,
       'for each disks.data volume: find disk by serial (= id)',
       'blank → mkfs(fs); existing FS → mount only (never reformat)',
       'fstab + mount',
+      'record dataMounts in init-state.json (no disk-root ok markers)',
     ]
   },
   /**
@@ -139,9 +163,9 @@ export default {
     if (!ctx.isRoot()) throw new StageError('data-mounts', 'must run as root')
 
     try {
-      const disks = await loadDisksJson(ctx.env)
+      const disks = resolveDisks(ctx.seedConfig?.disks)
       if (!disks) {
-        ctx.log('rocky-data-mounts: no disks.json — skipping')
+        ctx.log('rocky-data-mounts: no seed disks — skipping')
         return
       }
       const vols = Object.values(disks.data)

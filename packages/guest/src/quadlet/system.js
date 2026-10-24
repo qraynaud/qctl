@@ -94,12 +94,12 @@ function userUid(user) {
 }
 
 /**
- * @param {{ rootlessUser?: string, env?: Record<string, string | undefined> }} [opts]
+ * @param {{ rootlessUser?: string }} [opts]
  * @returns {System}
  */
 export function createSystem(opts = {}) {
-  const env = opts.env ?? process.env
-  const rootlessUser = opts.rootlessUser ?? env.QCTL_QUADLET_USER ?? 'apps'
+  // Identity: caller passes `rootlessUser` from `/etc/qctl/config.json` (not $QCTL_QUADLET_USER).
+  const rootlessUser = opts.rootlessUser?.trim() || 'apps'
 
   /** @param {Engine} engine */
   const asUserFor = (engine) => (engine === 'rootless' ? rootlessUser : null)

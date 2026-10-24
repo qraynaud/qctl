@@ -43,9 +43,8 @@ describe('guestQuadlet', () => {
     spyOn(console, 'log').mockImplementation(() => {})
     await guestQuadletUp(ep, ['demo'])
     expect(cmds.some((c) => c.includes('mkdir -p') && c.includes('/tank/rocky/volumes'))).toBe(true)
-    expect(cmds.some((c) => c.includes('qctl quadlet up --root') && c.includes("'demo'"))).toBe(
-      true,
-    )
+    expect(cmds.some((c) => c.includes('qctl quadlet up') && c.includes("'demo'"))).toBe(true)
+    expect(cmds.some((c) => c.includes('--root'))).toBe(false)
   })
 
   test('guestQuadletUpAll runs unfiltered up', async () => {
@@ -59,8 +58,7 @@ describe('guestQuadlet', () => {
     })
     spyOn(console, 'log').mockImplementation(() => {})
     await guestQuadletUpAll(ep)
-    expect(cmds.at(-1)).toMatch(/qctl quadlet up --root/)
-    expect(cmds.at(-1)).not.toMatch(/qctl quadlet up --root \S+ \w/)
+    expect(cmds.at(-1)).toBe('qctl quadlet up')
   })
 
   test('guestQuadletDown runs quadlet down', async () => {
@@ -75,7 +73,8 @@ describe('guestQuadlet', () => {
     })
     spyOn(console, 'log').mockImplementation(() => {})
     await guestQuadletDown(ep, ['demo'])
-    expect(cmds[0]).toMatch(/qctl quadlet down --root.*'demo'/)
+    expect(cmds[0]).toMatch(/qctl quadlet down.*'demo'/)
+    expect(cmds[0]).not.toContain('--root')
   })
 
   test('guestQuadletPs runs quadlet ps and prints stdout', async () => {

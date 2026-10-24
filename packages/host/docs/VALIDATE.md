@@ -55,7 +55,8 @@ qctl vm seed
 - [ ] Cockpit admin: VW Login user (password sudo); or key-only `admin` + NOPASSWD (no password until `passwd` over SSH); `https://<guest>:9090`
 - [ ] `cloud-init status --wait` → done; no fatal errors in `/var/log/cloud-init.log`
 - [ ] `systemctl is-active rocky-first-boot.service` → `active` (or succeeded oneshot)
-- [ ] Stamp present: `test -f /var/lib/rocky/first-boot.done`
+- [ ] Stamp present: `test -f /var/lib/qctl/first-boot.done`
+- [ ] OS config present: `test -f /etc/qctl/config.json`
 - [ ] cloud-init waited on qctl _internal_init: `cloud-init status` is `done` only with the stamp (error if `rocky-first-boot` failed)
 - [ ] SSH host keys match VW Login `rocky` attachment `ssh-host-keys.tar.gz` across OS reinstall (optional Path A check)
 
@@ -65,7 +66,8 @@ ssh -p 2222 rocky@127.0.0.1   # or VW Login rocky username
 cloud-init status --wait
 systemctl status rocky-first-boot.service
 journalctl -u rocky-first-boot.service -b --no-pager
-test -f /var/lib/rocky/first-boot.done && echo stamp_ok
+test -f /var/lib/qctl/first-boot.done && echo stamp_ok
+test -f /etc/qctl/config.json && echo os_config_ok
 ```
 
 ---
@@ -78,7 +80,7 @@ test -f /var/lib/rocky/first-boot.done && echo stamp_ok
 - [ ] `id -nG apps` includes `systemd-journal` (podman logs / Cockpit journal)
 - [ ] `runuser -u apps -- systemctl --user is-active podman.socket` → `active` (API sock for podman-proxy-rootless)
 - [ ] `systemctl is-active podman.socket` → `active` (API sock for podman-proxy-rootful)
-- [ ] firewalld forward-ports from `/usr/local/lib/rocky/ports.json` (guest `applyDnat` in `start-services`) (`port`→`127.0.0.1:dnat`) + `route_localnet=1`
+- [ ] firewalld forward-ports from seed config ports (guest `applyDnat` in `start-services`) (`port`→`127.0.0.1:dnat`) + `route_localnet=1`
 - [ ] Optional: bootstrap `@tag(container-registry)` applied (`registry-login` stage; auth for root + apps)
 - [ ] `/etc/subuid` + `/etc/subgid` have `apps:…` only (admin SSH user has none — Podman is apps-only)
 - [ ] `runuser -u apps -- podman info` succeeds (no subuid ERRO)
@@ -106,7 +108,7 @@ zfs version | head -3
 
 - [ ] `/vw` mounted (serial/label `rocky-vw`); `findmnt /vw`
 - [ ] Bootstrap `@initVw(appDataDir=/vw, …)` unlocks via Tier-0 credentials (plugin sets CLI apodata for spawned `bw`)
-- [ ] Tier-0 via sealed credstore + `LoadCredentialEncrypted` on `rocky-first-boot` (no TTY master-password prompt)
+- [ ] Tier-0 via ISO `qctl-seed/tier0` → seal stage → `/etc/credstore.encrypted` (no TTY master-password prompt)
 - [ ] **Path B** (empty `/vw`): login+sync to reachable VW succeeds once
 - [ ] **Path A** (kept `/vw` after OS wipe): offline unlock works with VW unreachable
 - [ ] Missing Tier-0 → clear failure (do not use `--allow-missing-tier0` for real boots)
@@ -130,14 +132,14 @@ Pool must already exist (`qctl vm init-tank` or dedicated
 - [ ] `zpool list` shows `tank`; health ONLINE
 - [ ] Encryption on; `zfs get encryption,keystatus,keylocation tank`
 - [ ] `keylocation` is `file:///etc/credstore/rocky/tank_passphrase_tank`
-- [ ] Datasets mounted under `/tank`; canary `/tank/.rocky-canary` readable
+- [ ] Datasets mounted under `/tank`; canary recorded in `/var/lib/qctl/init-state.json` (and `/tank/.rocky-canary` for drill)
 - [ ] `/tank/rocky` clone path exists after Gate 7 (may be empty until then)
 
 ```bash
 zpool status tank | head -30
 zfs get -H encryption,keystatus,keylocation tank
 findmnt /tank
-cat /tank/.rocky-canary
+jq '.tanks.tank.canary' /var/lib/qctl/init-state.json
 ```
 
 ---
@@ -166,7 +168,7 @@ journalctl -u rocky-first-boot.service -b --no-pager | grep -E 'drill|== zfs-dri
 - [ ] Reboot VM; `tank` imported + unlocked **without** interactive passphrase
 - [ ] Official path: `/etc/zfs/zfs-list.cache/tank` present; `zfs-load-key@tank.service` generated (vendor `zfs-load-key.service` stays a `/dev/null` stub)
 - [ ] Key file still `file:///etc/credstore/rocky/tank_passphrase_tank`
-- [ ] `/tank/.rocky-canary` still present
+- [ ] Tank canary still present in init-state (and on-disk `.rocky-canary`)
 - [ ] `/vw` still mounted; bootstrap / `qctl secret sync` can resolve VW secrets again if needed
 
 ```bash
@@ -175,7 +177,7 @@ reboot
 test -s /etc/zfs/zfs-list.cache/tank && systemctl cat zfs-load-key@tank.service | head -15
 test -r /etc/credstore/rocky/tank_passphrase_tank
 zfs get -H keystatus tank   # available
-findmnt /tank && cat /tank/.rocky-canary
+findmnt /tank && jq '.tanks.tank.canary' /var/lib/qctl/init-state.json
 ```
 
 ---
@@ -184,16 +186,16 @@ findmnt /tank && cat /tank/.rocky-canary
 
 ## Gate 7 — Repo + repeatability
 
-- [ ] `/tank/rocky` is an hg repo owned by the admin SSH user; guest `QCTL_ENV` matches the seed profile’s env (`/etc/environment.d/91-rocky-env.conf`)
+- [ ] `/tank/rocky` is an hg repo owned by the admin SSH user; guest `env` matches seed (`jq -r .env /etc/qctl/config.json`)
 - [ ] Deploy key from VW Login `rocky` attachment `heptapod-deploy-key` is in admin `~/.ssh/heptapod_deploy_key` (not seed ISO / not only under `/root`)
 - [ ] Existing clone: `hg pull -u` may fail soft without failing first-boot
-- [ ] Second boot: `ConditionPathExists=!/var/lib/rocky/first-boot.done` → first-boot skipped
+- [ ] Second boot: `ConditionPathExists=!/var/lib/qctl/first-boot.done` → first-boot skipped
 - [ ] Destroy OS + recreate from same seed with **kept** `/vw` + tank → Gates 1–6 pass again (Path A)
 
 ```bash
 hg -R /tank/rocky id -i
-grep '^QCTL_ENV=' /etc/environment.d/91-rocky-env.conf
-test -f /var/lib/rocky/first-boot.done && echo stamp_ok
+jq -r .env /etc/qctl/config.json
+test -f /var/lib/qctl/first-boot.done && echo stamp_ok
 # After reboot with stamp present, rocky-first-boot should be skipped:
 systemctl status rocky-first-boot.service   # inactive / condition not met
 ```
@@ -223,7 +225,8 @@ qctl vm init-tank          # once: create+export tank, keep disks
 qctl vm up --wipe-os       # appliance first-boot → stamp
 
 # Guest checks (Gates 1–5, 7)
-test -f /var/lib/rocky/first-boot.done
+test -f /var/lib/qctl/first-boot.done
+test -f /etc/qctl/config.json
 findmnt /vw /tank
 bw status
 hg -R /tank/rocky id -i

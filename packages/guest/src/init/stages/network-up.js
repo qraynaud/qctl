@@ -4,7 +4,16 @@
  */
 import { StageError } from '../errors.js'
 
+/** @import { PlatformNetworkCtx } from '@qctl/shared' */
 /** @import { StageContext } from '../context.js' */
+
+/**
+ * @param {StageContext} ctx
+ * @returns {PlatformNetworkCtx}
+ */
+function networkCtx(ctx) {
+  return { log: ctx.log, exec: ctx.exec, ports: ctx.ports }
+}
 
 export default {
   name: 'network-up',
@@ -14,7 +23,7 @@ export default {
    */
   plan(ctx) {
     const net = ctx.platform?.networking
-    if (net?.planEnsureUp) return net.planEnsureUp(ctx)
+    if (net?.planEnsureUp) return net.planEnsureUp(networkCtx(ctx))
     return ['platform.networking.ensureUp (load platform module)']
   },
   /**
@@ -28,6 +37,6 @@ export default {
         'platform.networking.ensureUp missing — stage qctl-platform-rocky.mjs with networking',
       )
     }
-    await ensureUp(ctx)
+    await ensureUp(networkCtx(ctx))
   },
 }
