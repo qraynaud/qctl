@@ -37,10 +37,21 @@ describe('console helpers', () => {
       status: 'ok',
       line: '[  OK  ] Finished Cloud-init: Final Stage',
     })
+    // systemd ≥257 StatusUnitFormat=combined
+    expect(
+      classifyCloudInitOutcome('[  OK  ] Finished cloud-final.service - Cloud-init: Final Stage.'),
+    ).toMatchObject({ status: 'ok' })
+    // Seed final_message (serial-visible when [ OK ] status is not on ttyS0)
+    expect(
+      classifyCloudInitOutcome('Expect disks: OS + /vw + 5 data (raidz2) + 2 special (mirror).'),
+    ).toMatchObject({ status: 'ok' })
     expect(classifyCloudInitOutcome('Failed to start Cloud-init: Final Stage')).toEqual({
       status: 'fail',
       line: 'Failed to start Cloud-init: Final Stage',
     })
+    expect(
+      classifyCloudInitOutcome('Failed to start cloud-final.service - Cloud-init: Final Stage.'),
+    ).toMatchObject({ status: 'fail' })
     expect(classifyCloudInitOutcome('noise')).toBeNull()
   })
 
@@ -48,6 +59,9 @@ describe('console helpers', () => {
     expect(classifyRebootReady('[  OK  ] Reached target Multi-User System')).toMatchObject({
       status: 'ok',
     })
+    expect(
+      classifyRebootReady('[  OK  ] Reached target multi-user.target - Multi-User System.'),
+    ).toMatchObject({ status: 'ok' })
     expect(classifyRebootReady('noise')).toBeNull()
   })
 
