@@ -2,8 +2,11 @@
  * Host interaction seam: engine paths, podman, systemctl, ownership.
  * Real implementation shells out (runuser for the rootless `apps` user);
  * tests inject `createFakeSystem()` from `test/fake-system.js`.
+ *
+ * `systemctl` / `podman` are async so the supervisor event loop can still
+ * serve apps.sock (ensure) while a quadlet start waits on Requires=qctl-app@.
  */
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { chownSync, statSync } from 'node:fs'
 
 import { die } from './errors.js'
@@ -39,8 +42,8 @@ import { die } from './errors.js'
  * @property {() => number} uid
  * @property {string} rootlessUser
  * @property {(engine: Engine) => EnginePaths} paths
- * @property {(engine: Engine, args: string[], opts?: ExecOpts) => ExecResult} podman
- * @property {(engine: Engine, args: string[], opts?: ExecOpts) => ExecResult} systemctl
+ * @property {(engine: Engine, args: string[], opts?: ExecOpts) => Promise<ExecResult>} podman
+ * @property {(engine: Engine, args: string[], opts?: ExecOpts) => Promise<ExecResult>} systemctl
  * @property {() => void} ensureRootlessBus
  * @property {(engine: Engine, path: string) => void} chown
  * @property {(cmd: string, args: string[], opts?: ExecOpts) => ExecResult} exec
@@ -84,6 +87,40 @@ export function execSync(cmd, args, opts = {}) {
   })
   if (r.error) return { status: 127, stdout: '' }
   return { status: r.status ?? 1, stdout: typeof r.stdout === 'string' ? r.stdout : '' }
+}
+
+/**
+ * Non-blocking spawn — keeps the supervisor event loop free for other sockets.
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {ExecOpts & { cwd?: string, env?: NodeJS.ProcessEnv }} [opts]
+ * @returns {Promise<ExecResult>}
+ */
+export function execAsync(cmd, args, opts = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      stdio: stdioFor(opts),
+      cwd: opts.cwd,
+      env: opts.env,
+    })
+    /** @type {Buffer[]} */
+    const chunks = []
+    if (opts.capture && child.stdout) {
+      child.stdout.on('data', (c) => chunks.push(c))
+    }
+    if (opts.input !== undefined && child.stdin) {
+      child.stdin.end(opts.input)
+    }
+    child.on('error', () => {
+      resolve({ status: 127, stdout: '' })
+    })
+    child.on('close', (code) => {
+      resolve({
+        status: code ?? 1,
+        stdout: opts.capture ? Buffer.concat(chunks).toString('utf8') : '',
+      })
+    })
+  })
 }
 
 /**
@@ -146,16 +183,16 @@ export function createSystem(opts = {}) {
    * @param {string} tool
    * @param {string[]} args
    * @param {ExecOpts} [o]
-   * @returns {ExecResult}
+   * @returns {Promise<ExecResult>}
    */
-  function runTool(engine, tool, args, o) {
+  async function runTool(engine, tool, args, o) {
     if (engine === 'rootless') {
       ensureBus()
       const w = userWrap(rootlessUser)
       const toolArgs = tool === 'systemctl' ? ['systemctl', '--user', ...args] : [tool, ...args]
-      return execSync('runuser', [...w.prefix, ...toolArgs], { ...o, cwd: w.cwd })
+      return execAsync('runuser', [...w.prefix, ...toolArgs], { ...o, cwd: w.cwd })
     }
-    return execSync(tool, args, o)
+    return execAsync(tool, args, o)
   }
 
   function ensureBus() {

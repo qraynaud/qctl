@@ -69,8 +69,8 @@ export function createFakeSystem(opts) {
         asUser: engine === 'rootless' ? 'apps' : null,
       }
     },
-    podman: (engine, args) => record('podman', engine, args),
-    systemctl: (engine, args) => record('systemctl', engine, args),
+    podman: async (engine, args) => record('podman', engine, args),
+    systemctl: async (engine, args) => record('systemctl', engine, args),
     ensureRootlessBus: () => {
       record('bus', 'rootless', [])
     },
