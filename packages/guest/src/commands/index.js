@@ -4,5 +4,6 @@ import * as plugins from './plugins.js'
 import * as quadlet from './quadlet.js'
 import * as secret from './secret.js'
 import * as stage from './stage.js'
+import * as supervisor from './supervisor.js'
 
-export const commands = [init, list, stage, plugins, quadlet, secret]
+export const commands = [init, list, stage, plugins, supervisor, quadlet, secret]
