@@ -8,9 +8,10 @@ import { createAppHolds } from './ensure.js'
 import { QCTL_RUN_DIR_DEFAULT } from './paths.js'
 import { createContext, resolveInstanceRoot } from './quadlet/context.js'
 import { createQuadletOps, invokeQuadletOp } from './quadlet/ops.js'
+import { createSecretOps, invokeSecretOp } from './secret/ops.js'
 import { startSupervisorServer } from './server.js'
 
-/** @import { QuadletRequest, QuadletResult } from './protocol.js' */
+/** @import { QuadletRequest, QuadletResult, SecretRequest, SecretResult } from './protocol.js' */
 /** @import { QuadletContext } from './quadlet/context.js' */
 
 /** Max time for socket close + monitor dispose on SIGTERM/SIGINT. */
@@ -82,11 +83,37 @@ export async function runSupervisorDaemon(opts = {}) {
     return { method: 'quadlet', exitCode: answer.exitCode }
   }
 
+  /**
+   * Secret RPC → libraries (streams via hctx writers). Apps sock → rootlessOnly.
+   * @param {SecretRequest} req
+   * @param {{
+   *   kind: 'apps' | 'admin',
+   *   writeStdout?: (data: string) => void,
+   *   writeStderr?: (data: string) => void,
+   * }} hctx
+   * @returns {Promise<SecretResult>}
+   */
+  const secretHandler = async (req, hctx) => {
+    const writeStdout = hctx.writeStdout ?? (() => {})
+    const writeStderr = hctx.writeStderr ?? (() => {})
+    const answer = await invokeSecretOp(
+      createSecretOps({
+        root: ctx.root,
+        osConfig,
+        rootlessOnly: hctx.kind === 'apps',
+        log: (m) => writeStdout(`${m}\n`),
+      }),
+      req.params,
+    )
+    if (answer.error) writeStderr(`secret: ERROR: ${answer.error}\n`)
+    return { method: 'secret', exitCode: answer.exitCode }
+  }
+
   const server = await startSupervisorServer({
     osConfig,
     runDir,
     log,
-    handlers: { ...holds.handlers(), quadlet: quadletHandler },
+    handlers: { ...holds.handlers(), quadlet: quadletHandler, secret: secretHandler },
     chownSockets: process.getuid?.() === 0,
   })
 

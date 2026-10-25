@@ -1,9 +1,7 @@
-import { resolve } from 'node:path'
-
-import { runSecretCheck } from '../../secret/check.js'
-import { runSecretCommand } from '../../secret/cli.js'
+import { callSecret } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { SecretArgv } from '../../secret/cli.js' */
+/** @import { SecretParams } from '../../supervisor/protocol.js' */
+/** @import { SecretArgv } from './rpc.js' */
 
 export const command = 'check'
 export const describe =
@@ -14,6 +12,10 @@ export const describe =
  */
 export function builder(yargs) {
   return yargs
+    .option('app', {
+      type: 'string',
+      describe: 'Limit to one app (+ common secrets it Secret=s)',
+    })
     .option('env', {
       type: 'string',
       describe: 'Override env label for schema @import',
@@ -26,13 +28,11 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   try {
-    await runSecretCommand(async (root) => {
-      const report = await runSecretCheck({
-        root: resolve(root),
-        qctlEnv: typeof argv.env === 'string' ? argv.env : undefined,
-      })
-      if (!report.ok) process.exitCode = 1
-    })
+    /** @type {SecretParams} */
+    const params = { op: 'check' }
+    if (typeof argv.app === 'string' && argv.app) params.app = argv.app
+    if (typeof argv.env === 'string' && argv.env) params.env = argv.env
+    await callSecret(params)
   } catch (e) {
     console.error(`secret-check: ERROR: ${e instanceof Error ? e.message : String(e)}`)
     process.exitCode = 1

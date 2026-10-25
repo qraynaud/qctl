@@ -5,7 +5,7 @@ import { isAdminOnlyMethod, isAppsMethod } from './protocol.js'
 
 /** @import { OsConfig } from '@qctl/shared' */
 /** @import { PeerCred } from './peercred.js' */
-/** @import { SocketKind } from './protocol.js' */
+/** @import { SecretParams, SocketKind } from './protocol.js' */
 
 /**
  * @param {OsConfig} os
@@ -62,4 +62,29 @@ export function authorizeRpc(kind, peer, method, os) {
     ok: false,
     error: `permission denied: unknown method ${method}`,
   }
+}
+
+/**
+ * Param ACL for `secret` after peercred/method allow.
+ * Apps sock: require `app`; reject `restart` (rootless-only is enforced by the handler).
+ * Admin sock: full params.
+ * @param {SocketKind} kind
+ * @param {SecretParams} params
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+export function authorizeSecretParams(kind, params) {
+  if (kind !== 'apps') return { ok: true }
+  if (!params.app) {
+    return {
+      ok: false,
+      error: 'permission denied: apps socket requires secret params.app',
+    }
+  }
+  if (params.op === 'sync' && params.restart) {
+    return {
+      ok: false,
+      error: 'permission denied: restart not allowed on apps socket',
+    }
+  }
+  return { ok: true }
 }

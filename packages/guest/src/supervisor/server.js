@@ -5,10 +5,15 @@ import { chmodSync, chownSync, unlinkSync } from 'node:fs'
 import net from 'node:net'
 import { createInterface } from 'node:readline'
 
-import { authorizeRpc } from './acl.js'
+import { authorizeRpc, authorizeSecretParams } from './acl.js'
 import { adminSockPath, appsSockPath } from './paths.js'
 import { getPeerCred } from './peercred.js'
-import { decodeRequestLine, encodeResponseLine, encodeStreamLine } from './protocol.js'
+import {
+  decodeRequestLine,
+  encodeResponseLine,
+  encodeStreamLine,
+  isStreamingMethod,
+} from './protocol.js'
 import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './stamps.js'
 
 /** @import { Socket } from 'node:net' */
@@ -22,6 +27,8 @@ import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './
  *   QuadletResult,
  *   ReleaseRequest,
  *   ReleaseResult,
+ *   SecretRequest,
+ *   SecretResult,
  *   SocketKind,
  *   StatusRequest,
  *   StatusResult,
@@ -55,6 +62,7 @@ import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './
  * @property {MethodHandler<StatusRequest, StatusResult>} [status]
  * @property {MethodHandler<WatchRequest, WatchResult>} [watch]
  * @property {MethodHandler<QuadletRequest, QuadletResult>} [quadlet]
+ * @property {MethodHandler<SecretRequest, SecretResult>} [secret]
  */
 
 /** @typedef {MethodHandler<SupervisorRequest, SupervisorResult>} DispatchFn */
@@ -108,6 +116,7 @@ export function stubHandlers(runDir) {
       return { method: 'watch', app: req.params.app, reason }
     },
     quadlet: () => ({ method: 'quadlet', exitCode: 0 }),
+    secret: () => ({ method: 'secret', exitCode: 0 }),
   }
 }
 
@@ -148,7 +157,7 @@ async function handleLine(line, kind, peer, osConfig, handlers) {
 }
 
 /**
- * Quadlet may emit intermediate stream frames before the final response.
+ * Quadlet/secret may emit intermediate stream frames before the final response.
  * @param {string} line
  * @param {SocketKind} kind
  * @param {PeerCred} peer
@@ -157,15 +166,15 @@ async function handleLine(line, kind, peer, osConfig, handlers) {
  * @param {Socket} socket
  * @returns {Promise<void>}
  */
-async function handleQuadletLine(line, kind, peer, osConfig, handlers, socket) {
+async function handleStreamingLine(line, kind, peer, osConfig, handlers, socket) {
   try {
     const req = decodeRequestLine(line)
-    if (req.method !== 'quadlet') {
+    if (!isStreamingMethod(req.method)) {
       socket.write(
         encodeResponseLine({
           id: req.id,
           ok: false,
-          error: `internal: expected quadlet, got ${req.method}`,
+          error: `internal: expected streaming method, got ${req.method}`,
         }),
       )
       return
@@ -174,6 +183,13 @@ async function handleQuadletLine(line, kind, peer, osConfig, handlers, socket) {
     if (!auth.ok) {
       socket.write(encodeResponseLine({ id: req.id, ok: false, error: auth.error }))
       return
+    }
+    if (req.method === 'secret') {
+      const paramAuth = authorizeSecretParams(kind, req.params)
+      if (!paramAuth.ok) {
+        socket.write(encodeResponseLine({ id: req.id, ok: false, error: paramAuth.error }))
+        return
+      }
     }
     /** @param {string} data */
     const writeStdout = (data) => {
@@ -220,8 +236,8 @@ async function serveConnection(kind, socket, peer, osConfig, handlers) {
       socket.write(encodeResponseLine(await handleLine(trimmed, kind, peer, osConfig, handlers)))
       continue
     }
-    if (method === 'quadlet') {
-      await handleQuadletLine(trimmed, kind, peer, osConfig, handlers, socket)
+    if (isStreamingMethod(method)) {
+      await handleStreamingLine(trimmed, kind, peer, osConfig, handlers, socket)
     } else {
       socket.write(encodeResponseLine(await handleLine(trimmed, kind, peer, osConfig, handlers)))
     }

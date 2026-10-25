@@ -6,6 +6,7 @@ import {
   SupervisorUnavailableError,
   supervisorQuadletRequest,
   supervisorRequest,
+  supervisorSecretRequest,
 } from './client.js'
 import { startSupervisorServer } from './server.js'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -213,5 +214,63 @@ describe('supervisor server + client', () => {
     expect(err).toEqual(['err-line\n'])
     expect(res.ok).toBe(true)
     if (res.ok) expect(res.result).toEqual({ method: 'quadlet', exitCode: 7 })
+  })
+
+  test('secret: apps without app denied; with app OK; restart denied; streams on admin', async () => {
+    const runDir = join(makeTempDir(), 'run')
+    const server = await startSupervisorServer({
+      osConfig: os(),
+      runDir,
+      chownSockets: false,
+      getPeerCred: fixedPeer({ pid: 1, uid: 900, gid: 900 }),
+      handlers: {
+        secret: async (req, ctx) => {
+          ctx.writeStdout?.(`secret:${req.params.op}\n`)
+          return { method: 'secret', exitCode: 0 }
+        },
+      },
+    })
+    servers.push(server)
+
+    const noApp = await supervisorSecretRequest(server.appsPath, {
+      method: 'secret',
+      params: { op: 'sync' },
+    })
+    expect(noApp.ok).toBe(false)
+    if (!noApp.ok) expect(noApp.error).toMatch(/params\.app/)
+
+    const withRestart = await supervisorSecretRequest(server.appsPath, {
+      method: 'secret',
+      params: { op: 'sync', app: 'web', restart: true },
+    })
+    expect(withRestart.ok).toBe(false)
+    if (!withRestart.ok) expect(withRestart.error).toMatch(/restart/)
+
+    /** @type {string[]} */
+    const out = []
+    const ok = await supervisorSecretRequest(
+      server.appsPath,
+      { method: 'secret', params: { op: 'sync', app: 'web' } },
+      { onStdout: (d) => out.push(d) },
+    )
+    expect(ok.ok).toBe(true)
+    expect(out).toEqual(['secret:sync\n'])
+    if (ok.ok) expect(ok.result).toEqual({ method: 'secret', exitCode: 0 })
+
+    await server.close()
+    servers.pop()
+
+    const admin = await startSupervisorServer({
+      osConfig: os(),
+      runDir,
+      chownSockets: false,
+      getPeerCred: fixedPeer({ pid: 1, uid: 1000, gid: 1000 }),
+    })
+    servers.push(admin)
+    const full = await supervisorSecretRequest(admin.adminPath, {
+      method: 'secret',
+      params: { op: 'sync', restart: true },
+    })
+    expect(full.ok).toBe(true)
   })
 })

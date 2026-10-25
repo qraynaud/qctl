@@ -10,11 +10,14 @@ import { decodeResponseLine, decodeWireLine, encodeRequestLine } from './protoco
 /**
  * @import {
  *   QuadletRequest,
+ *   SecretRequest,
  *   SupervisorRequest,
  *   SupervisorResponse,
  *   SupervisorStream,
  * } from './protocol.js'
  */
+
+/** @typedef {QuadletRequest | SecretRequest} StreamingRequest */
 
 export class SupervisorUnavailableError extends Error {
   /**
@@ -150,19 +153,19 @@ export function supervisorRequest(sockPath, req, opts = {}) {
 }
 
 /**
- * Quadlet RPC: one request, zero-or-more stream frames, then a final response.
+ * Streaming RPC (quadlet / secret): one request, zero-or-more stream frames, then a final response.
  * @param {string} sockPath
- * @param {QuadletRequest} req
+ * @param {StreamingRequest} req
  * @param {{
  *   onStdout?: (data: string) => void,
  *   onStderr?: (data: string) => void,
  *   timeoutMs?: number,
  *   signal?: AbortSignal,
  * }} [opts]
- *   `timeoutMs: 0` disables the client timeout (long `quadlet up`).
+ *   `timeoutMs: 0` disables the client timeout (long `quadlet up` / `secret sync`).
  * @returns {Promise<SupervisorResponse>}
  */
-export function supervisorQuadletRequest(sockPath, req, opts = {}) {
+export function supervisorStreamingRequest(sockPath, req, opts = {}) {
   const timeoutMs = opts.timeoutMs ?? 0
   const line = encodeRequestLine(req)
 
@@ -293,4 +296,24 @@ export function supervisorQuadletRequest(sockPath, req, opts = {}) {
       // ignore
     }
   })
+}
+
+/**
+ * @param {string} sockPath
+ * @param {QuadletRequest} req
+ * @param {Parameters<typeof supervisorStreamingRequest>[2]} [opts]
+ * @returns {Promise<SupervisorResponse>}
+ */
+export function supervisorQuadletRequest(sockPath, req, opts) {
+  return supervisorStreamingRequest(sockPath, req, opts)
+}
+
+/**
+ * @param {string} sockPath
+ * @param {SecretRequest} req
+ * @param {Parameters<typeof supervisorStreamingRequest>[2]} [opts]
+ * @returns {Promise<SupervisorResponse>}
+ */
+export function supervisorSecretRequest(sockPath, req, opts) {
+  return supervisorStreamingRequest(sockPath, req, opts)
 }
