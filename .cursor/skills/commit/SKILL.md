@@ -31,7 +31,8 @@ Skim warnings on green runs; fix actionable ones even if pre-existing.
 
 Split dirty work into ordered, shippable commits. Skip secrets and unrelated dirty
 files. Put related docs/READMEs/`.cursor` skill edits in the **same** commit as
-the code.
+the code. Ensure you only commit on new branches you create with a suitable name.
+Ensure you only commit on new branches you create with a suitable name.
 
 - One concern → one feature branch → preferably one commit (stack only if a single
   commit would be unwieldy; never leave a broken intermediate).

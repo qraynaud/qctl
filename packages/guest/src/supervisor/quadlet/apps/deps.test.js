@@ -23,6 +23,22 @@ describe('deps', () => {
     }
   })
 
+  test('unitDepApps accepts installed qctl-app@ tokens as the same peer', () => {
+    const fx = makeQuadletInstance()
+    try {
+      const ctx = { root: fx.root }
+      const web = join(fx.root, 'applications/web')
+      writeFile(
+        fx.root,
+        'applications/web/web.container',
+        '[Unit]\nAfter=network-online.target qctl-app@proxy.service\nRequires=qctl-app@proxy.service\n[Container]\nImage=x\n',
+      )
+      expect(unitDepApps(ctx, web)).toEqual(['proxy'])
+    } finally {
+      cleanupQuadletFixture(fx)
+    }
+  })
+
   test('transitive expansion never includes the app itself', () => {
     const fx = makeQuadletInstance()
     try {

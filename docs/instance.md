@@ -135,8 +135,9 @@ plus bash-completion.
 
 Instance root comes from `/etc/qctl/config.json` (written by guest load-seed from
 ISO `qctl-seed/config.json`). Same resolution for `qctl secret {check,sync}`.
-Mutating quadlet commands re-exec with `sudo -n`. Rootless apps install under the
-`apps` user’s `~/.config/containers/systemd`; rootful under `/etc/containers/systemd`.
+Run `qctl quadlet` as the admin user (or root) — no `sudo` needed. Rootless apps
+install under the `apps` user’s `~/.config/containers/systemd`; rootful under
+`/etc/containers/systemd`.
 
 Package-root graph → Quadlet `${VAR}` render. Unit templates also get
 `${__DIRNAME}` (absolute directory of the file being rendered). Unit graph →
@@ -145,9 +146,9 @@ Package-root graph → Quadlet `${VAR}` render. Unit templates also get
 ### Cross-app / cross-engine deps
 
 Depend on another app with the usual systemd keys and its short name
-(`Requires=other.service`, `After=…`, and so on). That works for peers on the
-same engine and across rootful/rootless. After upgrading qctl, run
-`qctl quadlet up` once so existing installs pick this up.
+(`Requires=other.service`, `After=…`, `PropagatesStopTo=…`, and so on). That works
+for peers on the same engine and across rootful/rootless. After upgrading qctl,
+run `qctl quadlet up` once so existing installs pick this up.
 
 ## Guest: first boot
 
