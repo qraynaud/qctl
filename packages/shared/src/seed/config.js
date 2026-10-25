@@ -61,6 +61,15 @@ export const seedAppsUserSchema = z.strictObject({
   subgid: seedSubidRangeSchema,
 })
 
+/**
+ * Non-secret admin identity (password stays Tier-0). Used for peercred / socket ACL.
+ */
+export const seedAdminUserSchema = z.strictObject({
+  username: nonEmpty,
+  uid: z.number().int().nonnegative(),
+  gid: z.number().int().nonnegative(),
+})
+
 export const seedRepoSchema = z.strictObject({
   vcs: z.enum(['git', 'hg']),
   url: nonEmpty.optional(),
@@ -83,6 +92,7 @@ export const seedConfigSchema = z.strictObject({
   repo: seedRepoSchema,
   users: z.strictObject({
     apps: seedAppsUserSchema,
+    admin: seedAdminUserSchema,
   }),
   disks: disksJsonSchema,
   ports: portsSchema,
@@ -109,6 +119,7 @@ export const osConfigSchema = z.strictObject({
   repo: seedRepoSchema,
   quadletUser: nonEmpty,
   apps: seedAppsUserSchema,
+  admin: seedAdminUserSchema,
   timezone: nonEmpty,
   profile: seedProfileSchema,
 })
@@ -125,6 +136,7 @@ export function seedConfigToOsConfig(seed) {
     repo: seed.repo,
     quadletUser: seed.users.apps.username,
     apps: seed.users.apps,
+    admin: seed.users.admin,
     timezone: seed.timezone,
     profile: seed.profile,
   })

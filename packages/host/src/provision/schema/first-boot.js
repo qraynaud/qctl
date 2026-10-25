@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { tankPassphraseCredName } from '@qctl/shared'
 
-import { formatSubuid } from './users.js'
+import { DEFAULT_ADMIN_UID, DEFAULT_ADMIN_USERNAME, formatSubuid } from './users.js'
 import { trimmedText } from './zod-utils.js'
 
 export { tankPassphraseCredName }
@@ -108,5 +108,25 @@ export function appsIdentityFromProvision(data) {
     subgid: a.subgid,
     subuidSpec: formatSubuid(a.subuid),
     subgidSpec: formatSubuid(a.subgid),
+  }
+}
+
+/**
+ * @typedef {{ username?: string, uid?: number, gid?: number }} AdminUserStub
+ */
+
+/**
+ * Non-secret admin identity from parsed provision (`users.admin`).
+ * Defaults match provision schema when stubs omit admin (tests).
+ * @param {ProvisionFile | { users?: { admin?: AdminUserStub } }} data
+ * @returns {{ username: string, uid: number, gid: number }}
+ */
+export function adminIdentityFromProvision(data) {
+  const a = data.users?.admin
+  const uid = a?.uid ?? DEFAULT_ADMIN_UID
+  return {
+    username: a?.username ?? DEFAULT_ADMIN_USERNAME,
+    uid,
+    gid: a?.gid ?? uid,
   }
 }

@@ -5,6 +5,7 @@ import { findInstanceRoot, loadProvision } from '@qctl/shared'
 import { portsFromArgv } from '../lib/options.js'
 import { resolveProfileArgv } from '../lib/profile-argv.js'
 import { which } from '../lib/util.js'
+import { adminIdentityFromProvision } from '../provision/schema/first-boot.js'
 import { appsIdentityFromProvision, parseProvisionOrThrow } from '../provision/schema/index.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { localContainerName, localTestContainerName } from './name.js'
@@ -24,6 +25,9 @@ import { die } from './util.js'
  * @property {number} appsGid
  * @property {{ start: number, count: number }} appsSubuid from provision
  * @property {{ start: number, count: number }} appsSubgid from provision
+ * @property {string} adminUsername
+ * @property {number} adminUid
+ * @property {number} adminGid
  * @property {{ vcs: 'git' | 'hg', url?: string, branch?: string }} repo
  * @property {string} guestBin
  * @property {string} platformModulePath
@@ -70,11 +74,15 @@ export async function createLocalContext(argv, opts = {}) {
       .join(' + ') || 'provision'
   const data = parseProvisionOrThrow(loaded.data, sourceLabel)
   const apps = appsIdentityFromProvision(data)
+  const admin = adminIdentityFromProvision(data)
   const appsUsername = apps.username
   const appsUid = apps.uid
   const appsGid = apps.gid
   const appsSubuid = apps.subuid
   const appsSubgid = apps.subgid
+  const adminUsername = admin.username
+  const adminUid = admin.uid
+  const adminGid = admin.gid
   const repoRaw = /** @type {{ vcs?: string, url?: string, branch?: string }} */ (data.repo || {})
   /** @type {{ vcs: 'git' | 'hg', url?: string, branch?: string }} */
   const repo = { vcs: repoRaw.vcs === 'hg' ? 'hg' : 'git' }
@@ -105,6 +113,9 @@ export async function createLocalContext(argv, opts = {}) {
     appsGid,
     appsSubuid,
     appsSubgid,
+    adminUsername,
+    adminUid,
+    adminGid,
     repo,
     guestBin: tooling.guestPath,
     platformModulePath: tooling.platformModulePath,

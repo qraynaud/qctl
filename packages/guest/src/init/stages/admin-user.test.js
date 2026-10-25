@@ -1,8 +1,11 @@
 import * as fsp from 'node:fs/promises'
 
 import { createTestContext, testOsConfig } from '../context.test-helpers.js'
+import * as loadSeed from '../load-seed-config.js'
 import adminUser from './admin-user.js'
 import { describe, expect, spyOn, test } from 'bun:test'
+
+/** @import { OsConfig } from '@qctl/shared' */
 
 describe('admin-user stage', () => {
   test('key-only mode when ADMIN_* incomplete', async () => {
@@ -13,13 +16,18 @@ describe('admin-user stage', () => {
     })
     spyOn(fsp, 'mkdir').mockImplementation(async () => undefined)
     spyOn(fsp, 'chmod').mockImplementation(async () => undefined)
+    /** @type {OsConfig[]} */
+    const writtenOs = []
+    spyOn(loadSeed, 'writeOsConfig').mockImplementation((os) => {
+      writtenOs.push(os)
+    })
 
     /** @type {string[]} */
     const logs = []
     /** @type {string[][]} */
     const calls = []
     const ctx = createTestContext({
-      osConfig: testOsConfig(),
+      osConfig: testOsConfig({ admin: { username: 'placeholder', uid: 1000, gid: 1000 } }),
       seedConfig: /** @type {any} */ ({ adminSshAuthorizedKeys: 'ssh-ed25519 AAAA test' }),
       paths: { adminKeys: '/mock/keys', sudoersDropin: '/mock/sudoers' },
       log: (l) => logs.push(l),
@@ -37,5 +45,7 @@ describe('admin-user stage', () => {
     expect(logs.some((l) => l.includes('key-only'))).toBe(true)
     expect(calls.some((a) => a.includes('admin-user-ensure') && a.includes('keyonly'))).toBe(true)
     expect(files.get('/mock/sudoers')).toMatch(/NOPASSWD/)
+    expect(ctx.osConfig.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
+    expect(writtenOs.at(-1)?.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
   })
 })

@@ -48,11 +48,17 @@ const apps = {
   subgid: { start: 900000, count: 32768 },
 }
 
+const admin = {
+  username: 'admin',
+  uid: 1000,
+  gid: 1000,
+}
+
 const sampleSeedDefaults = {
   env: 'dev',
   root: '/tank/rocky',
   repo: { vcs: /** @type {const} */ ('hg'), url: 'ssh://hg@example/repo', branch: 'default' },
-  users: { apps },
+  users: { apps, admin },
   disks,
   ports: {},
   packages: {
@@ -139,6 +145,7 @@ describe('osConfigSchema / seedConfigToOsConfig', () => {
       repo: { vcs: 'hg', url: 'ssh://hg@example/repo', branch: 'default' },
       quadletUser: 'apps',
       apps,
+      admin,
       timezone: 'Europe/Paris',
       profile: 'appliance',
     })

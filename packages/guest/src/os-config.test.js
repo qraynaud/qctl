@@ -32,6 +32,11 @@ function sampleOs() {
       subuid: { start: 900000, count: 65536 },
       subgid: { start: 900000, count: 65536 },
     },
+    admin: {
+      username: 'admin',
+      uid: 1000,
+      gid: 1000,
+    },
     timezone: 'Europe/Paris',
     profile: 'appliance',
   }

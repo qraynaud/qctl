@@ -29,6 +29,7 @@ export type {
 } from './roles.js'
 export type {
   OsConfig,
+  SeedAdminUser,
   SeedAppsUser,
   SeedConfig,
   SeedInitTank,

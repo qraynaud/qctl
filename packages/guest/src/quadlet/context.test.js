@@ -25,6 +25,11 @@ function writeOsConfig(path, root) {
         subuid: { start: 1, count: 1 },
         subgid: { start: 1, count: 1 },
       },
+      admin: {
+        username: 'admin',
+        uid: 1000,
+        gid: 1000,
+      },
       timezone: 'UTC',
       profile: 'appliance',
     }),

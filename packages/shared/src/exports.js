@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.6.0'
+export const QCTL_VERSION = '0.7.0-pre'
 
 /**
  * @param {never} value
@@ -114,6 +114,7 @@ export {
   QCTL_SEED_TIER0_ISO_REL,
   SEED_PROFILE,
   osConfigSchema,
+  seedAdminUserSchema,
   seedAppsUserSchema,
   seedConfigSchema,
   seedConfigToOsConfig,
