@@ -1,5 +1,5 @@
-import * as contextMod from '../quadlet/context.js'
-import * as systemMod from '../quadlet/system.js'
+import * as contextMod from '../supervisor/quadlet/context.js'
+import * as systemMod from '../supervisor/quadlet/system.js'
 import { runSecretCommand } from './cli.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 

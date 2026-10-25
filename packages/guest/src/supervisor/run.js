@@ -4,12 +4,14 @@
 import { asyncExitHook } from 'exit-hook'
 
 import { readOsConfig } from '../os-config.js'
-import { createContext, resolveInstanceRoot } from '../quadlet/context.js'
 import { createAppHolds } from './ensure.js'
 import { QCTL_RUN_DIR_DEFAULT } from './paths.js'
+import { createContext, resolveInstanceRoot } from './quadlet/context.js'
+import { createQuadletOps, invokeQuadletOp } from './quadlet/ops.js'
 import { startSupervisorServer } from './server.js'
 
-/** @import { QuadletContext } from '../quadlet/context.js' */
+/** @import { QuadletRequest, QuadletResult } from './protocol.js' */
+/** @import { QuadletContext } from './quadlet/context.js' */
 
 /** Max time for socket close + monitor dispose on SIGTERM/SIGINT. */
 const SHUTDOWN_WAIT_MS = 10_000
@@ -55,11 +57,36 @@ export async function runSupervisorDaemon(opts = {}) {
       signal: lifetime.signal,
     })
 
+  /**
+   * Admin RPC → quadlet libraries (streams via hctx writers).
+   * @param {QuadletRequest} req
+   * @param {{
+   *   writeStdout?: (data: string) => void,
+   *   writeStderr?: (data: string) => void,
+   * }} hctx
+   * @returns {Promise<QuadletResult>}
+   */
+  const quadletHandler = async (req, hctx) => {
+    const writeStdout = hctx.writeStdout ?? (() => {})
+    const writeStderr = hctx.writeStderr ?? (() => {})
+    const qctx = createContext({
+      root: ctx.root,
+      osConfig,
+      sys: ctx.sys,
+      log: (m) => writeStdout(`quadlet: ${m}\n`),
+      print: (m) => writeStdout(`${m}\n`),
+    })
+
+    const answer = await invokeQuadletOp(createQuadletOps(qctx), req.params)
+    if (answer.error) writeStderr(`quadlet: ERROR: ${answer.error}\n`)
+    return { method: 'quadlet', exitCode: answer.exitCode }
+  }
+
   const server = await startSupervisorServer({
     osConfig,
     runDir,
     log,
-    handlers: holds.handlers(),
+    handlers: { ...holds.handlers(), quadlet: quadletHandler },
     chownSockets: process.getuid?.() === 0,
   })
 

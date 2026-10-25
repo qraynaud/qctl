@@ -3,7 +3,7 @@
  * (via `qctl.sha256` labels written by `secret sync`). Exit 1 on drift.
  */
 import { tryReadOsConfig } from '../os-config.js'
-import { detectQctlEnvFor } from '../quadlet/env.js'
+import { detectQctlEnvFor } from '../supervisor/quadlet/env.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'
 import {
   defaultPodman,

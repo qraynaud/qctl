@@ -8,7 +8,7 @@ import { createInterface } from 'node:readline'
 import { authorizeRpc } from './acl.js'
 import { adminSockPath, appsSockPath } from './paths.js'
 import { getPeerCred } from './peercred.js'
-import { decodeRequestLine, encodeResponseLine } from './protocol.js'
+import { decodeRequestLine, encodeResponseLine, encodeStreamLine } from './protocol.js'
 import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './stamps.js'
 
 /** @import { Socket } from 'node:net' */
@@ -34,7 +34,12 @@ import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './
  */
 
 /**
- * @typedef {{ kind: SocketKind, peer: PeerCred }} HandlerCtx
+ * @typedef {{
+ *   kind: SocketKind,
+ *   peer: PeerCred,
+ *   writeStdout?: (data: string) => void,
+ *   writeStderr?: (data: string) => void,
+ * }} HandlerCtx
  */
 
 /**
@@ -102,7 +107,7 @@ export function stubHandlers(runDir) {
       const reason = await watchAppUntilNotReady(req.params.app, { runDir })
       return { method: 'watch', app: req.params.app, reason }
     },
-    quadlet: (req) => ({ stub: true, method: 'quadlet', argv: req.params.argv }),
+    quadlet: () => ({ method: 'quadlet', exitCode: 0 }),
   }
 }
 
@@ -143,6 +148,60 @@ async function handleLine(line, kind, peer, osConfig, handlers) {
 }
 
 /**
+ * Quadlet may emit intermediate stream frames before the final response.
+ * @param {string} line
+ * @param {SocketKind} kind
+ * @param {PeerCred} peer
+ * @param {OsConfig} osConfig
+ * @param {SupervisorHandlers} handlers
+ * @param {Socket} socket
+ * @returns {Promise<void>}
+ */
+async function handleQuadletLine(line, kind, peer, osConfig, handlers, socket) {
+  try {
+    const req = decodeRequestLine(line)
+    if (req.method !== 'quadlet') {
+      socket.write(
+        encodeResponseLine({
+          id: req.id,
+          ok: false,
+          error: `internal: expected quadlet, got ${req.method}`,
+        }),
+      )
+      return
+    }
+    const auth = authorizeRpc(kind, peer, req.method, osConfig)
+    if (!auth.ok) {
+      socket.write(encodeResponseLine({ id: req.id, ok: false, error: auth.error }))
+      return
+    }
+    /** @param {string} data */
+    const writeStdout = (data) => {
+      socket.write(encodeStreamLine({ id: req.id, stream: 'stdout', data }))
+    }
+    /** @param {string} data */
+    const writeStderr = (data) => {
+      socket.write(encodeStreamLine({ id: req.id, stream: 'stderr', data }))
+    }
+    const result = await dispatch(req, { kind, peer, writeStdout, writeStderr }, handlers)
+    if (result === undefined) {
+      socket.write(
+        encodeResponseLine({ id: req.id, ok: false, error: `no handler for ${req.method}` }),
+      )
+      return
+    }
+    socket.write(encodeResponseLine({ id: req.id, ok: true, result }))
+  } catch (err) {
+    socket.write(
+      encodeResponseLine({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    )
+  }
+}
+
+/**
  * @param {SocketKind} kind
  * @param {Socket} socket
  * @param {PeerCred} peer
@@ -154,7 +213,18 @@ async function serveConnection(kind, socket, peer, osConfig, handlers) {
   for await (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
-    socket.write(encodeResponseLine(await handleLine(trimmed, kind, peer, osConfig, handlers)))
+    let method
+    try {
+      method = decodeRequestLine(trimmed).method
+    } catch {
+      socket.write(encodeResponseLine(await handleLine(trimmed, kind, peer, osConfig, handlers)))
+      continue
+    }
+    if (method === 'quadlet') {
+      await handleQuadletLine(trimmed, kind, peer, osConfig, handlers, socket)
+    } else {
+      socket.write(encodeResponseLine(await handleLine(trimmed, kind, peer, osConfig, handlers)))
+    }
   }
 }
 

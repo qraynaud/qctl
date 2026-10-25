@@ -85,7 +85,7 @@ export async function reconcileApp(s, app, engineIn, isNew) {
   const dir = appDir(ctx, app)
   if (!dir) {
     ctx.log(`remove orphan ${app} (${engine})`)
-    stopAndRemoveApp(ctx, app, paths)
+    await stopAndRemoveApp(ctx, app, paths)
     s.needReload = true
     return
   }

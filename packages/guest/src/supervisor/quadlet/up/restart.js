@@ -8,13 +8,13 @@ import { die } from '../errors.js'
 /**
  * @param {UpSession} s
  */
-export function reloadDaemons(s) {
+export async function reloadDaemons(s) {
   const { ctx, needReload, restartApps, dirtyNetworks, reloadEngines } = s
   if (!(needReload || restartApps.length > 0 || dirtyNetworks.length > 0)) return
   for (const eng of reloadEngines) {
     if (eng === 'rootless') ctx.sys.ensureRootlessBus()
     ctx.log(`daemon-reload (${eng})`)
-    ctx.sys.systemctl(eng, ['daemon-reload'])
+    await ctx.sys.systemctl(eng, ['daemon-reload'])
   }
 }
 
@@ -22,9 +22,9 @@ export function reloadDaemons(s) {
  * Restart changed apps in unit-dep order (deps before dependents).
  * With Notify=healthy, each systemctl restart blocks until healthy.
  * @param {UpSession} s
- * @returns {string[]} restart order used (for done log)
+ * @returns {Promise<string[]>} restart order used (for done log)
  */
-export function restartChangedApps(s) {
+export async function restartChangedApps(s) {
   const { ctx, restartApps } = s
   const restartList = topoSortApps(ctx, restartApps)
   for (const app of restartList) {
@@ -34,13 +34,15 @@ export function restartChangedApps(s) {
     if (engine === 'rootless') ctx.sys.ensureRootlessBus()
     for (const svc of appServiceNames(dir)) {
       ctx.log(`restart ${svc} (${engine})`)
-      ctx.sys.systemctl(engine, ['reset-failed', svc], { ignoreStderr: true })
+      await ctx.sys.systemctl(engine, ['reset-failed', svc], { ignoreStderr: true })
       const active =
-        ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
+        (await ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true })).status
+        === 0
       const failed =
         !active
-        && ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true }).status === 0
-      const r = ctx.sys.systemctl(engine, [active || failed ? 'restart' : 'start', svc])
+        && (await ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true }))
+          .status === 0
+      const r = await ctx.sys.systemctl(engine, [active || failed ? 'restart' : 'start', svc])
       if (r.status !== 0)
         die(`systemctl ${active || failed ? 'restart' : 'start'} ${svc} failed (exit ${r.status})`)
     }
@@ -52,7 +54,7 @@ export function restartChangedApps(s) {
  * Filtered up with nothing dirty: still ensure targets are started.
  * @param {UpSession} s
  */
-export function startFilteredIfNeeded(s) {
+export async function startFilteredIfNeeded(s) {
   const { ctx, filtered, filterList, restartApps } = s
   if (restartApps.length > 0 || !filtered) return
   for (const name of filterList) {
@@ -61,10 +63,14 @@ export function startFilteredIfNeeded(s) {
     const engine = readEngine(dir)
     if (engine === 'rootless') ctx.sys.ensureRootlessBus()
     for (const svc of appServiceNames(dir)) {
-      if (ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0)
+      if (
+        (await ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true })).status
+        === 0
+      ) {
         continue
+      }
       ctx.log(`start ${svc} (${engine})`)
-      const r = ctx.sys.systemctl(engine, ['start', svc])
+      const r = await ctx.sys.systemctl(engine, ['start', svc])
       if (r.status !== 0) die(`systemctl start ${svc} failed (exit ${r.status})`)
     }
   }

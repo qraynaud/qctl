@@ -1,8 +1,8 @@
 /**
  * Refcounted ensure/release for cross-engine app holds (qctl-app@ proxies).
  */
-import { appDir, appServiceNames, resolveAppEngine } from '../quadlet/apps/index.js'
-import { QuadletError } from '../quadlet/errors.js'
+import { appDir, appServiceNames, resolveAppEngine } from './quadlet/apps/index.js'
+import { QuadletError } from './quadlet/errors.js'
 import {
   clearAppReady,
   isAppFailed,
@@ -12,9 +12,9 @@ import {
   watchAppUntilNotReady,
 } from './stamps.js'
 
-/** @import { QuadletContext } from '../quadlet/context.js' */
-/** @import { Engine } from '../quadlet/system.js' */
 /** @import { EnsureResult, ReleaseResult, StatusResult, WatchResult } from './protocol.js' */
+/** @import { QuadletContext } from './quadlet/context.js' */
+/** @import { Engine } from './quadlet/system.js' */
 
 /**
  * @param {number} ms
@@ -72,10 +72,12 @@ async function waitUnitsActive(ctx, engine, svcs, opts) {
     let allActive = true
     for (const svc of svcs) {
       const failed =
-        ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true }).status === 0
+        (await ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true })).status
+        === 0
       if (failed) return 'failed'
       const active =
-        ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
+        (await ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true })).status
+        === 0
       if (!active) allActive = false
     }
     if (allActive) return 'active'
@@ -109,9 +111,11 @@ async function pollUnitHealth(opts) {
     if ((refs.get(app) ?? 0) <= 0) return
     for (const svc of svcs) {
       const failed =
-        ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true }).status === 0
+        (await ctx.sys.systemctl(engine, ['is-failed', '--quiet', svc], { capture: true })).status
+        === 0
       const active =
-        ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
+        (await ctx.sys.systemctl(engine, ['is-active', '--quiet', svc], { capture: true })).status
+        === 0
       if (failed || !active) {
         log(`qctl-supervisor: ${app}: unit ${svc} ${failed ? 'failed' : 'inactive'}`)
         setAppFailed(app, runDir)
@@ -139,8 +143,8 @@ async function startAppUnits(opts) {
   if (engine === 'rootless') ctx.sys.ensureRootlessBus()
   for (const svc of svcs) {
     log(`qctl-supervisor: ensure start ${svc} (${engine})`)
-    ctx.sys.systemctl(engine, ['reset-failed', svc], { ignoreStderr: true })
-    const r = ctx.sys.systemctl(engine, ['start', svc])
+    await ctx.sys.systemctl(engine, ['reset-failed', svc], { ignoreStderr: true })
+    const r = await ctx.sys.systemctl(engine, ['start', svc])
     if (r.status !== 0) {
       setAppFailed(app, runDir)
       throw new QuadletError(`systemctl start ${svc} failed (exit ${r.status})`)
@@ -153,7 +157,7 @@ async function startAppUnits(opts) {
   if (wait !== 'active') {
     setAppFailed(app, runDir)
     for (const svc of svcs) {
-      ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
+      await ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
     }
     throw new QuadletError(
       wait === 'failed'
@@ -250,7 +254,7 @@ async function dropHold(opts) {
     if (engine === 'rootless') ctx.sys.ensureRootlessBus()
     for (const svc of svcs) {
       log(`qctl-supervisor: release stop ${svc} (${engine})`)
-      ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
+      await ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
     }
     clearAppReady(app, runDir)
     stopped = true

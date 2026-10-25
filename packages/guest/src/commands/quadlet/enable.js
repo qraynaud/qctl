@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runEnable } from '../../quadlet/enable.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'enable <apps..>'
 export const describe = "Render/install apps' units"
@@ -24,10 +23,9 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  const apps = argvApps(argv)
-  await runQuadletCommand(async (ctx) => {
-    for (const app of apps) {
-      await runEnable(ctx, { app, install: argv.install !== false })
-    }
+  await callQuadlet({
+    op: 'enable',
+    apps: argvApps(argv),
+    install: argv.install !== false,
   })
 }

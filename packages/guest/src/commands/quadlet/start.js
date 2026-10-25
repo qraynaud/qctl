@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runStartStop } from '../../quadlet/lifecycle.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'start <apps..>'
 export const describe = "Start apps' units (systemctl start)"
@@ -18,8 +17,5 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  const apps = argvApps(argv)
-  await runQuadletCommand((ctx) => {
-    for (const app of apps) runStartStop(ctx, 'start', app)
-  })
+  await callQuadlet({ op: 'start', apps: argvApps(argv) })
 }

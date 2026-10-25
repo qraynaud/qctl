@@ -1,15 +1,10 @@
-import * as cliMod from '../../quadlet/cli.js'
-import * as upMod from '../../quadlet/up/index.js'
+import * as rpcMod from './rpc.js'
 import * as mod from './up.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { QuadletContext } from '../../quadlet/context.js' */
-
 afterEach(() => {
   // @ts-expect-error restore
-  cliMod.runQuadletCommand.mockRestore?.()
-  // @ts-expect-error restore
-  upMod.runUp.mockRestore?.()
+  rpcMod.callQuadlet.mockRestore?.()
 })
 
 describe('quadlet up command', () => {
@@ -20,21 +15,15 @@ describe('quadlet up command', () => {
     expect(typeof mod.handler).toBe('function')
   })
 
-  test('handler runs runUp with dry-run and app filter', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
-      await fn(/** @type {QuadletContext} */ ({}))
-    })
-    const runUp = spyOn(upMod, 'runUp').mockImplementation(async () => {})
+  test('handler sends up op with dry-run and apps', async () => {
+    const call = spyOn(rpcMod, 'callQuadlet').mockImplementation(async () => {})
     await mod.handler({ apps: ['web'], dryRun: true })
-    expect(runUp).toHaveBeenCalledWith({}, { dryRun: true, apps: ['web'] })
+    expect(call).toHaveBeenCalledWith({ op: 'up', dryRun: true, apps: ['web'] })
   })
 
   test('handler omits apps when none given', async () => {
-    spyOn(cliMod, 'runQuadletCommand').mockImplementation(async (fn) => {
-      await fn(/** @type {QuadletContext} */ ({}))
-    })
-    const runUp = spyOn(upMod, 'runUp').mockImplementation(async () => {})
+    const call = spyOn(rpcMod, 'callQuadlet').mockImplementation(async () => {})
     await mod.handler({ dryRun: false })
-    expect(runUp).toHaveBeenCalledWith({}, { dryRun: false, apps: undefined })
+    expect(call).toHaveBeenCalledWith({ op: 'up', dryRun: false })
   })
 })

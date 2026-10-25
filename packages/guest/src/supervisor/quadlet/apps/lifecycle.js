@@ -14,7 +14,7 @@ import { unmarkEnabled } from './markers.js'
  * @param {string} app
  * @param {EnginePaths} paths
  */
-export function appSystemctl(ctx, action, app, paths) {
+export async function appSystemctl(ctx, action, app, paths) {
   const d = appDir(ctx, app)
   if (!d) die(`unknown app '${app}' (no applications/${app}/app.yaml)`)
   if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
@@ -22,7 +22,7 @@ export function appSystemctl(ctx, action, app, paths) {
   if (svcs.length === 0) die(`app '${app}' has no startable units`)
   for (const svc of svcs) {
     ctx.log(`${action} ${svc} (${paths.engine})`)
-    const r = ctx.sys.systemctl(paths.engine, [action, svc])
+    const r = await ctx.sys.systemctl(paths.engine, [action, svc])
     if (r.status !== 0) die(`systemctl ${action} ${svc} failed (exit ${r.status})`)
   }
 }
@@ -33,29 +33,31 @@ export function appSystemctl(ctx, action, app, paths) {
  * @param {string} app
  * @param {EnginePaths} paths
  */
-export function stopAndRemoveApp(ctx, app, paths) {
+export async function stopAndRemoveApp(ctx, app, paths) {
   if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
   const quiet = { ignoreStderr: true }
 
-  /** @param {string} svc */
-  const stopDisable = (svc) => {
+  /**
+   * @param {string} svc
+   */
+  const stopDisable = async (svc) => {
     ctx.log(`stop ${svc} (${paths.engine})`)
-    ctx.sys.systemctl(paths.engine, ['stop', svc], quiet)
-    ctx.sys.systemctl(paths.engine, ['disable', svc], quiet)
+    await ctx.sys.systemctl(paths.engine, ['stop', svc], quiet)
+    await ctx.sys.systemctl(paths.engine, ['disable', svc], quiet)
   }
 
   const d = appDir(ctx, app)
   if (d) {
-    for (const svc of appServiceNames(d)) stopDisable(svc)
+    for (const svc of appServiceNames(d)) await stopDisable(svc)
   } else {
     for (const ext of ['container', 'pod', 'kube']) {
-      if (existsSync(join(paths.dest, `${app}.${ext}`))) stopDisable(`${app}.service`)
+      if (existsSync(join(paths.dest, `${app}.${ext}`))) await stopDisable(`${app}.service`)
     }
     for (const ext of ['timer', 'service']) {
       const f = join(paths.sysDest, `${app}.${ext}`)
       if (existsSync(f)) {
-        ctx.sys.systemctl(paths.engine, ['stop', basename(f)], quiet)
-        ctx.sys.systemctl(paths.engine, ['disable', basename(f)], quiet)
+        await ctx.sys.systemctl(paths.engine, ['stop', basename(f)], quiet)
+        await ctx.sys.systemctl(paths.engine, ['disable', basename(f)], quiet)
       }
     }
   }

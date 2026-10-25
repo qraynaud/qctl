@@ -141,17 +141,21 @@ export function networkPodmanName(file) {
  * @param {QuadletContext} ctx
  * @param {EnginePaths} paths
  * @param {string} unitFile installed .network
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function networkLiveStale(ctx, paths, unitFile) {
+export async function networkLiveStale(ctx, paths, unitFile) {
   if (!existsSync(unitFile)) return false
   const name = networkPodmanName(unitFile)
   const q = { capture: true }
-  if (ctx.sys.podman(paths.engine, ['network', 'exists', name], q).status !== 0) return false
+  if ((await ctx.sys.podman(paths.engine, ['network', 'exists', name], q)).status !== 0)
+    return false
 
-  /** @param {string} fmt */
-  const inspect = (fmt) => {
-    const r = ctx.sys.podman(paths.engine, ['network', 'inspect', name, '--format', fmt], q)
+  /**
+   * @param {string} fmt
+   * @returns {Promise<string>}
+   */
+  const inspect = async (fmt) => {
+    const r = await ctx.sys.podman(paths.engine, ['network', 'inspect', name, '--format', fmt], q)
     return r.status === 0 ? r.stdout.replace(/\n$/, '') : ''
   }
   const wantSub = networkUnitGet(unitFile, 'Subnet')
@@ -159,12 +163,12 @@ export function networkLiveStale(ctx, paths, unitFile) {
   const wantDrv = networkUnitGet(unitFile, 'Driver')
   const wantParent = networkUnitParent(unitFile)
 
-  const liveSub = inspect('{{range .Subnets}}{{.Subnet}}{{end}}')
-  const liveGw = inspect('{{range .Subnets}}{{.Gateway}}{{end}}')
-  const liveDrv = inspect('{{.Driver}}')
+  const liveSub = await inspect('{{range .Subnets}}{{.Subnet}}{{end}}')
+  const liveGw = await inspect('{{range .Subnets}}{{.Gateway}}{{end}}')
+  const liveDrv = await inspect('{{.Driver}}')
   // Macvlan/ipvlan: Options=parent=X lands in NetworkInterface; Options map is often
   // empty after create. Prefer interface, fall back to Options.
-  let liveParent = inspect(
+  let liveParent = await inspect(
     '{{if .NetworkInterface}}{{.NetworkInterface}}{{else}}{{index .Options "parent"}}{{end}}',
   )
   if (liveParent === '<no value>') liveParent = ''
@@ -181,9 +185,9 @@ export function networkLiveStale(ctx, paths, unitFile) {
  * @param {QuadletContext} ctx
  * @param {EnginePaths} paths
  * @param {string} baseName
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function recreatePodmanNetwork(ctx, paths, baseName) {
+export async function recreatePodmanNetwork(ctx, paths, baseName) {
   const base = baseName.endsWith('.network') ? baseName : `${baseName}.network`
   const dest = join(paths.dest, base)
   if (!existsSync(dest)) return false
@@ -191,11 +195,11 @@ export function recreatePodmanNetwork(ctx, paths, baseName) {
   const svc = `${base.slice(0, -'.network'.length)}-network.service`
   if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
   ctx.log(`recreate podman network ${netName} (${paths.engine}; ${svc})`)
-  ctx.sys.systemctl(paths.engine, ['stop', svc], { ignoreStderr: true })
-  ctx.sys.podman(paths.engine, ['network', 'rm', '-f', netName], { ignoreStderr: true })
+  await ctx.sys.systemctl(paths.engine, ['stop', svc], { ignoreStderr: true })
+  await ctx.sys.podman(paths.engine, ['network', 'rm', '-f', netName], { ignoreStderr: true })
   // Generator must see the updated unit before start.
-  ctx.sys.systemctl(paths.engine, ['daemon-reload'])
-  return ctx.sys.systemctl(paths.engine, ['start', svc]).status === 0
+  await ctx.sys.systemctl(paths.engine, ['daemon-reload'])
+  return (await ctx.sys.systemctl(paths.engine, ['start', svc])).status === 0
 }
 
 /**
@@ -204,9 +208,9 @@ export function recreatePodmanNetwork(ctx, paths, baseName) {
  * @param {EnginePaths} paths
  * @param {string} netFile
  * @param {RenderEnv} renv
- * @returns {boolean} true when installed
+ * @returns {Promise<boolean>} true when installed
  */
-export function installNetworkHostMacvlan(ctx, paths, netFile, renv) {
+export async function installNetworkHostMacvlan(ctx, paths, netFile, renv) {
   const dir = dirname(netFile)
   const stem = basename(netFile, '.network')
   const scriptSrc = join(dir, `${stem}-host-macvlan.sh`)
@@ -234,9 +238,9 @@ export function installNetworkHostMacvlan(ctx, paths, netFile, renv) {
   const unitDest = join(sysUnitDir, `${stem}-host-macvlan.service`)
   writeFileSync(unitDest, renderFile(unitSrc, renv))
   chmodSync(unitDest, 0o644)
-  ctx.sys.systemctl('rootful', ['daemon-reload'])
-  ctx.sys.systemctl('rootful', ['enable', `${stem}-host-macvlan.service`], { capture: true })
-  ctx.sys.systemctl('rootful', ['restart', `${stem}-host-macvlan.service`])
+  await ctx.sys.systemctl('rootful', ['daemon-reload'])
+  await ctx.sys.systemctl('rootful', ['enable', `${stem}-host-macvlan.service`], { capture: true })
+  await ctx.sys.systemctl('rootful', ['restart', `${stem}-host-macvlan.service`])
   return true
 }
 
@@ -246,17 +250,17 @@ export function installNetworkHostMacvlan(ctx, paths, netFile, renv) {
  * @param {EnginePaths} paths
  * @param {string} baseName
  */
-export function removeNetworkUnit(ctx, paths, baseName) {
+export async function removeNetworkUnit(ctx, paths, baseName) {
   const base = baseName.endsWith('.network') ? baseName : `${baseName}.network`
   const dest = join(paths.dest, base)
   if (!existsSync(dest)) return
   const netName = networkPodmanName(dest)
   const svc = `${base.slice(0, -'.network'.length)}-network.service`
   if (paths.engine === 'rootless') ctx.sys.ensureRootlessBus()
-  ctx.sys.systemctl(paths.engine, ['stop', svc], { ignoreStderr: true })
+  await ctx.sys.systemctl(paths.engine, ['stop', svc], { ignoreStderr: true })
   rmSync(`${dest}.d`, { recursive: true, force: true })
   rmSync(dest, { force: true })
-  ctx.sys.podman(paths.engine, ['network', 'rm', '-f', netName], { ignoreStderr: true })
+  await ctx.sys.podman(paths.engine, ['network', 'rm', '-f', netName], { ignoreStderr: true })
 }
 
 /**

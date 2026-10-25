@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runRestart } from '../../quadlet/lifecycle.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'restart <apps..>'
 export const describe = "Restart apps' units (blocks on Notify=healthy)"
@@ -18,8 +17,5 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  const apps = argvApps(argv)
-  await runQuadletCommand((ctx) => {
-    for (const app of apps) runRestart(ctx, app)
-  })
+  await callQuadlet({ op: 'restart', apps: argvApps(argv) })
 }

@@ -13,36 +13,36 @@ describe('quadlet lifecycle', () => {
     try {
       await runUp(makeContext(fx).ctx)
       const a = makeContext(fx)
-      runStartStop(a.ctx, 'start', 'web')
+      await runStartStop(a.ctx, 'start', 'web')
       expect(a.sys.lines()).toContain('systemctl:rootless start web.service')
 
       const b = makeContext(fx)
-      runStartStop(b.ctx, 'stop', 'dbroot')
+      await runStartStop(b.ctx, 'stop', 'dbroot')
       expect(b.sys.lines()).toContain('systemctl:rootful stop dbroot.service')
 
       const c = makeContext(fx)
-      runRestart(c.ctx, 'web')
+      await runRestart(c.ctx, 'web')
       expect(c.sys.lines()).toContain('systemctl:rootless reset-failed web.service')
       expect(c.sys.lines()).toContain('systemctl:rootless start web.service') // fake: not active
 
       const d = makeContext(fx, (call) =>
         call.line.includes('is-active') ? { status: 0 } : undefined,
       )
-      runRestart(d.ctx, 'web')
+      await runRestart(d.ctx, 'web')
       expect(d.sys.lines()).toContain('systemctl:rootless restart web.service')
     } finally {
       cleanupQuadletFixture(fx)
     }
   })
 
-  test('start fails when systemctl fails; unknown app dies', () => {
+  test('start fails when systemctl fails; unknown app dies', async () => {
     const fx = makeQuadletInstance()
     try {
-      expect(() => runStartStop(makeContext(fx).ctx, 'start', 'ghost')).toThrow(
+      await expect(runStartStop(makeContext(fx).ctx, 'start', 'ghost')).rejects.toThrow(
         /not installed and not in applications/,
       )
       const bad = makeContext(fx, (c) => (c.line.includes(' start ') ? { status: 5 } : undefined))
-      expect(() => runStartStop(bad.ctx, 'start', 'web')).toThrow(/failed \(exit 5\)/)
+      await expect(runStartStop(bad.ctx, 'start', 'web')).rejects.toThrow(/failed \(exit 5\)/)
     } finally {
       cleanupQuadletFixture(fx)
     }
@@ -53,7 +53,7 @@ describe('quadlet lifecycle', () => {
     try {
       await runUp(makeContext(fx).ctx)
       const { ctx, sys } = makeContext(fx)
-      runDown(ctx, 'web')
+      await runDown(ctx, 'web')
       const rl = sys.paths('rootless')
       expect(existsSync(join(rl.dest, 'web'))).toBe(false)
       expect(existsSync(join(rl.dest, 'web.network'))).toBe(false)
@@ -61,7 +61,7 @@ describe('quadlet lifecycle', () => {
       expect(existsSync(join(rl.dest, 'proxy/proxy.container'))).toBe(true)
       expect(sys.lines()).toContain('systemctl:rootless stop web.service')
       expect(sys.lines()).toContain('systemctl:rootless daemon-reload')
-      expect(() => runDown(makeContext(fx).ctx, 'nonexistent')).toThrow(
+      await expect(runDown(makeContext(fx).ctx, 'nonexistent')).rejects.toThrow(
         /not installed and not in repo/,
       )
     } finally {
@@ -82,7 +82,7 @@ describe('quadlet lifecycle', () => {
         if (c.line.includes('container inspect')) return { status: 125 }
         return undefined
       })
-      runPs(ctx)
+      await runPs(ctx)
       expect(out[0]).toMatch(/^ENGINE\s+NAMES\s+STATUS\s+IMAGE$/)
       expect(
         out.some((l) => /rootless\s+proxy\s+Up 5 minutes \(healthy\)\s+img\/proxy:1.0/.test(l)),
@@ -94,7 +94,7 @@ describe('quadlet lifecycle', () => {
       const one = makeContext(fx, (c) =>
         c.line.includes('container inspect') ? { status: 125 } : undefined,
       )
-      runPs(one.ctx, 'web')
+      await runPs(one.ctx, 'web')
       expect(one.out.some((l) => /rootless\s+web\s+not-installed/.test(l))).toBe(true)
     } finally {
       cleanupQuadletFixture(fx)

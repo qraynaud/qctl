@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runPs } from '../../quadlet/lifecycle.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'ps [apps..]'
 export const describe = 'Installed containers (both engines, or listed apps)'
@@ -18,5 +17,8 @@ export function builder(yargs) {
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
   const apps = argvApps(argv)
-  await runQuadletCommand((ctx) => runPs(ctx, apps.length ? apps : undefined))
+  await callQuadlet({
+    op: 'ps',
+    ...(apps.length ? { apps } : {}),
+  })
 }

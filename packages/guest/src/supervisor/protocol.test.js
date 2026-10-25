@@ -2,8 +2,10 @@ import {
   SUPERVISOR_METHOD,
   decodeRequestLine,
   decodeResponseLine,
+  decodeWireLine,
   encodeRequestLine,
   encodeResponseLine,
+  encodeStreamLine,
   isAdminOnlyMethod,
   isAppsMethod,
   supervisorRequestCodec,
@@ -53,9 +55,15 @@ describe('supervisor protocol', () => {
       method: 'ensure',
       params: { app: 'web' },
     })
-    expect(decodeRequestLine('{"method":"quadlet","params":{"argv":["ps"]}}\n')).toEqual({
+    expect(decodeRequestLine('{"method":"quadlet","params":{"op":"ps"}}\n')).toEqual({
       method: 'quadlet',
-      params: { argv: ['ps'] },
+      params: { op: 'ps' },
+    })
+    expect(
+      decodeRequestLine('{"method":"quadlet","params":{"op":"down","apps":["web"]}}\n'),
+    ).toEqual({
+      method: 'quadlet',
+      params: { op: 'down', apps: ['web'] },
     })
   })
 
@@ -66,5 +74,21 @@ describe('supervisor protocol', () => {
     expect(() => decodeRequestLine('{"method":"ensure","params":{"app":" web"}}')).toThrow()
     expect(() => decodeResponseLine('{"hello":1}')).toThrow()
     expect(() => encodeResponseLine(/** @type {any} */ ({ ok: false, error: '' }))).toThrow()
+  })
+
+  test('quadlet result is exitCode; stream frames round-trip', () => {
+    const result = {
+      ok: /** @type {const} */ (true),
+      result: { method: /** @type {const} */ ('quadlet'), exitCode: 0 },
+    }
+    expect(decodeResponseLine(encodeResponseLine(result))).toEqual(result)
+
+    const frame = {
+      id: '1',
+      stream: /** @type {const} */ ('stdout'),
+      data: 'quadlet: hi\n',
+    }
+    expect(decodeWireLine(encodeStreamLine(frame))).toEqual(frame)
+    expect(decodeWireLine(encodeResponseLine(result))).toEqual(result)
   })
 })
