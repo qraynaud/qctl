@@ -33,7 +33,10 @@ describe('proxmox destroy', () => {
   test('destroys rocky vm when vmid found', async () => {
     const client = /** @type {Awaited<ReturnType<typeof shared.clientFrom>>} */ (
       /** @type {never} */ ({
+        config: { node: 'pve' },
         findVmidByName: async () => 101,
+        qemuConfig: async () => ({ tags: 'qctl.installed=true' }),
+        put: async () => {},
       })
     )
     spyOn(shared, 'clientFrom').mockResolvedValue(client)

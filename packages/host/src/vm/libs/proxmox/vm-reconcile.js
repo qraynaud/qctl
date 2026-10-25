@@ -3,6 +3,7 @@ import { chalk } from 'zx'
 import { assertProxmoxAttachModes, withAttachModes } from '../attach-mode.js'
 import { applyNetsToForm, mergeNetPreserveMac } from './config.js'
 import { diskStateFromConfig } from './disk-holder.js'
+import { preserveQctlFlagTagsOnForm } from './flag-store.js'
 import { rockyTpmstate } from './tpm.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue } from './vm-parse.js'
@@ -209,6 +210,8 @@ export async function reconcileRockyAppliance(client, opts) {
     form.tpmstate0 = rockyTpmstate(storage)
     added.push('tpmstate0')
   }
+
+  preserveQctlFlagTagsOnForm(form, cfg)
 
   if (deleteKeys.length || added.length) {
     console.log(

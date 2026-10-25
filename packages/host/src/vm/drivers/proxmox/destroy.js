@@ -1,6 +1,8 @@
 import { chalk } from 'zx'
 
+import { clearInstalled } from '../../libs/installed-lifecycle.js'
 import { destroyHolder } from '../../libs/proxmox/disk-holder.js'
+import { createFlagStore } from '../../libs/proxmox/flag-store.js'
 import { destroyRockyVm } from '../../libs/proxmox/vm.js'
 import { clientFrom } from './shared.js'
 
@@ -25,6 +27,8 @@ export async function destroy(argv) {
   const client = await clientFrom(argv)
   const vmid = await client.findVmidByName(argv.name)
   if (vmid != null) {
+    // Drop INSTALLED while the VM still exists (tags live on the qemu config).
+    await clearInstalled(createFlagStore(client, vmid))
     await destroyRockyVm(client, {
       vmid,
       name: argv.name,

@@ -8,11 +8,15 @@ import { downloadImage } from '../../commands/download.js'
 import { summarizeAttachModes, withAttachModes } from '../../libs/attach-mode.js'
 import {
   classifyCloudInitOutcome,
+  classifyContinueFirstBoot,
   classifyRebootReady,
   startSerialTcpFollow,
 } from '../../libs/console.js'
 import { ensureDisks } from '../../libs/disks.js'
+import { clearInstalled, composeScrubSeed, isInstalled } from '../../libs/installed-lifecycle.js'
 import {
+  createFlagStore,
+  detachSeedCdrom,
   domainExists,
   domainState,
   ensureDefaultNetwork,
@@ -50,7 +54,7 @@ import { sleep, waitForLocalTcpPorts } from '../../libs/wait.js'
  * @property {string} osinfo
  * @property {PortsMap} ports
  * @property {Awaited<ReturnType<typeof ensureDisks>>} disks
- * @property {Awaited<ReturnType<typeof ensureSeed>>} seed
+ * @property {Awaited<ReturnType<typeof ensureSeed>> | null} seed
  * @property {string | null} [state]
  */
 
@@ -117,7 +121,6 @@ async function prepareLocalUp(argv) {
     osinfo,
     wipeOs,
     forceDownload,
-    cidata,
     env,
   } = argv
   const network = networkArg === 'auto' ? 'user' : networkArg
@@ -140,23 +143,10 @@ async function prepareLocalUp(argv) {
     target: 'workstation',
   })
 
-  console.log(chalk.cyan('vm: building appliance seed…'))
-  const seedResult = await runSeed({
-    seedProfile: 'appliance',
-    profile: argv.profile,
-    out: cidata || undefined,
-    allowMissingTier0: false,
-    allowMissingFiles: false,
-    env: env || 'dev',
-    target: argv.target || 'workstation',
-  })
-  const seed = await ensureSeed({
-    isoPath: seedResult.isoPath,
-    imgPath: seedResult.imgPath,
-  })
-
+  // Seed only on wipe/create (createFirstBoot). Resume / incomplete must not re-seed.
   if (wipeOs && (await which('virsh')) && (await domainExists(connect, name))) {
     console.log(chalk.yellow(`vm: --wipe-os — removing domain ${name} before recreating OS disk`))
+    await clearInstalled(createFlagStore(connect, name))
     await removeDomain(connect, name)
   }
 
@@ -182,7 +172,7 @@ async function prepareLocalUp(argv) {
     osinfo,
     ports,
     disks,
-    seed,
+    seed: null,
     state: null,
   }
 }
@@ -263,17 +253,53 @@ async function localDryRun(argv) {
  * @returns {VmUpBackend<LocalExisting, LocalCreated>}
  */
 function localBackend(state) {
+  /** Lazily bound after prepare (needs connect + name). */
+  /** @type {ReturnType<typeof createFlagStore> | null} */
+  let flags = null
+
+  /**
+   * @returns {ReturnType<typeof createFlagStore>}
+   */
+  function requireFlags() {
+    if (!flags) {
+      if (!state.session) throw new Error('workstation up: prepare() did not run')
+      flags = createFlagStore(state.session.connect, state.session.name)
+    }
+    return flags
+  }
+
   return {
+    get flags() {
+      return requireFlags()
+    },
+
+    scrubSeed: async () => {
+      const session = state.session
+      if (!session) return
+      await composeScrubSeed({
+        env: session.argv.env || 'dev',
+        seedProfile: 'appliance',
+        after: async () => {
+          await detachSeedCdrom(session.connect, session.name)
+        },
+      })()
+    },
+
     dryRun: (argv) => localDryRun(argv),
 
     prepare: async (argv) => {
       state.session = await prepareLocalUp(argv)
+      flags = createFlagStore(state.session.connect, state.session.name)
     },
 
-    findRunnableExisting: async () => {
+    probeExisting: async (argv) => {
       if (!state.session) throw new Error('workstation up: prepare() did not run')
+      if (argv.wipeOs) return null
       if (!(await domainExists(state.session.connect, state.session.name))) return null
-      return state.session
+      return {
+        existing: state.session,
+        installed: await isInstalled(requireFlags()),
+      }
     },
 
     reconcile: async (_argv, existing) => {
@@ -321,7 +347,7 @@ function localBackend(state) {
       console.log(chalk.green(`vm: domain ${name} started`))
     },
 
-    startWithSerial: async (_argv, existing) => {
+    startWithSerial: async (_argv, existing, mode) => {
       const { connect, name, state } = existing
       if (state !== 'shut off') {
         die(
@@ -329,7 +355,8 @@ function localBackend(state) {
             + `use destroy (--keep-persistent) then up, or --wipe-os to recreate`,
         )
       }
-      const follow = await startSerialTcpFollow({ classify: classifyRebootReady })
+      const classify = mode === 'cloud-init' ? classifyContinueFirstBoot : classifyRebootReady
+      const follow = await startSerialTcpFollow({ classify })
       await setDomainSerialTcp(connect, name, follow.port)
       console.log(chalk.cyan(`vm: starting existing domain ${name}…`))
       const r = await virsh(connect, 'start', name).nothrow()
@@ -372,9 +399,26 @@ function localBackend(state) {
 
     resumeFailHint: (_argv, existing) => `vm: domain ${existing.name} left running for diagnosis`,
 
-    createFirstBoot: async (_argv, _signal, { wantSerial }) => {
+    createFirstBoot: async (argv, _signal, { wantSerial }) => {
       if (!state.session) throw new Error('workstation up: prepare() did not run')
-      const { connect, name, memory, vcpus, disks, seed, ports, network, osinfo } = state.session
+      const session = state.session
+      const { connect, name, memory, vcpus, disks, ports, network, osinfo } = session
+
+      console.log(chalk.cyan('vm: building appliance seed…'))
+      const seedResult = await runSeed({
+        seedProfile: 'appliance',
+        profile: argv.profile,
+        out: argv.cidata || undefined,
+        allowMissingTier0: false,
+        allowMissingFiles: false,
+        env: argv.env || 'dev',
+        target: argv.target || 'workstation',
+      })
+      const seed = await ensureSeed({
+        isoPath: seedResult.isoPath,
+        imgPath: seedResult.imgPath,
+      })
+      session.seed = seed
 
       /** @type {TcpFollow | null} */
       let follow = null
@@ -407,7 +451,7 @@ function localBackend(state) {
       }
       console.log(chalk.green(`vm: domain ${name} created`))
 
-      return { created: state.session, follow: /** @type {SerialFollow | null} */ (follow) }
+      return { created: session, follow: /** @type {SerialFollow | null} */ (follow) }
     },
 
     finishFirstBootNoConsole: async (_argv, created, signal) => {
@@ -423,6 +467,21 @@ function localBackend(state) {
     },
 
     firstBootFailHint: (_argv, created) => `vm: domain ${created.name} left running for diagnosis`,
+
+    // LocalExisting === LocalCreated (session); continue reuses first-boot finishers.
+    finishContinueNoConsole: async (existing, signal) => {
+      await finishAfterConsole(existing, signal)
+    },
+
+    finishContinueOk: async (existing, signal) => {
+      await finishAfterConsole(existing, signal)
+    },
+
+    finishContinueFail: async (existing) => {
+      await restartWithSerialNull(existing.connect, existing.name)
+    },
+
+    continueFailHint: (existing) => `vm: domain ${existing.name} left running for diagnosis`,
   }
 }
 

@@ -219,6 +219,17 @@ export function classifyRebootReady(line) {
 }
 
 /**
+ * Incomplete first-boot resume: accept cloud-init Final Stage or multi-user
+ * (guest may already be past Final Stage / legacy installs without the flag).
+ *
+ * @param {string} line
+ * @returns {SerialOutcome | null}
+ */
+export function classifyContinueFirstBoot(line) {
+  return classifyCloudInitOutcome(line) ?? classifyRebootReady(line)
+}
+
+/**
  * @param {SerialSinkOpts} [opts]
  * @returns {Promise<{
  *   port: number,

@@ -1,14 +1,57 @@
+import { INSTALLED, VmFlagNotFoundError } from './flags.js'
 import { reportSerialWaitOutcome, runVmUp } from './up-pipeline.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 /** @import { VmArgv } from '../types.js' */
 /** @import { SerialFollow } from './console.js' */
+/** @import { VmFlagStore } from './flag-store.js' */
 /** @import { VmUpBackend } from './up-pipeline.js' */
+
+/**
+ * @param {{ value?: boolean }} [opts]
+ * @returns {VmFlagStore & { ops: string[] }}
+ */
+function mockFlags(opts = {}) {
+  /** @type {boolean | undefined} */
+  let value = opts.value
+  /** @type {string[]} */
+  const ops = []
+  /** @type {VmFlagStore & { ops: string[] }} */
+  const store = {
+    ops,
+    async has(flag) {
+      expect(flag.name).toBe(INSTALLED.name)
+      ops.push('has')
+      return value !== undefined
+    },
+    async get(flag) {
+      expect(flag.name).toBe(INSTALLED.name)
+      ops.push('get')
+      if (value === undefined) throw new VmFlagNotFoundError(flag.name)
+      return /** @type {never} */ (value)
+    },
+    async set(flag, v) {
+      expect(flag.name).toBe(INSTALLED.name)
+      ops.push(`set:${v}`)
+      value = /** @type {boolean} */ (v)
+    },
+    async delete(flag) {
+      expect(flag.name).toBe(INSTALLED.name)
+      ops.push('delete')
+      value = undefined
+    },
+    async entry(flag) {
+      const out = await this.get(flag)
+      return { name: flag.name, schema: flag.schema, value: out }
+    },
+  }
+  return store
+}
 
 /**
  * @typedef {Pick<
  *   VmUpBackend<string, string>,
- *   'dryRun' | 'findRunnableExisting' | 'createFirstBoot'
+ *   'dryRun' | 'probeExisting' | 'createFirstBoot' | 'flags' | 'scrubSeed'
  * >} BackendRequired
  * @param {Partial<VmUpBackend<string, string>> & BackendRequired} overrides
  * @returns {VmUpBackend<string, string>}
@@ -24,6 +67,9 @@ function backend(overrides) {
     finishFirstBootNoConsole: async () => {},
     finishFirstBootOk: async () => {},
     firstBootFailHint: () => 'first-fail',
+    finishContinueNoConsole: async () => {},
+    finishContinueOk: async () => {},
+    continueFailHint: () => 'continue-fail',
     ...overrides,
   }
 }
@@ -44,18 +90,23 @@ describe('runVmUp', () => {
   test('dry-run calls dryRun only', async () => {
     /** @type {string[]} */
     const calls = []
+    const flags = mockFlags()
     await runVmUp(
       /** @type {VmArgv} */ ({ dryRun: true }),
       backend({
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
+        },
         dryRun: async () => {
           calls.push('dryRun')
         },
         prepare: async () => {
           calls.push('prepare')
         },
-        findRunnableExisting: async () => {
-          calls.push('find')
-          return 'existing'
+        probeExisting: async () => {
+          calls.push('probe')
+          return { existing: 'existing', installed: true }
         },
         createFirstBoot: async () => {
           calls.push('create')
@@ -66,21 +117,24 @@ describe('runVmUp', () => {
     expect(calls).toEqual(['dryRun'])
   })
 
-  test('existing domain skips first boot', async () => {
+  test('installed existing resumes (skips first boot)', async () => {
     /** @type {string[]} */
     const calls = []
+    const flags = mockFlags({ value: true })
     await runVmUp(
       /** @type {VmArgv} */ ({ dryRun: false, noConsole: true, timeout: 1 }),
       backend({
-        dryRun: async () => {
-          calls.push('dryRun')
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
         },
+        dryRun: async () => {},
         prepare: async () => {
           calls.push('prepare')
         },
-        findRunnableExisting: async () => {
-          calls.push('find')
-          return 'existing'
+        probeExisting: async () => {
+          calls.push('probe')
+          return { existing: 'existing', installed: true }
         },
         reconcile: async () => {
           calls.push('reconcile')
@@ -97,17 +151,22 @@ describe('runVmUp', () => {
         },
       }),
     )
-    expect(calls).toEqual(['prepare', 'find', 'reconcile', 'start', 'finishResume'])
+    expect(calls).toEqual(['prepare', 'probe', 'reconcile', 'start', 'finishResume'])
+    expect(flags.ops).toEqual([])
+    expect(calls).not.toContain('scrub')
+    expect(calls).not.toContain('create')
   })
 
-  test('already-up skips start and serial', async () => {
+  test('already-up installed skips start and serial', async () => {
     /** @type {string[]} */
     const calls = []
     await runVmUp(
       /** @type {VmArgv} */ ({ dryRun: false, timeout: 1 }),
       backend({
+        flags: mockFlags({ value: true }),
+        scrubSeed: async () => {},
         dryRun: async () => {},
-        findRunnableExisting: async () => 'existing',
+        probeExisting: async () => ({ existing: 'existing', installed: true }),
         reconcile: async () => {
           calls.push('reconcile')
         },
@@ -131,15 +190,128 @@ describe('runVmUp', () => {
     expect(calls).toEqual(['reconcile', 'finishOk'])
   })
 
-  test('missing domain runs first boot', async () => {
+  test('incomplete existing continues first-boot (no create, marks installed)', async () => {
     /** @type {string[]} */
     const calls = []
+    const flags = mockFlags()
+    /** @type {SerialFollow} */
+    const follow = {
+      stop: async () => {
+        calls.push('stop')
+      },
+      result: Promise.resolve({ status: 'ok', line: 'Final Stage' }),
+    }
+    await runVmUp(
+      /** @type {VmArgv} */ ({ dryRun: false, timeout: 5 }),
+      backend({
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
+        },
+        dryRun: async () => {},
+        probeExisting: async () => {
+          calls.push('probe')
+          return { existing: 'existing', installed: false }
+        },
+        reconcile: async () => {
+          calls.push('reconcile')
+        },
+        startWithSerial: async (_a, _e, mode) => {
+          calls.push(`startSerial:${mode}`)
+          return follow
+        },
+        createFirstBoot: async () => {
+          calls.push('create')
+          return { created: 'c', follow: null }
+        },
+        finishContinueOk: async () => {
+          calls.push('finishContinueOk')
+        },
+      }),
+    )
+    expect(calls).toEqual(['probe', 'startSerial:cloud-init', 'stop', 'scrub', 'finishContinueOk'])
+    expect(calls).not.toContain('create')
+    expect(flags.ops).toEqual(['set:true'])
+  })
+
+  test('incomplete continue OK on multi-user line still marks installed + scrub', async () => {
+    const flags = mockFlags()
+    /** @type {string[]} */
+    const calls = []
+    const follow = {
+      stop: async () => {},
+      result: Promise.resolve({
+        status: /** @type {const} */ ('ok'),
+        line: 'Reached target Multi-User System',
+      }),
+    }
+    await runVmUp(
+      /** @type {VmArgv} */ ({ dryRun: false, timeout: 5 }),
+      backend({
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
+        },
+        dryRun: async () => {},
+        probeExisting: async () => ({ existing: 'existing', installed: false }),
+        startWithSerial: async () => follow,
+        createFirstBoot: async () => {
+          calls.push('create')
+          return { created: 'c', follow: null }
+        },
+        finishContinueOk: async () => {
+          calls.push('finishContinueOk')
+        },
+      }),
+    )
+    expect(calls).toEqual(['scrub', 'finishContinueOk'])
+    expect(flags.ops).toEqual(['set:true'])
+  })
+
+  test('missing VM runs first boot and marks installed', async () => {
+    /** @type {string[]} */
+    const calls = []
+    const flags = mockFlags()
     await runVmUp(
       /** @type {VmArgv} */ ({ dryRun: false, noConsole: true, timeout: 1 }),
       backend({
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
+        },
         dryRun: async () => {},
-        findRunnableExisting: async () => {
-          calls.push('find')
+        probeExisting: async () => {
+          calls.push('probe')
+          return null
+        },
+        createFirstBoot: async () => {
+          calls.push('create')
+          return { created: 'c', follow: null }
+        },
+        finishFirstBootNoConsole: async () => {
+          calls.push('finishCreate')
+        },
+        finishFirstBootOk: async () => {
+          calls.push('finishOk')
+        },
+      }),
+    )
+    expect(calls).toEqual(['probe', 'create', 'finishCreate'])
+    expect(flags.ops).not.toContain('set:true')
+  })
+
+  test('wipeOs clears installed then creates', async () => {
+    /** @type {string[]} */
+    const calls = []
+    const flags = mockFlags({ value: true })
+    await runVmUp(
+      /** @type {VmArgv} */ ({ dryRun: false, wipeOs: true, noConsole: true, timeout: 1 }),
+      backend({
+        flags,
+        scrubSeed: async () => {},
+        dryRun: async () => {},
+        probeExisting: async () => {
+          calls.push('probe')
           return null
         },
         createFirstBoot: async () => {
@@ -151,12 +323,14 @@ describe('runVmUp', () => {
         },
       }),
     )
-    expect(calls).toEqual(['find', 'create', 'finishCreate'])
+    expect(calls).toEqual(['probe', 'create', 'finishCreate'])
+    expect(flags.ops).toEqual(['has', 'delete'])
   })
 
   test('first boot uses openSerialAfterCreate when create returns no follow', async () => {
     /** @type {string[]} */
     const calls = []
+    const flags = mockFlags()
     /** @type {SerialFollow} */
     const follow = {
       stop: async () => {
@@ -167,8 +341,12 @@ describe('runVmUp', () => {
     await runVmUp(
       /** @type {VmArgv} */ ({ dryRun: false, timeout: 5 }),
       backend({
+        flags,
+        scrubSeed: async () => {
+          calls.push('scrub')
+        },
         dryRun: async () => {},
-        findRunnableExisting: async () => null,
+        probeExisting: async () => null,
         createFirstBoot: async () => {
           calls.push('create')
           return { created: 'c', follow: null }
@@ -182,7 +360,8 @@ describe('runVmUp', () => {
         },
       }),
     )
-    expect(calls).toEqual(['create', 'openSerial', 'stop', 'finishOk'])
+    expect(calls).toEqual(['create', 'openSerial', 'stop', 'scrub', 'finishOk'])
+    expect(flags.ops).toContain('set:true')
   })
 })
 

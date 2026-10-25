@@ -2,7 +2,8 @@ import { chalk, fs } from 'zx'
 
 import { requireBins } from '../../../lib/util.js'
 import { persistentDisks, vmPaths } from '../../libs/disks.js'
-import { domainExists, removeDomain } from '../../libs/libvirt/index.js'
+import { clearInstalled } from '../../libs/installed-lifecycle.js'
+import { createFlagStore, domainExists, removeDomain } from '../../libs/libvirt/index.js'
 import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 
 /** @import { VmArgv } from '../../types.js' */
@@ -30,6 +31,8 @@ export async function destroyVm({ connect, name, keepPersistent, dryRun, env, ta
   await requireBins(['virsh'])
 
   if (await domainExists(connect, name)) {
+    // Drop INSTALLED while the domain still exists (metadata lives in domain XML).
+    await clearInstalled(createFlagStore(connect, name))
     await removeDomain(connect, name)
   } else {
     console.log(chalk.dim(`vm: domain ${name} not defined`))

@@ -1,6 +1,10 @@
 /**
  * Shared `qctl vm up` orchestration. Drivers supply a {@link VmUpBackend};
- * this module owns dry-run / resume / first-boot sequencing and serial waits.
+ * this module owns dry-run / resume / incomplete / first-boot sequencing and
+ * serial waits.
+ *
+ * Install state comes from an injected {@link VmFlagStore} (`INSTALLED`) — the
+ * pipeline never imports target-private flag factories.
  *
  * Serial attach order differs by platform (workstation: before start; Proxmox: after),
  * so backends expose `startWithSerial` / `createFirstBoot` that return an open
@@ -8,10 +12,21 @@
  */
 import { chalk } from 'zx'
 
+import { clearInstalled, markInstalled } from './installed-lifecycle.js'
 import { isAbortError, waitForSerialOutcome } from './wait.js'
 
 /** @import { VmArgv } from '../types.js' */
 /** @import { SerialFollow, SerialWaitOutcome } from './console.js' */
+/** @import { VmFlagStore } from './flag-store.js' */
+
+/**
+ * Probe result for an existing appliance VM/domain.
+ *
+ * @template TExisting
+ * @typedef {object} VmUpProbe
+ * @property {TExisting} existing
+ * @property {boolean} installed
+ */
 
 /**
  * Platform backend for {@link runVmUp}. Handles are opaque to the pipeline.
@@ -19,17 +34,19 @@ import { isAbortError, waitForSerialOutcome } from './wait.js'
  * @template TExisting
  * @template TCreated
  * @typedef {object} VmUpBackend
+ * @property {VmFlagStore | null} flags
+ * @property {() => void | Promise<void>} scrubSeed
  * @property {(argv: VmArgv) => void | Promise<void>} [assertReady]
  * @property {(argv: VmArgv) => Promise<void>} dryRun
  * @property {(argv: VmArgv) => Promise<void>} [prepare]
- * @property {(argv: VmArgv) => Promise<TExisting | null>} findRunnableExisting
+ * @property {(argv: VmArgv) => Promise<VmUpProbe<TExisting> | null>} probeExisting
  * @property {(argv: VmArgv, existing: TExisting) => Promise<void>} reconcile
  * @property {(argv: VmArgv, existing: TExisting) => boolean | Promise<boolean>} [isAlreadyUp]
  * @property {(argv: VmArgv, existing: TExisting) => Promise<void>} startWithoutSerial
  * @property {(
  *   argv: VmArgv,
  *   existing: TExisting,
- *   mode: 'multi-user',
+ *   mode: 'multi-user' | 'cloud-init',
  * ) => Promise<SerialFollow>} startWithSerial
  * @property {(argv: VmArgv, existing: TExisting) => Promise<void>} finishResumeNoConsole
  * @property {(
@@ -60,6 +77,16 @@ import { isAbortError, waitForSerialOutcome } from './wait.js'
  * ) => Promise<void>} finishFirstBootOk
  * @property {(argv: VmArgv, created: TCreated) => Promise<void>} [finishFirstBootFail]
  * @property {(argv: VmArgv, created: TCreated) => string} firstBootFailHint
+ * @property {(
+ *   existing: TExisting,
+ *   signal: AbortSignal,
+ * ) => Promise<void>} finishContinueNoConsole
+ * @property {(
+ *   existing: TExisting,
+ *   signal: AbortSignal,
+ * ) => Promise<void>} finishContinueOk
+ * @property {(existing: TExisting) => Promise<void>} [finishContinueFail]
+ * @property {(existing: TExisting) => string} continueFailHint
  */
 
 const MULTI_USER_WAIT = {
@@ -74,6 +101,14 @@ const CLOUD_INIT_WAIT = {
   waiting: (timeoutSec) => `vm: waiting for cloud-init Final Stage (timeout ${timeoutSec}s)…`,
   /** @param {number} timeoutSec */
   timeoutLine: (timeoutSec) => `cloud-init Final Stage not seen within ${timeoutSec}s`,
+}
+
+const CONTINUE_WAIT = {
+  /** @param {number} timeoutSec */
+  waiting: (timeoutSec) =>
+    `vm: waiting for first-boot continue (cloud-init or multi-user; timeout ${timeoutSec}s)…`,
+  /** @param {number} timeoutSec */
+  timeoutLine: (timeoutSec) => `first-boot continue not seen within ${timeoutSec}s`,
 }
 
 /**
@@ -136,6 +171,89 @@ async function waitSerial(follow, timeoutSec, signal, msgs) {
 /**
  * @template TExisting
  * @template TCreated
+ * @param {VmUpBackend<TExisting, TCreated>} backend
+ * @returns {VmFlagStore}
+ */
+function requireFlags(backend) {
+  if (!backend.flags) throw new Error('vm up: flag store not bound')
+  return backend.flags
+}
+
+/**
+ * @template TExisting
+ * @template TCreated
+ * @param {VmArgv} argv
+ * @param {VmUpBackend<TExisting, TCreated>} backend
+ * @param {TCreated} created
+ * @param {AbortSignal} signal
+ * @returns {Promise<void>}
+ */
+async function finishFirstBootSuccess(argv, backend, created, signal) {
+  await markInstalled(requireFlags(backend), { scrubSeed: backend.scrubSeed })
+  await backend.finishFirstBootOk(argv, created, signal)
+}
+
+/**
+ * @template TExisting
+ * @template TCreated
+ * @param {VmUpBackend<TExisting, TCreated>} backend
+ * @param {TExisting} existing
+ * @param {AbortSignal} signal
+ * @returns {Promise<void>}
+ */
+async function finishContinueSuccess(backend, existing, signal) {
+  await markInstalled(requireFlags(backend), { scrubSeed: backend.scrubSeed })
+  await backend.finishContinueOk(existing, signal)
+}
+
+/**
+ * Existing VM without INSTALLED — continue first-boot wait (no create / re-seed).
+ *
+ * @template TExisting
+ * @template TCreated
+ * @param {VmArgv} argv
+ * @param {VmUpBackend<TExisting, TCreated>} backend
+ * @param {TExisting} existing
+ * @param {number} timeoutSec
+ * @param {AbortSignal} signal
+ * @returns {Promise<void>}
+ */
+async function runIncompleteFirstBoot(argv, backend, existing, timeoutSec, signal) {
+  console.log(chalk.cyan('vm: existing VM not marked installed — continuing first-boot'))
+
+  if (argv.noConsole) {
+    await backend.startWithoutSerial(argv, existing)
+    await backend.finishContinueNoConsole(existing, signal)
+    return
+  }
+
+  /** @type {SerialFollow | null} */
+  let follow = null
+  try {
+    follow = await backend.startWithSerial(argv, existing, 'cloud-init')
+    console.log(chalk.green('vm: started — streaming serial until first-boot continue'))
+    const outcome = await waitSerial(follow, timeoutSec, signal, CONTINUE_WAIT)
+    await follow.stop()
+    follow = null
+    if (
+      reportSerialWaitOutcome(outcome, {
+        okTitle: 'vm: first-boot continue OK',
+        failTitle: 'vm: first-boot continue failed (or timed out)',
+        leaveHint: backend.continueFailHint(existing),
+      })
+    ) {
+      await finishContinueSuccess(backend, existing, signal)
+    } else {
+      await backend.finishContinueFail?.(existing)
+    }
+  } finally {
+    if (follow) await follow.stop()
+  }
+}
+
+/**
+ * @template TExisting
+ * @template TCreated
  * @param {VmArgv} argv
  * @param {VmUpBackend<TExisting, TCreated>} backend
  * @returns {Promise<void>}
@@ -152,8 +270,10 @@ export async function runVmUp(argv, backend) {
   await withUpSignals(async (signal) => {
     await backend.prepare?.(argv)
 
-    const existing = await backend.findRunnableExisting(argv)
-    if (existing != null) {
+    const probe = await backend.probeExisting(argv)
+
+    if (probe?.installed) {
+      const { existing } = probe
       await backend.reconcile(argv, existing)
 
       if (await backend.isAlreadyUp?.(argv, existing)) {
@@ -190,6 +310,15 @@ export async function runVmUp(argv, backend) {
       return
     }
 
+    if (probe != null) {
+      await runIncompleteFirstBoot(argv, backend, probe.existing, timeoutSec, signal)
+      return
+    }
+
+    if (argv.wipeOs && backend.flags) {
+      await clearInstalled(backend.flags)
+    }
+
     const { created, follow: earlyFollow } = await backend.createFirstBoot(argv, signal, {
       wantSerial: !argv.noConsole,
     })
@@ -221,7 +350,7 @@ export async function runVmUp(argv, backend) {
           leaveHint: backend.firstBootFailHint(argv, created),
         })
       ) {
-        await backend.finishFirstBootOk(argv, created, signal)
+        await finishFirstBootSuccess(argv, backend, created, signal)
       } else {
         await backend.finishFirstBootFail?.(argv, created)
       }

@@ -4,9 +4,11 @@
  */
 
 export { domainExists, domainState, removeDomain } from './domain.js'
+export { createFlagStore } from './flag-store.js'
 export { ensureDefaultNetwork } from './network.js'
 export { reconcilePasstPortForwards } from './passt.js'
 export { reconcileDomainResources } from './resources.js'
+export { detachSeedCdrom } from './seed-cdrom.js'
 export {
   restartWithSerialNull,
   setDomainSerialNull,
