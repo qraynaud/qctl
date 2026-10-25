@@ -173,6 +173,8 @@ describe('seed ISO (@gcu/iso9660)', () => {
     const userData = readFileSync(join(keep, 'user-data'), 'utf8')
     expect(userData).toContain('/var/lib/qctl/first-boot.done')
     expect(userData).toContain('rocky-first-boot.service')
+    expect(userData).toContain('qctl-supervisor.service')
+    expect(userData).toContain('systemctl enable qctl-supervisor.service')
     expect(userData).toContain('install-qctl-guest.sh')
     expect(userData).not.toContain('91-rocky-env.conf')
     expect(userData).not.toContain('tier0-pending')

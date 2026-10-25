@@ -44,6 +44,8 @@ describe('admin-user stage', () => {
     await adminUser.run(ctx)
     expect(logs.some((l) => l.includes('key-only'))).toBe(true)
     expect(calls.some((a) => a.includes('admin-user-ensure') && a.includes('keyonly'))).toBe(true)
+    expect(calls.some((a) => a[0] === 'systemctl' && a.includes('try-restart'))).toBe(true)
+    expect(logs.some((l) => l.includes('restarted qctl-supervisor'))).toBe(true)
     expect(files.get('/mock/sudoers')).toMatch(/NOPASSWD/)
     expect(ctx.osConfig.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
     expect(writtenOs.at(-1)?.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })

@@ -1,12 +1,10 @@
 /**
  * Minimal systemd `sd_notify` over NOTIFY_SOCKET (Type=notify services).
  *
- * Uses unix datagram sockets; Node's public dgram typings omit unix path
- * overloads, so createSocket/send are cast at the call site.
+ * Bun's `node:dgram` only supports udp4/udp6 (no `unix_dgram`), so we shell out
+ * to `systemd-notify` which speaks the notify protocol correctly.
  */
-import { Buffer } from 'node:buffer'
-import { createSocket } from 'node:dgram'
-/** @import { Socket, SocketType } from 'node:dgram' */
+import { spawnSync } from 'node:child_process'
 
 /**
  * @param {string} state e.g. `READY=1` or `READY=1\nSTATUS=…`
@@ -17,31 +15,28 @@ export function sdNotify(state, opts = {}) {
   const raw = opts.socketPath ?? process.env.NOTIFY_SOCKET
   if (!raw) return Promise.resolve(false)
 
-  const message = Buffer.from(state.endsWith('\n') ? state : `${state}\n`)
-  const dest = raw.startsWith('@') ? `\0${raw.slice(1)}` : raw
+  const vars = state
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (vars.length === 0) return Promise.resolve(false)
 
   return new Promise((resolve, reject) => {
-    const sock = /**
- * @type {Socket & {
-      send: (msg: Buffer, path: string, cb: (err: Error | null) => void) => void
-    }} */ (createSocket(/** @type {SocketType} */ ('unix_dgram')))
-    sock.once('error', (err) => {
-      try {
-        sock.close()
-      } catch {
-        // ignore
-      }
-      reject(err)
+    // Type=notify associates READY with the service main PID. A bare
+    // systemd-notify child PID is ignored — pass --pid of this process.
+    const r = spawnSync('systemd-notify', [`--pid=${process.pid}`, ...vars], {
+      env: { ...process.env, NOTIFY_SOCKET: raw },
+      encoding: 'utf8',
     })
-
-    sock.send(message, dest, (err) => {
-      try {
-        sock.close()
-      } catch {
-        // ignore
-      }
-      if (err) reject(err)
-      else resolve(true)
-    })
+    if (r.error) {
+      reject(r.error)
+      return
+    }
+    if (r.status !== 0) {
+      const detail = (r.stderr || r.stdout || '').trim() || `exit ${r.status}`
+      reject(new Error(`systemd-notify failed: ${detail}`))
+      return
+    }
+    resolve(true)
   })
 }
