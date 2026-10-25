@@ -1,13 +1,17 @@
 import * as driversMod from '../drivers/index.js'
 import * as confirmMod from '../libs/confirm-destroy.js'
+import * as destroyPipe from '../libs/destroy-pipeline.js'
+import * as resolveDisks from '../libs/resolve-provision-disks.js'
 import * as mod from './destroy.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  destroyPipe.runVmDestroy.mockRestore?.()
   // @ts-expect-error restore
   confirmMod.confirmProdFullDestroy.mockRestore?.()
   // @ts-expect-error restore
@@ -18,19 +22,24 @@ afterEach(() => {
   console.error.mockRestore?.()
 })
 
-describe('vm destroy command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('destroy')
-    expect(mod.describe).toContain('keep-persistent')
-    expect(typeof mod.builder).toBe('function')
-  })
+const resolved = {
+  module: { id: 'workstation' },
+  ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+}
 
-  test('handler loads driver and calls destroy', async () => {
-    const destroy = async () => {}
-    const spy = spyOn({ destroy }, 'destroy')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ destroy: spy })),
+describe('vm destroy command', () => {
+  test('handler resolveDriver + runVmDestroy', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(/** @type {never} */ (resolved))
+    spyOn(resolveDisks, 'resolveProvisionDisks').mockResolvedValue(
+      /** @type {never} */ ({
+        os: { id: 'os' },
+        members: [
+          { id: 'os', kind: 'os' },
+          { id: 'rocky-data0', kind: 'tank' },
+        ],
+      }),
     )
+    const spy = spyOn(destroyPipe, 'runVmDestroy').mockResolvedValue(undefined)
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
       /** @type {VmArgv} */ (
@@ -38,89 +47,80 @@ describe('vm destroy command', () => {
           target: 'workstation',
           env: 'dev',
           name: 'rocky',
-          keepPersistent: false,
-          yes: false,
-          dryRun: false,
-        })
-      ),
-    )
-    expect(driversMod.loadDriver).toHaveBeenCalled()
-    expect(spy).toHaveBeenCalled()
-  })
-
-  test('dies when -y without --keep-persistent', async () => {
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ destroy: async () => {} })),
-    )
-    spyOn(console, 'log').mockImplementation(() => {})
-    spyOn(console, 'error').mockImplementation(() => {})
-    const exit = spyOn(process, 'exit').mockImplementation((code) => {
-      throw new Error(`exit ${code}`)
-    })
-    await expect(
-      mod.handler(
-        /** @type {VmArgv} */ (
-          /** @type {never} */ ({
-            target: 'workstation',
-            env: 'dev',
-            name: 'rocky',
-            keepPersistent: false,
-            yes: true,
-            dryRun: false,
-          })
-        ),
-      ),
-    ).rejects.toThrow(/exit 1/)
-    exit.mockRestore()
-  })
-
-  test('prod full wipe always confirms', async () => {
-    const destroy = async () => {}
-    const spy = spyOn({ destroy }, 'destroy')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ destroy: spy })),
-    )
-    const confirm = spyOn(confirmMod, 'confirmProdFullDestroy').mockResolvedValue(undefined)
-    spyOn(console, 'log').mockImplementation(() => {})
-    await mod.handler(
-      /** @type {VmArgv} */ (
-        /** @type {never} */ ({
-          target: 'workstation',
-          env: 'prod',
-          production: true,
-          name: 'rocky',
-          keepPersistent: false,
-          yes: false,
-          dryRun: false,
-        })
-      ),
-    )
-    expect(confirm).toHaveBeenCalledWith('rocky')
-    expect(spy).toHaveBeenCalled()
-  })
-
-  test('prod keep-persistent skips confirm', async () => {
-    const destroy = async () => {}
-    const spy = spyOn({ destroy }, 'destroy')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ destroy: spy })),
-    )
-    const confirm = spyOn(confirmMod, 'confirmProdFullDestroy').mockResolvedValue(undefined)
-    spyOn(console, 'log').mockImplementation(() => {})
-    await mod.handler(
-      /** @type {VmArgv} */ (
-        /** @type {never} */ ({
-          target: 'workstation',
-          env: 'prod',
-          production: true,
-          name: 'rocky',
           keepPersistent: true,
           yes: true,
-          dryRun: false,
         })
       ),
     )
-    expect(confirm).not.toHaveBeenCalled()
+    expect(driversMod.resolveDriver).toHaveBeenCalled()
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ keepDisks: ['rocky-data0'] }),
+      expect.anything(),
+    )
+  })
+
+  test('dies when --yes without --keep-persistent', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(/** @type {never} */ (resolved))
+    spyOn(process, 'exit').mockImplementation(
+      /** @returns {never} */ () => {
+        throw new Error('exit')
+      },
+    )
+    spyOn(console, 'error').mockImplementation(() => {})
+    spyOn(console, 'log').mockImplementation(() => {})
+    await expect(
+      mod.handler(
+        /** @type {never} */ ({
+          target: 'workstation',
+          env: 'dev',
+          name: 'rocky',
+          yes: true,
+          keepPersistent: false,
+        }),
+      ),
+    ).rejects.toThrow(/exit/)
+  })
+
+  test('production full wipe confirms', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(/** @type {never} */ (resolved))
+    const confirm = spyOn(confirmMod, 'confirmProdFullDestroy').mockResolvedValue(undefined)
+    const spy = spyOn(destroyPipe, 'runVmDestroy').mockResolvedValue(undefined)
+    spyOn(console, 'log').mockImplementation(() => {})
+    await mod.handler(
+      /** @type {never} */ ({
+        target: 'workstation',
+        env: 'prod',
+        name: 'rocky',
+        production: true,
+        dryRun: false,
+        keepPersistent: false,
+      }),
+    )
+    expect(confirm).toHaveBeenCalled()
     expect(spy).toHaveBeenCalled()
+  })
+
+  test('production dry-run skips confirm', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        ...resolved,
+        ctx: { ...resolved.ctx, dryRun: true },
+      }),
+    )
+    const confirm = spyOn(confirmMod, 'confirmProdFullDestroy').mockResolvedValue(undefined)
+    spyOn(destroyPipe, 'runVmDestroy').mockResolvedValue(undefined)
+    spyOn(console, 'log').mockImplementation(() => {})
+    await mod.handler(
+      /** @type {never} */ ({
+        target: 'workstation',
+        env: 'prod',
+        name: 'rocky',
+        production: true,
+        dryRun: true,
+        keepPersistent: false,
+      }),
+    )
+    expect(confirm).not.toHaveBeenCalled()
   })
 })

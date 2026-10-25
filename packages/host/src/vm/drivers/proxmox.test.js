@@ -1,12 +1,21 @@
-import { createDriver } from './proxmox.js'
+import { module } from './proxmox.js'
 import { describe, expect, test } from 'bun:test'
 
-describe('proxmox createDriver', () => {
-  test('returns proxmox driver with lifecycle methods', () => {
-    const driver = createDriver()
-    expect(driver.id).toBe('proxmox')
-    for (const key of ['check', 'up', 'down', 'destroy', 'status', 'initTank', 'sshInfo']) {
-      expect(typeof driver[/** @type {keyof typeof driver} */ (key)]).toBe('function')
+describe('proxmox module', () => {
+  test('exposes thin ops + getStatus / targetCheck', () => {
+    expect(String(module.id)).toBe('proxmox')
+    for (const key of [
+      'find',
+      'create',
+      'start',
+      'stop',
+      'destroy',
+      'getStatus',
+      'targetCheck',
+      'powerState',
+      'createFlagStore',
+    ]) {
+      expect(typeof module[/** @type {keyof typeof module} */ (key)]).toBe('function')
     }
   })
 })

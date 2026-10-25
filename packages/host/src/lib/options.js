@@ -1,15 +1,16 @@
 import { loadProvisionDocument } from '@qctl/shared'
 
 import { portsSchema } from '../provision/schema/index.js'
+import '../vm/drivers/index.js'
+import { listDriverIds } from '../vm/drivers/registry.js'
 import { tryGetRepoRoot } from './paths.js'
 import { sharedProfile } from './profile-argv.js'
-import { TARGETS } from './target.js'
 
 export { sharedProfile } from './profile-argv.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { YamlValue } from '@qctl/shared' */
-/** @import { PortsMap, VmArgv, VmTarget } from '../vm/types.js' */
+/** @import { PortsMap, VmArgv } from '../vm/types.js' */
 
 /** @typedef {{ memory?: string | number, cpu?: string | number }} BootResourceSection */
 
@@ -24,13 +25,18 @@ function loadProvisionUnresolved(argv = {}) {
   const env = argv.env || 'dev'
   const profile = argv.profile
   if (profile == null || String(profile).trim() === '') return null
-  const target = /** @type {VmTarget} */ (
-    argv.target && /** @type {readonly string[]} */ (TARGETS).includes(argv.target)
-      ? argv.target
+  const target =
+    argv.target != null && String(argv.target).trim() !== ''
+      ? String(argv.target).trim()
       : 'workstation'
-  )
   try {
-    return loadProvisionDocument({ root, env, target, profile })
+    return loadProvisionDocument({
+      root,
+      env,
+      target,
+      profile,
+      knownTargets: listDriverIds().map(String),
+    })
   } catch {
     return null
   }
@@ -88,7 +94,8 @@ export const DEFAULT_CPU = 2
 export const DEFAULT_MEMORY_MIB = 4096
 
 /**
- * Fill argv.memory / argv.vcpus from provision workstation|proxmox.memory|cpu when CLI omits them.
+ * Fill argv.memory / argv.vcpus from provision `<target>.memory|cpu` when CLI omits them.
+ * Overlay key is `argv.target` (driver module id), not a hardcoded workstation|proxmox branch.
  * Mutates argv (same pattern as resolveVmName). Soft-loads config (never exits).
  * @param {VmArgv} argv
  * @returns {VmArgv}
@@ -96,14 +103,15 @@ export const DEFAULT_MEMORY_MIB = 4096
 export function resolveBootResources(argv) {
   /** @type {BootResourceSection | null} */
   let section = null
+  const targetKey = String(argv.target || 'workstation')
   if (argv.memory == null || argv.vcpus == null) {
     const doc = loadProvisionUnresolved({
       env: argv.env || 'dev',
-      target: argv.target || 'workstation',
+      target: targetKey,
       profile: argv.profile,
     })
-    if (doc?.data) {
-      const block = argv.target === 'proxmox' ? doc.data.proxmox : doc.data.workstation
+    if (doc?.data && typeof doc.data === 'object' && !Array.isArray(doc.data)) {
+      const block = /** @type {Record<string, YamlValue>} */ (doc.data)[targetKey]
       section =
         block && typeof block === 'object' && !Array.isArray(block)
           ? /** @type {BootResourceSection} */ (block)

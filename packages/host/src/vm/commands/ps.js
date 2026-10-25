@@ -2,9 +2,9 @@ import { chalk } from 'zx'
 
 import { sharedLibvirt } from '../../lib/options.js'
 import { resolveSyncEndpoint } from '../../sync/endpoint.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
 import { guestQuadletPs } from '../libs/guest-quadlet.js'
-import { resolveVmPowerState } from '../libs/power-state.js'
+import { powerStateFromModule } from '../libs/power-state.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -68,8 +68,9 @@ function argvApps(apps) {
  */
 export async function handler(argv) {
   try {
-    const driver = await loadDriver(argv)
-    const power = await resolveVmPowerState(driver, argv)
+    const { module, ctx } = await resolveDriver(argv)
+    if (!module.powerState) throw new Error(`driver ${module.id} has no powerState`)
+    const power = await powerStateFromModule({ powerState: module.powerState }, ctx)
     const apps = argvApps(argv.apps)
 
     console.log(

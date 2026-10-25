@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import YAML from 'yaml'
 
 import {
-  PROVISION_TARGETS,
   loadQctlHostMeta,
   provisionEnvFile,
   provisionProfileFile,
@@ -21,6 +20,12 @@ import {
   scaffoldTemplatePath,
 } from '../templates.js'
 import { getScaffoldTemplatesRoot } from '../templates-root.js'
+import '../vm/drivers/index.js'
+import {
+  assertScaffoldTarget,
+  listScaffoldTargets,
+  resolveTargetYamlStub,
+} from '../vm/drivers/scaffold.js'
 
 /**
  * @typedef {object} NewEnvResult
@@ -35,14 +40,14 @@ import { getScaffoldTemplatesRoot } from '../templates-root.js'
  * @property {string} root
  * @property {string} name
  * @property {string} env
- * @property {'workstation' | 'proxmox'} target
+ * @property {string} target
  * @property {string[]} written
  * @property {string[]} skipped
  */
 
 /**
  * @typedef {{ production?: boolean }} EnvSpecPlain
- * @typedef {{ env: string, target: 'workstation' | 'proxmox' }} ProfileSpecPlain
+ * @typedef {{ env: string, target: string }} ProfileSpecPlain
  * @typedef {{
  *   environments?: Record<string, EnvSpecPlain>
  *   profiles?: Record<string, ProfileSpecPlain>
@@ -74,10 +79,10 @@ export function listEnvironmentKeys(root) {
 }
 
 /**
- * @returns {('workstation' | 'proxmox')[]}
+ * @returns {string[]}
  */
 export function listProvisionTargets() {
-  return /** @type {('workstation' | 'proxmox')[]} */ ([...PROVISION_TARGETS].sort())
+  return listScaffoldTargets()
 }
 
 /**
@@ -205,39 +210,6 @@ function stubProfileYaml(profile, spec) {
 }
 
 /**
- * @param {'workstation' | 'proxmox'} target
- * @returns {string}
- */
-function stubTargetYaml(target) {
-  const basename = provisionTargetFile(target).replace(/\.yaml$/, '')
-  try {
-    const full = join(getScaffoldTemplatesRoot(), scaffoldTemplatePath(`provision/${basename}`))
-    if (existsSync(full)) {
-      return loadScaffoldTemplate(`provision/${basename}`, defaultProvisionTemplateVars())
-    }
-  } catch {
-    // fall through
-  }
-  if (target === 'workstation') {
-    return `# Defaults for profiles with target: workstation (VM on this machine).
-
-workstation:
-  cpu: 2
-  memory: 4096
-`
-  }
-  return `# Defaults for profiles with target: proxmox.
-
-proxmox:
-  api_url: https://pve.example:8006
-  api_token: SET_PROXMOX_API_TOKEN
-  node: pve
-  cpu: 2
-  memory: 4096
-`
-}
-
-/**
  * @param {string} root
  * @param {string} name
  * @param {{ from?: string, force?: boolean }} [opts]
@@ -290,21 +262,19 @@ export function writeProfileLayer(root, name, spec, opts = {}) {
 /**
  * Ensure a stub `target-<target>.yaml` exists (interactive overlays fill it later).
  * @param {string} root
- * @param {'workstation' | 'proxmox'} target
+ * @param {string} target
  * @param {{ force?: boolean }} [opts]
  * @returns {'wrote' | 'skipped'}
  */
 export function writeTargetLayerStub(root, target, opts = {}) {
-  if (!PROVISION_TARGETS.has(target)) {
-    throw new Error(`invalid target '${target}' (want workstation|proxmox)`)
-  }
-  const path = join(root, 'provision', provisionTargetFile(target))
-  return writeOrSkipFile(path, stubTargetYaml(target), Boolean(opts.force))
+  const id = assertScaffoldTarget(target)
+  const path = join(root, 'provision', provisionTargetFile(id))
+  return writeOrSkipFile(path, resolveTargetYamlStub(id), Boolean(opts.force))
 }
 
 /**
  * @param {string} root
- * @param {'workstation' | 'proxmox'} target
+ * @param {string} target
  * @returns {boolean}
  */
 export function targetLayerExists(root, target) {
@@ -356,7 +326,7 @@ export function newEnv(name, opts = {}) {
  *   cwd?: string
  *   force?: boolean
  *   env: string
- *   target: 'workstation' | 'proxmox'
+ *   target: string
  *   setDefault?: boolean
  *   ensureTargetStub?: boolean
  * }} opts
@@ -371,11 +341,9 @@ export function newProfile(name, opts) {
       `env ${JSON.stringify(opts.env)} is not in qctl.environments (${keys}). Run \`qctl new env\` first.`,
     )
   }
-  if (!PROVISION_TARGETS.has(opts.target)) {
-    throw new Error(`invalid target '${opts.target}' (want workstation|proxmox)`)
-  }
+  const target = assertScaffoldTarget(opts.target)
 
-  const spec = { env: opts.env, target: opts.target }
+  const spec = { env: opts.env, target }
   /** @type {string[]} */
   const written = []
   /** @type {string[]} */
@@ -393,12 +361,12 @@ export function newProfile(name, opts) {
   if (profileAction === 'skipped') skipped.push(profileRel)
   else written.push(profileRel)
 
-  if (opts.ensureTargetStub !== false && !targetLayerExists(root, opts.target)) {
-    const tAction = writeTargetLayerStub(root, opts.target, { force: false })
-    const tRel = `provision/${provisionTargetFile(opts.target)}`
+  if (opts.ensureTargetStub !== false && !targetLayerExists(root, target)) {
+    const tAction = writeTargetLayerStub(root, target, { force: false })
+    const tRel = `provision/${provisionTargetFile(target)}`
     if (tAction === 'skipped') skipped.push(tRel)
     else written.push(tRel)
   }
 
-  return { root, name, env: opts.env, target: opts.target, written, skipped }
+  return { root, name, env: opts.env, target, written, skipped }
 }

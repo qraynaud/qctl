@@ -1,19 +1,29 @@
 /**
  * Shared CLI / driver shapes for `qctl vm`.
+ *
+ * Thin driver module contract: {@link ./driver-contract.js}.
+ * Runtime branded ids: {@link ./drivers/id.js}.
  */
 
+/**
+ * Builtin profile target literals (CLI/provision today).
+ * Open branded ids for new backends: {@link import('./driver-contract.js').VmDriverId}.
+ */
 export type VmTarget = 'workstation' | 'proxmox'
-/** Provision / QCTL_ENV name (open; declared in `qctl.environments`). */
-export type VmEnv = string
-export type VmNetwork = 'auto' | 'default' | 'user'
-export type SeedProfile = 'appliance' | 'init-tank'
+
+/** @see import('./driver-contract.js').VmEnv */
+export type VmEnv = import('./driver-contract.js').VmEnv
+
+/** Seed ISO kind — same as {@link import('./driver-contract.js').VmSeedProfile}. */
+export type SeedProfile = import('./driver-contract.js').VmSeedProfile
 
 /** Parsed yargs argv for vm commands (known fields; yargs may add more). */
 export type VmArgv = {
   _: (string | number)[]
   $0: string
+  /** Builtin union or future driver id string until branded in `loadBackend`. */
   target: VmTarget | string
-  env: VmEnv
+  env: import('./driver-contract.js').VmEnv
   /** From profile / `qctl.environments.*.production` when resolved. */
   production?: boolean
   /** Provision profile key (`qctl.profiles`); set by resolveProfileArgv. */
@@ -22,20 +32,20 @@ export type VmArgv = {
   _qctlProfileResolved?: boolean
   /** Seed ISO kind (`--seed-profile`); not the provision profile. */
   seedProfile?: SeedProfile | string
-  /** Resolved by `loadDriver` (resolveVmName). */
+  /** Resolved by `resolveDriver` (module.defaultVmName). */
   name: string
   connect: string
-  /** Resolved by `loadDriver` (resolveBootResources). */
+  /** Resolved by `resolveDriver` (resolveBootResources via module id). */
   memory: number
   vcpus: number
-  network: VmNetwork | string
+  network: import('./driver-contract.js').VmNetwork | string
   osinfo: string
   cidata?: string
   dryRun: boolean
   wipeOs?: boolean
   /** destroy: keep data + tank members (drop OS only). */
   keepPersistent?: boolean
-  /** destroy: skip prompts; only valid with keepPersistent. */
+  /** destroy CLI: skip prompts; only valid with keepPersistent. */
   yes?: boolean
   timeout: number
   forceDownload?: boolean
@@ -52,14 +62,3 @@ export type VmArgv = {
 }
 
 export type { PortEntry, PortsMap } from '../provision/schema/types.js'
-
-export type VmDriver = {
-  id: 'workstation' | 'proxmox'
-  check: (argv: VmArgv) => Promise<boolean>
-  up: (argv: VmArgv) => Promise<void>
-  down: (argv: VmArgv) => Promise<void>
-  destroy: (argv: VmArgv) => Promise<void>
-  status: (argv: VmArgv) => Promise<void>
-  initTank: (argv: VmArgv) => Promise<void>
-  sshInfo: (argv: VmArgv) => Promise<void>
-}

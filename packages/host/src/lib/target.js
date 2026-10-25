@@ -1,17 +1,20 @@
 /**
- * Deployment target (workstation libvirt vs Proxmox). Env names are open (`qctl.environments`).
+ * Deployment target helpers. VM default names come from the driver registry.
  */
 
-import { BUILTIN_ENVIRONMENTS, isProductionEnv } from '@qctl/shared'
+import { asVmDriverId, getDriverModule, resolveNameForModule } from '../vm/drivers/registry.js'
+
+// Builtin self-registration (side-effect) so defaultVmName works before resolveDriver.
+import '../vm/drivers/proxmox.js'
+import '../vm/drivers/workstation.js'
 
 /** @import { VmArgv, VmEnv, VmTarget } from '../vm/types.js' */
 
-/** Profile / driver target values (not a user CLI flag). */
+/** Profile / driver target values (not a user CLI flag). Closed until overlay phase. */
 export const TARGETS = /** @type {const} */ (['workstation', 'proxmox'])
 
 /**
- * Default libvirt/Proxmox VM name when --name is omitted.
- * Proxmox production → `rocky`; otherwise `rocky-<env>`.
+ * Default VM name when --name is omitted — delegates to the registered module.
  * @param {{
  *   target?: VmTarget | string,
  *   env?: VmEnv | string,
@@ -21,10 +24,12 @@ export const TARGETS = /** @type {const} */ (['workstation', 'proxmox'])
  * @returns {string}
  */
 export function defaultVmName({ target, env, production, environments }) {
-  const envName = env != null && String(env).trim() !== '' ? String(env).trim() : 'dev'
-  const isProd = production ?? isProductionEnv(envName, environments ?? BUILTIN_ENVIRONMENTS)
-  if (target === 'proxmox') return isProd ? 'rocky' : `rocky-${envName}`
-  return 'rocky'
+  const id = asVmDriverId(target || 'workstation')
+  const mod = getDriverModule(id)
+  if (!mod?.defaultVmName) {
+    throw new Error(`defaultVmName: driver ${id} has no defaultVmName`)
+  }
+  return mod.defaultVmName({ env, production, environments })
 }
 
 /**
@@ -34,14 +39,12 @@ export function defaultVmName({ target, env, production, environments }) {
  * @returns {string}
  */
 export function resolveVmName(argv) {
-  const name =
-    argv.name != null && String(argv.name).trim() !== '' ? String(argv.name).trim() : null
-  return (
-    name
-    || defaultVmName({
-      target: argv.target,
-      env: argv.env,
-      production: argv.production,
-    })
-  )
+  const id = asVmDriverId(argv.target || 'workstation')
+  const mod = getDriverModule(id)
+  if (!mod) throw new Error(`resolveVmName: unknown target ${id}`)
+  return resolveNameForModule(mod, {
+    name: argv.name,
+    env: argv.env,
+    production: argv.production,
+  })
 }

@@ -12,7 +12,12 @@ import { chalk } from 'zx'
 
 /** @typedef {{ status: 'ok' | 'fail', line: string }} SerialOutcome */
 /** @typedef {SerialOutcome | { status: 'timeout', line: string }} SerialWaitOutcome */
-/** @typedef {{ stop: () => Promise<void>, result: Promise<SerialOutcome> }} SerialFollow */
+/**
+ * @typedef {object} SerialFollow
+ * @property {() => Promise<void>} stop
+ * @property {Promise<SerialOutcome>} result
+ * @property {number} [port] TCP listen port when using {@link startSerialTcpFollow}
+ */
 /**
  * @typedef {object} SerialSinkOpts
  * @property {(line: string) => void} [onLine]

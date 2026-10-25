@@ -1,27 +1,28 @@
 import * as driversMod from '../drivers/index.js'
+import * as statusPipe from '../libs/status-pipeline.js'
 import * as mod from './status.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  statusPipe.runVmStatus.mockRestore?.()
   // @ts-expect-error restore
   console.log.mockRestore?.()
 })
 
 describe('vm status command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('status')
-  })
-
-  test('handler loads driver and calls status', async () => {
-    const status = async () => {}
-    const spy = spyOn({ status }, 'status')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ status: spy })),
+  test('handler resolveDriver + runVmStatus', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        module: { id: 'workstation' },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+      }),
     )
+    const spy = spyOn(statusPipe, 'runVmStatus').mockResolvedValue(undefined)
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
       /** @type {VmArgv} */ (

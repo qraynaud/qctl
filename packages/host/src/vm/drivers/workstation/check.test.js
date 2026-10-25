@@ -7,7 +7,7 @@ import { check } from './check.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 /** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
-/** @import { VmArgv } from '../../types.js' */
+/** @import { VmContext } from '../../driver-contract.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
@@ -64,11 +64,15 @@ describe('workstation check', () => {
     spyOn(console, 'error').mockImplementation(() => {})
 
     await check(
-      /** @type {VmArgv} */ ({
-        connect: 'qemu:///system',
-        env: 'dev',
-        target: 'workstation',
-      }),
+      /** @type {VmContext} */ (
+        /** @type {never} */ ({
+          connect: 'qemu:///system',
+          env: 'dev',
+          name: 'rocky',
+          timeout: 120,
+          dryRun: false,
+        })
+      ),
     )
     expect(process.exitCode || 0).toBe(0)
     expect(whichBins).toContain('swtpm')
@@ -111,11 +115,15 @@ describe('workstation check', () => {
     })
 
     await check(
-      /** @type {VmArgv} */ ({
-        connect: 'qemu:///system',
-        env: 'dev',
-        target: 'workstation',
-      }),
+      /** @type {VmContext} */ (
+        /** @type {never} */ ({
+          connect: 'qemu:///system',
+          env: 'dev',
+          name: 'rocky',
+          timeout: 120,
+          dryRun: false,
+        })
+      ),
     )
     expect(process.exitCode).toBe(1)
     expect(logs.join('\n')).toMatch(/swtpm not found/)

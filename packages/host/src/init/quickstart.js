@@ -15,7 +15,9 @@ import {
   parseBindingFlag,
   promptCredentialBinding,
 } from '../lib/binding.js'
-import { loadDriver } from '../vm/drivers/index.js'
+import { resolveDriver } from '../vm/drivers/index.js'
+import { runVmCheck } from '../vm/libs/check-pipeline.js'
+import { runVmInitTank } from '../vm/libs/up-pipeline.js'
 import { hostCloneContext } from './detect-clone-url.js'
 import { writeLayout } from './write-layout.js'
 import {
@@ -366,12 +368,8 @@ export async function runTargetCheckOnce(root, opts = {}) {
     const argv = /** @type {VmArgv} */ ({
       profile: opts.profile ?? 'lab',
     })
-    const driver = await loadDriver(argv)
-    if (typeof driver.check !== 'function') {
-      console.error(chalk.red('vm target-check not implemented for this target'))
-      return false
-    }
-    const ok = await driver.check(argv)
+    const { module, ctx } = await resolveDriver(argv)
+    const ok = await runVmCheck(ctx, module)
     return ok !== false && process.exitCode !== 1
   } finally {
     process.chdir(prev)
@@ -437,8 +435,8 @@ export async function offerInitTank(root, opts = {}) {
       await opts.initTank(argv)
       return true
     }
-    const driver = await loadDriver(argv)
-    await driver.initTank(argv)
+    const { module, ctx, specs } = await resolveDriver(argv)
+    await runVmInitTank(ctx, { console: true }, module, specs)
     return true
   } finally {
     process.chdir(prev)

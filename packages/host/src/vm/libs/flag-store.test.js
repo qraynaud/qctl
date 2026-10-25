@@ -1,5 +1,6 @@
 /**
  * Both targets must expose the same {@link VmFlagStore} shape via `createFlagStore`.
+ * Callers should use `module.createFlagStore(ctx)` — not target-private factories.
  */
 import { createFlagStore as createLibvirtStore } from './libvirt/flag-store.js'
 import { createFlagStore as createProxmoxStore } from './proxmox/flag-store.js'

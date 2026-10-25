@@ -1,47 +1,38 @@
 /**
  * Lightweight VM power probe for `qctl vm ps` (not the verbose `vm status` dump).
+ * Delegates to {@link VmDriverModule.powerState} — no host id branches.
  */
 
-import { domainState } from './libvirt/index.js'
-import { createProxmoxClient } from './proxmox/client.js'
-import { loadProxmoxConfig } from './proxmox/config.js'
+import { toVmContext } from '../context.js'
+import { asVmDriverId, getDriverModule } from '../drivers/registry.js'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+// Ensure builtins are registered when tests import this module alone.
+import '../drivers/proxmox.js'
+import '../drivers/workstation.js'
 
-/**
- * @typedef {'running' | 'stopped' | 'absent'} VmPowerKind
- */
-
-/**
- * @typedef {object} VmPowerState
- * @property {VmPowerKind} kind
- * @property {string} [detail]  raw hypervisor state (e.g. libvirt "paused")
- */
+/** @import { VmContext, VmPowerState } from '../driver-contract.js' */
+/** @import { VmArgv } from '../types.js' */
 
 /**
- * @param {VmDriver} driver
- * @param {VmArgv} argv  profile/name already resolved by {@link loadDriver}
+ * @param {{ id: string }} driver
+ * @param {VmArgv} argv  profile/name/boot already resolved by {@link resolveDriver}
  * @returns {Promise<VmPowerState>}
  */
 export async function resolveVmPowerState(driver, argv) {
-  if (driver.id === 'proxmox') {
-    if (argv.dryRun) return { kind: 'absent', detail: 'dry-run' }
-    const client = await createProxmoxClient(
-      await loadProxmoxConfig({
-        env: argv.env || 'dev',
-        profile: /** @type {string} */ (argv.profile),
-      }),
-    )
-    const vmid = await client.findVmidByName(argv.name)
-    if (vmid == null) return { kind: 'absent' }
-    const st = await client.qemuStatus(vmid)
-    const raw = String(st?.status || '').trim() || '?'
-    if (raw === 'running') return { kind: 'running', detail: raw }
-    return { kind: 'stopped', detail: raw }
+  const id = asVmDriverId(driver.id)
+  const mod = getDriverModule(id)
+  if (!mod?.powerState) {
+    throw new Error(`resolveVmPowerState: driver ${id} has no powerState`)
   }
+  return mod.powerState(toVmContext(/** @type {VmArgv} */ (argv)))
+}
 
-  const state = await domainState(argv.connect, argv.name)
-  if (state == null) return { kind: 'absent' }
-  if (state === 'running') return { kind: 'running', detail: state }
-  return { kind: 'stopped', detail: state }
+/**
+ * Direct module entry (preferred by shared runners).
+ * @param {{ powerState: (ctx: VmContext) => Promise<VmPowerState> }} module
+ * @param {VmContext} ctx
+ * @returns {Promise<VmPowerState>}
+ */
+export function powerStateFromModule(module, ctx) {
+  return module.powerState(ctx)
 }

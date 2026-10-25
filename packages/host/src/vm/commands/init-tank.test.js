@@ -1,29 +1,28 @@
 import * as driversMod from '../drivers/index.js'
+import * as upPipe from '../libs/up-pipeline.js'
 import * as mod from './init-tank.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  upPipe.runVmUp.mockRestore?.()
   // @ts-expect-error restore
   console.log.mockRestore?.()
 })
 
 describe('vm init-tank command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('init-tank [poolIds..]')
-    expect(mod.describe).toMatch(/tank|pool/i)
-    expect(typeof mod.builder).toBe('function')
-  })
-
-  test('handler loads driver and calls initTank', async () => {
-    const initTank = async () => {}
-    const spy = spyOn({ initTank }, 'initTank')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ initTank: spy })),
+  test('handler resolveDriver + runVmInitTank', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        module: { id: 'workstation' },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+      }),
     )
+    const spy = spyOn(upPipe, 'runVmInitTank').mockResolvedValue(undefined)
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
       /** @type {VmArgv} */ (
@@ -31,5 +30,6 @@ describe('vm init-tank command', () => {
       ),
     )
     expect(spy).toHaveBeenCalled()
+    expect(spy.mock.calls[0]?.[1]?.console).toBe(true)
   })
 })

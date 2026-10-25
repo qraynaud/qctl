@@ -1,7 +1,8 @@
 import { chalk } from 'zx'
 
 import { sharedLibvirt } from '../../lib/options.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmStatus } from '../libs/status-pipeline.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -28,10 +29,10 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
-  const driver = await loadDriver(argv)
+  const { module, ctx } = await resolveDriver(argv)
   console.log(
     chalk.cyan('vm status'),
     chalk.dim(`target=${argv.target} env=${argv.env} name=${argv.name}`),
   )
-  await driver.status(argv)
+  await runVmStatus(ctx, module)
 }

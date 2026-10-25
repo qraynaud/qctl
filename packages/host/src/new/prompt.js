@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import * as clack from '@clack/prompts'
 import YAML from 'yaml'
 
-import { PROVISION_TARGETS, provisionEnvFile, provisionTargetFile } from '@qctl/shared'
+import { provisionEnvFile, provisionTargetFile } from '@qctl/shared'
 
 import { isInteractiveTty } from '../init/quickstart.js'
 import {
@@ -18,6 +18,7 @@ import {
 } from '../init/wizard/overlays.js'
 import { asBindingPrompts } from '../lib/binding.js'
 import { listAppsForNewUnit, newUnit, requireInstanceRoot } from '../new.js'
+import { assertScaffoldTarget, scaffoldHintFor } from '../vm/drivers/scaffold.js'
 import {
   listEnvYamlNames,
   listEnvironmentKeys,
@@ -528,13 +529,11 @@ export function peekNetworkingForEnv(root, env) {
 
 /**
  * @param {string | undefined} raw
- * @returns {'workstation' | 'proxmox' | null}
+ * @returns {string | null}
  */
 export function parseTargetFlag(raw) {
   if (raw == null || raw === '') return null
-  const t = String(raw).trim()
-  if (t === 'workstation' || t === 'proxmox') return t
-  throw new Error(`invalid --target '${raw}' (want workstation|proxmox)`)
+  return assertScaffoldTarget(String(raw).trim())
 }
 
 /**
@@ -554,7 +553,7 @@ export function parseTargetFlag(raw) {
  * @property {boolean} force
  * @property {boolean} yes
  * @property {string} env
- * @property {'workstation' | 'proxmox'} target
+ * @property {string} target
  * @property {boolean} setDefault
  * @property {boolean} skipOverlays
  * @property {OverlaysWizardAnswers | null} overlays
@@ -566,7 +565,7 @@ export function parseTargetFlag(raw) {
  * @param {{
  *   cwd?: string
  *   prompts?: NewPrompts
- *   preferTarget?: 'workstation' | 'proxmox'
+ *   preferTarget?: string
  *   nameInitial?: string
  * }} [opts]
  * @returns {Promise<NewProfileResolved>}
@@ -629,13 +628,13 @@ export async function resolveNewProfileOptions(flags, opts = {}) {
     )
   }
 
-  /** @type {'workstation' | 'proxmox'} */
+  /** @type {string} */
   let target
   const targetFlag = parseTargetFlag(flags.target)
   if (targetFlag) {
     target = targetFlag
   } else if (yes || !canPrompt(opts)) {
-    target = opts.preferTarget ?? 'proxmox'
+    target = assertScaffoldTarget(opts.preferTarget ?? 'proxmox')
   } else {
     const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))
     const targets = listProvisionTargets()
@@ -645,7 +644,7 @@ export async function resolveNewProfileOptions(flags, opts = {}) {
       options: targets.map((t) => ({
         value: t,
         label: t,
-        hint: t === 'proxmox' ? 'remote Proxmox VE' : 'VM on this machine',
+        hint: scaffoldHintFor(t),
       })),
       initialValue: initial,
     })
@@ -653,10 +652,7 @@ export async function resolveNewProfileOptions(flags, opts = {}) {
       p.cancel?.('Cancelled')
       throw new Error('cancelled')
     }
-    target = /** @type {'workstation' | 'proxmox'} */ (picked)
-  }
-  if (!PROVISION_TARGETS.has(target)) {
-    throw new Error(`invalid target '${target}' (want workstation|proxmox)`)
+    target = assertScaffoldTarget(String(picked))
   }
 
   /** @type {boolean} */
@@ -748,7 +744,7 @@ export function scaffoldNewProfile(opts, ctx = {}) {
 
 /**
  * @param {string} name
- * @param {'workstation' | 'proxmox'} target
+ * @param {string} target
  * @returns {string}
  */
 export function formatNewProfileOutro(name, target) {

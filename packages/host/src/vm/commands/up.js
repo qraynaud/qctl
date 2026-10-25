@@ -3,9 +3,13 @@ import { chalk } from 'zx'
 import { sharedBoot, sharedDryRun } from '../../lib/options.js'
 import { resolveSyncEndpoint } from '../../sync/endpoint.js'
 import { waitForSsh } from '../../sync/wait-ssh.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmDestroy } from '../libs/destroy-pipeline.js'
+import { persistentDiskLabels } from '../libs/disk-plan.js'
 import { resolveVmAppSelection } from '../libs/guest-apps.js'
 import { guestQuadletUp, guestQuadletUpAll } from '../libs/guest-quadlet.js'
+import { resolveProvisionDisks } from '../libs/resolve-provision-disks.js'
+import { runVmUp } from '../libs/up-pipeline.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -90,7 +94,7 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   const selection = resolveVmAppSelection(argv)
-  const driver = await loadDriver(argv)
+  const { module, ctx, specs } = await resolveDriver(argv)
   console.log(
     chalk.cyan('vm up'),
     chalk.dim(
@@ -98,7 +102,27 @@ export async function handler(argv) {
         + `env=${argv.env} name=${argv.name}`,
     ),
   )
-  await driver.up(argv)
+  if (argv.wipeOs && !argv.dryRun) {
+    console.log(chalk.yellow(`vm: --wipe-os — destroying ${argv.name} (keep persistent disks)`))
+    const resolved = await resolveProvisionDisks({
+      env: argv.env || 'dev',
+      target: String(module.id),
+      profile: argv.profile,
+    })
+    await runVmDestroy(ctx, { keepDisks: persistentDiskLabels(resolved) }, module)
+  }
+  await runVmUp(
+    ctx,
+    {
+      console: !argv.noConsole,
+      timeout: argv.timeout,
+      // host prep (not VmUpOptions contract fields)
+      wipeOs: argv.wipeOs,
+      forceDownload: argv.forceDownload,
+    },
+    module,
+    specs,
+  )
 
   if (selection.mode === 'none') return
 

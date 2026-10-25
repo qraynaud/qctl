@@ -1,48 +1,65 @@
-import { chalk, fs } from 'zx'
+import { fs } from 'zx'
 
 import { portsFromArgv } from '../../../lib/options.js'
 import { requireBins } from '../../../lib/util.js'
 import { vmPaths } from '../../libs/disks.js'
 import { virsh } from '../../libs/libvirt/index.js'
 import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
-import { printLocalSshInfo } from '../../libs/ssh-hints.js'
+import { localSshHints } from '../../libs/ssh-hints.js'
+import { connectOf, powerState } from './ops.js'
 
-/** @import { VmArgv } from '../../types.js' */
+/** @import { VmContext, VmStatusSnapshot } from '../../driver-contract.js' */
 
 /**
- * @param {VmArgv} argv
- * @returns {Promise<void>}
+ * Gather workstation status + shell hints (no printing).
+ * @param {VmContext} ctx
+ * @returns {Promise<VmStatusSnapshot>}
  */
-export async function status(argv) {
-  const { connect, name } = argv
+export async function getStatus(ctx) {
+  const connect = connectOf(ctx)
+  const name = String(ctx.name).trim()
+  const power = await powerState(ctx)
+  const network = 'user'
+  const ports = portsFromArgv({
+    env: ctx.env,
+    target: 'workstation',
+    profile: ctx.profile,
+  })
 
   await requireBins(['virsh'])
   const r = await virsh(connect, 'dominfo', name).nothrow()
   if (r.exitCode !== 0) {
-    console.log(chalk.yellow(`vm: domain ${name} not defined`))
+    /** @type {VmStatusSnapshot} */
+    const snap = {
+      power: power.kind === 'absent' ? power : { kind: 'absent' },
+      summary: `domain ${name} not defined`,
+    }
     try {
       const resolved = await resolveProvisionDisks({
-        env: argv.env || 'dev',
-        target: argv.target || 'workstation',
-        profile: argv.profile,
+        env: ctx.env || 'dev',
+        target: 'workstation',
+        profile: ctx.profile,
       })
       const p = vmPaths(name, resolved)
-      console.log(`  os: ${fs.existsSync(p.os.path) ? p.os.path : '(missing)'}`)
-      for (const e of p.attached) {
-        console.log(`  ${e.id}: ${fs.existsSync(e.path) ? e.path : '(missing)'}`)
-      }
+      snap.disks = [
+        { id: 'os', path: p.os.path, exists: fs.existsSync(p.os.path) },
+        ...p.attached.map((e) => ({
+          id: e.id,
+          path: e.path,
+          exists: fs.existsSync(e.path),
+        })),
+      ]
     } catch (err) {
-      console.log(
-        chalk.dim(`  (could not resolve disks: ${err instanceof Error ? err.message : err})`),
-      )
+      snap.fields = {
+        disksError: err instanceof Error ? err.message : String(err),
+      }
     }
-    return
+    return snap
   }
-  console.log(String(r.stdout).trim())
-  await printLocalSshInfo({
-    connect,
-    name,
-    ports: portsFromArgv(argv),
-    network: argv.network === 'auto' ? 'user' : argv.network,
-  })
+
+  return {
+    power,
+    summary: String(r.stdout).trim(),
+    hints: await localSshHints({ connect, name, ports, network }),
+  }
 }

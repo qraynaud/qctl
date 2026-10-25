@@ -54,8 +54,9 @@ export function provisionProfileFile(profile) {
  * @typedef {object} LoadProvisionOptions
  * @property {string} root - instance repo root
  * @property {string} env - e.g. "dev"
- * @property {'workstation' | 'proxmox'} [target]
+ * @property {string} [target] - driver module id (default workstation)
  * @property {string} profile - profile key (leaf layer `profile-<profile>.yaml`)
+ * @property {Iterable<string>} [knownTargets] - overlay keys to strip besides `target`
  * @property {NodeJS.ProcessEnv} [processEnv]
  * @property {boolean} [resolve] - resolve !env (default true)
  */
@@ -104,15 +105,16 @@ function mergeIfPresent(data, filePath) {
  * }}
  */
 export function loadProvisionDocument(opts) {
-  const { root, env, target = 'workstation', profile } = opts
+  const { root, env, target = 'workstation', profile, knownTargets } = opts
   if (!profile || !String(profile).trim()) {
     throw new Error('loadProvisionDocument: profile is required')
   }
   const profileKey = String(profile).trim()
+  const targetId = String(target).trim() || 'workstation'
 
   const provisionDir = join(root, 'provision')
   const commonCandidate = join(provisionDir, `${COMMON_PROVISION}.yaml`)
-  const targetCandidate = join(provisionDir, provisionTargetFile(target))
+  const targetCandidate = join(provisionDir, provisionTargetFile(targetId))
   const envCandidate = join(provisionDir, provisionEnvFile(env))
   const profileCandidate = join(provisionDir, provisionProfileFile(profileKey))
 
@@ -129,13 +131,13 @@ export function loadProvisionDocument(opts) {
 
   if (!common.path && !targetLayer.path && !envLayer.path && !profileLayer.path) {
     throw new Error(
-      `no provision YAML found for profile=${profileKey} env=${env} target=${target} `
-        + `(tried provision/{${COMMON_PROVISION}.yaml,${provisionTargetFile(target)},`
+      `no provision YAML found for profile=${profileKey} env=${env} target=${targetId} `
+        + `(tried provision/{${COMMON_PROVISION}.yaml,${provisionTargetFile(targetId)},`
         + `${provisionEnvFile(env)},${provisionProfileFile(profileKey)}})`,
     )
   }
 
-  stripOppositeTarget(data, target)
+  stripOppositeTarget(data, targetId, knownTargets ?? PROVISION_TARGETS)
   const envRefs = collectEnvRefs(data)
   return {
     data,

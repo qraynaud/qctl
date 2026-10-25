@@ -38,7 +38,8 @@ export const environmentSpecSchema = z.strictObject({
 
 export const profileSpecSchema = z.strictObject({
   env: z.string().trim().min(1),
-  target: z.enum(['workstation', 'proxmox']),
+  /** Driver module id (`workstation`, `proxmox`, or a registered third target). */
+  target: z.string().trim().min(1),
 })
 
 /** Raw `qctl` fields read from common.yaml (before built-ins). */
@@ -71,7 +72,7 @@ export const qctlHostMetaFieldsSchema = z.strictObject({
  * @typedef {object} ResolvedProfile
  * @property {string} key
  * @property {string} env
- * @property {'workstation' | 'proxmox'} target
+ * @property {string} target
  * @property {boolean} production
  */
 
