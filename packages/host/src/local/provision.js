@@ -33,6 +33,11 @@ export async function provisionAppliance(ctx) {
       subuid: ctx.appsSubuid,
       subgid: ctx.appsSubgid,
     },
+    admin: {
+      username: ctx.adminUsername,
+      uid: ctx.adminUid,
+      gid: ctx.adminGid,
+    },
     timezone: 'Europe/Paris',
     profile: SEED_PROFILE.APPLIANCE,
   })

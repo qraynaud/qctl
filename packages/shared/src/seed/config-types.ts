@@ -2,6 +2,7 @@ import type { z } from 'zod'
 
 import type {
   osConfigSchema,
+  seedAdminUserSchema,
   seedAppsUserSchema,
   seedConfigSchema,
   seedInitTankSchema,
@@ -13,6 +14,7 @@ import type {
 export type SeedProfile = z.infer<typeof seedProfileSchema>
 export type SeedSubidRange = z.infer<typeof seedSubidRangeSchema>
 export type SeedAppsUser = z.infer<typeof seedAppsUserSchema>
+export type SeedAdminUser = z.infer<typeof seedAdminUserSchema>
 export type SeedRepo = z.infer<typeof seedRepoSchema>
 export type SeedInitTank = z.infer<typeof seedInitTankSchema>
 /** Non-secret ISO seed document (`qctl-seed/config.json`). */

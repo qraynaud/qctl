@@ -27,6 +27,11 @@ export function testOsConfig(patch = {}) {
       subuid: { start: 900000, count: 65536 },
       subgid: { start: 900000, count: 65536 },
     },
+    admin: {
+      username: 'admin',
+      uid: 1000,
+      gid: 1000,
+    },
     timezone: 'Europe/Paris',
     profile: SEED_PROFILE.APPLIANCE,
   }
@@ -39,6 +44,10 @@ export function testOsConfig(patch = {}) {
       ...patch.apps,
       subuid: { ...base.apps.subuid, ...patch.apps?.subuid },
       subgid: { ...base.apps.subgid, ...patch.apps?.subgid },
+    },
+    admin: {
+      ...base.admin,
+      ...patch.admin,
     },
   }
 }

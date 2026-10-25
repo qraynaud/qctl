@@ -75,7 +75,10 @@ function sampleSeed() {
     env: 'dev',
     root: '/tank/rocky',
     repo: { vcs: 'hg', url: 'ssh://hg@example/repo', branch: 'default' },
-    users: { apps },
+    users: {
+      apps,
+      admin: { username: 'admin', uid: 1000, gid: 1000 },
+    },
     disks,
     ports: {},
     packages: { distro: ['curl'], pipx: [], http: [] },
@@ -130,6 +133,7 @@ describe('parseSeedConfigFile / writeOsConfig', () => {
     const written = JSON.parse(readFileSync(osPath, 'utf8'))
     expect(written.env).toBe('dev')
     expect(written.root).toBe('/tank/rocky')
+    expect(written.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
     expect(Object.hasOwn(written, 'tier0Keys')).toBe(false)
     expect(Object.hasOwn(written, 'disks')).toBe(false)
     expect(Object.hasOwn(written, 'adminSshAuthorizedKeys')).toBe(false)

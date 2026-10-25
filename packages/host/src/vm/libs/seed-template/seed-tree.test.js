@@ -89,6 +89,7 @@ describe('buildSeedConfig / stageSeedTree', () => {
     expect(config.packages.pipx).toEqual([{ package: 'hg', inject: [] }])
     expect(config.vlanParents).toEqual({ VLAN2_PARENT: 'vlan2' })
     expect(config.tier0Keys).toEqual(['tank_passphrase_tank', 'DEPLOY_KEY'])
+    expect(config.users.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
     expect(config.initTank).toBeUndefined()
     expect(() => seedConfigSchema.parse(config)).not.toThrow()
 

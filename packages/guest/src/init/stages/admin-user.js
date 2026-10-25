@@ -1,12 +1,16 @@
 /**
  * Create sudo/SSH admin from seed Tier-0 ADMIN_* (or key-only default "admin").
  * SSH pubkeys from seed `/etc/rocky/admin_ssh_authorized_keys` (or `seedConfig`).
+ * Persists non-secret admin identity into `/etc/qctl/config.json` for day-2 ACL.
  */
 import { existsSync } from 'node:fs'
 import * as fsp from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import { QCTL_OS_CONFIG_PATH, osConfigSchema } from '@qctl/shared'
+
 import { StageError } from '../errors.js'
+import { writeOsConfig } from '../load-seed-config.js'
 import { detectQctlEnv, secretString } from './lib/credentials.js'
 
 /** @import { StageContext } from '../context.js' */
@@ -211,11 +215,27 @@ export default {
       await ensureSudoers(ctx, admin.mode, admin.user, sudoers)
       await ensureAdminKeysFile(ctx, keysSrc)
       await ensureAdminUser(ctx, admin, keysSrc)
+      persistAdminOsConfig(ctx, { username: admin.user, uid: admin.uid, gid: admin.gid })
     } catch (err) {
       throw new StageError('admin-user', err instanceof Error ? err.message : String(err))
     }
     ctx.log(`rocky-admin-user: user '${admin.user}' ready`)
   },
+}
+
+/**
+ * Write resolved admin identity into OS config (seed may already have it; Tier-0 wins).
+ * @param {StageContext} ctx
+ * @param {{ username: string, uid: number, gid: number }} admin
+ */
+function persistAdminOsConfig(ctx, admin) {
+  const next = osConfigSchema.parse({ ...ctx.osConfig, admin })
+  ctx.osConfig.admin = next.admin
+  const path = process.env.QCTL_OS_CONFIG?.trim() || QCTL_OS_CONFIG_PATH
+  writeOsConfig(next, path)
+  ctx.log(
+    `rocky-admin-user: wrote admin ${admin.username} uid=${admin.uid} gid=${admin.gid} → ${path}`,
+  )
 }
 
 /**

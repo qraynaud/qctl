@@ -14,7 +14,10 @@ import {
   seedConfigSchema,
 } from '@qctl/shared'
 
-import { appsIdentityFromProvision } from '../../../provision/schema/first-boot.js'
+import {
+  adminIdentityFromProvision,
+  appsIdentityFromProvision,
+} from '../../../provision/schema/first-boot.js'
 import { vlanParentEnvLines } from '../guest-net.js'
 import { disksJsonPayload } from './disks-payload.js'
 
@@ -49,6 +52,7 @@ export function buildSeedConfig(vars) {
   const apps = appsIdentityFromProvision(
     /** @type {Parameters<typeof appsIdentityFromProvision>[0]} */ (vars.provision),
   )
+  const admin = adminIdentityFromProvision(vars.provision)
   const profile =
     vars.profile === SEED_PROFILE.INIT_TANK ? SEED_PROFILE.INIT_TANK : SEED_PROFILE.APPLIANCE
   const repoRaw = vars.provision.repo || {}
@@ -70,6 +74,11 @@ export function buildSeedConfig(vars) {
         gid: apps.gid,
         subuid: apps.subuid,
         subgid: apps.subgid,
+      },
+      admin: {
+        username: admin.username,
+        uid: admin.uid,
+        gid: admin.gid,
       },
     },
     disks: disksJsonPayload(vars.resolved_disks),

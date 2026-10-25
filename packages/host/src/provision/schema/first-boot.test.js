@@ -1,4 +1,8 @@
-import { firstBootCredentialsFromProvision, tankPassphraseCredName } from './first-boot.js'
+import {
+  adminIdentityFromProvision,
+  firstBootCredentialsFromProvision,
+  tankPassphraseCredName,
+} from './first-boot.js'
 import { provisionSchema } from './parse.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -6,6 +10,28 @@ describe('tankPassphraseCredName', () => {
   test('prefixes pool id', () => {
     expect(tankPassphraseCredName('tank')).toBe('tank_passphrase_tank')
     expect(tankPassphraseCredName('cold-pool')).toBe('tank_passphrase_cold-pool')
+  })
+})
+
+describe('adminIdentityFromProvision', () => {
+  test('reads users.admin; defaults when omitted', () => {
+    const data = provisionSchema.parse({
+      networking: {
+        ports: { ssh: { port: 22 } },
+        uplinks: { eth0: { dhcp4: true } },
+      },
+      users: { admin: { username: 'rocky', uid: 1200, gid: 1200 } },
+    })
+    expect(adminIdentityFromProvision(data)).toEqual({
+      username: 'rocky',
+      uid: 1200,
+      gid: 1200,
+    })
+    expect(adminIdentityFromProvision({ users: {} })).toEqual({
+      username: 'admin',
+      uid: 1000,
+      gid: 1000,
+    })
   })
 })
 
