@@ -142,6 +142,13 @@ Package-root graph → Quadlet `${VAR}` render. Unit templates also get
 `${__DIRNAME}` (absolute directory of the file being rendered). Unit graph →
 `EnvironmentFile=.env` and Podman secrets ([secrets.md](./secrets.md)).
 
+### Cross-app / cross-engine deps
+
+Depend on another app with the usual systemd keys and its short name
+(`Requires=other.service`, `After=…`, and so on). That works for peers on the
+same engine and across rootful/rootless. After upgrading qctl, run
+`qctl quadlet up` once so existing installs pick this up.
+
 ## Guest: first boot
 
 `qctl _internal_init [--profile default|init-tank]` is the only first-boot entrypoint

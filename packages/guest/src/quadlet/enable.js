@@ -91,7 +91,9 @@ export async function runEnable(ctx, opts) {
     const dest = join(paths.dest, basename(net))
     const nenv = await loadNetworkRenderEnv(ctx, net)
     const needRecreate =
-      !existsSync(dest) || templateDiffers(net, dest, nenv) || networkLiveStale(ctx, paths, dest)
+      !existsSync(dest)
+      || templateDiffers(ctx, net, dest, nenv, paths.engine)
+      || networkLiveStale(ctx, paths, dest)
     renderToFile(ctx, paths, net, dest, nenv)
     ctx.print(`${engine}: rendered ${dest} (shared)`)
     if (needRecreate) recreateNets.push(basename(net))
