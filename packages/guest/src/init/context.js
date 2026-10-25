@@ -40,7 +40,6 @@ import { hydrateSystemdCredentials, seedConfigToOsConfig } from '@qctl/shared'
  * @property {string} [credstoreDir]
  * @property {string} [tankCredFile]
  * @property {string} [tankMount]
- * @property {string} [tankCanary]
  * @property {string} [zfsListCacheDir]
  * @property {string} [routeLocalnetConf]
  * @property {string} [hgBin]

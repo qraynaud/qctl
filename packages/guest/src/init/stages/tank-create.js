@@ -27,7 +27,6 @@ import {
   tankKeyLocation,
   tankPoolImportable,
   tankPoolImported,
-  writeTankCanary,
 } from './lib/tank.js'
 
 /** @import { DisksJson } from '@qctl/shared' */
@@ -118,7 +117,6 @@ async function createOneTank(ctx, disks, poolId) {
   )
   await mustExec(ctx, argv, `zpool create ${tank.id}`)
 
-  await writeTankCanary(ctx, { poolId: tank.id, mountPath: tank.mount })
   await tankEnableBootUnlock(ctx, tank.id, tank.mount)
 
   const status = await ctx.exec(['zpool', 'status', tank.id])
