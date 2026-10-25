@@ -26,8 +26,8 @@ First-boot / debug / plugin tooling (`_internal_init`, `_internal_list`,
 
 ### `qctl quadlet …`
 
-Generate and manage Quadlet units from the instance repo. Requires root (passwordless
-`sudo`).
+Generate and manage Quadlet units from the instance repo. Run as the admin user
+(or root); no `sudo` needed.
 
 | Subcommand | Description |
 |------------|-------------|

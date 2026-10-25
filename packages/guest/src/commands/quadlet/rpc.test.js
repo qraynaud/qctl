@@ -76,4 +76,41 @@ describe('quadlet rpc', () => {
     await callQuadlet({ op: 'ps' }, { osConfigPath: cfg, runDir: join(dir, 'run') })
     expect(process.exitCode).toBe(1)
   })
+
+  test('non-admin uid dies without calling supervisor (no sudo hint)', async () => {
+    const dir = makeTempDir()
+    const cfg = join(dir, 'config.json')
+    writeFileSync(
+      cfg,
+      JSON.stringify({
+        env: 'dev',
+        root: dir,
+        repo: { vcs: 'hg' },
+        quadletUser: 'apps',
+        apps: {
+          username: 'apps',
+          uid: 900,
+          gid: 900,
+          subuid: { start: 1, count: 1 },
+          subgid: { start: 1, count: 1 },
+        },
+        admin: { username: 'admin', uid: 1000, gid: 1000 },
+        timezone: 'UTC',
+        profile: 'appliance',
+      }),
+    )
+    const spy = spyOn(clientMod, 'supervisorQuadletRequest').mockImplementation(async () => ({
+      ok: /** @type {const} */ (true),
+      result: { method: /** @type {const} */ ('quadlet'), exitCode: 0 },
+    }))
+    const getuid = spyOn(process, 'getuid').mockReturnValue(42)
+
+    try {
+      await callQuadlet({ op: 'ps' }, { osConfigPath: cfg, runDir: join(dir, 'run') })
+      expect(spy).not.toHaveBeenCalled()
+      expect(process.exitCode).toBe(1)
+    } finally {
+      getuid.mockRestore()
+    }
+  })
 })

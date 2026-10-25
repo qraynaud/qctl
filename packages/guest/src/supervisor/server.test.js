@@ -163,6 +163,23 @@ describe('supervisor server + client', () => {
     expect(ok.ok).toBe(true)
   })
 
+  test('admin uid denied on apps sock (even for ensure)', async () => {
+    const runDir = join(makeTempDir(), 'run')
+    const server = await startSupervisorServer({
+      osConfig: os(),
+      runDir,
+      chownSockets: false,
+      getPeerCred: fixedPeer({ pid: 1, uid: 1000, gid: 1000 }),
+    })
+    servers.push(server)
+    const denied = await supervisorRequest(server.appsPath, {
+      method: 'ensure',
+      params: { app: 'web' },
+    })
+    expect(denied.ok).toBe(false)
+    if (!denied.ok) expect(denied.error).toMatch(/uid 1000/)
+  })
+
   test('quadlet streams stdio then exitCode on admin sock', async () => {
     const runDir = join(makeTempDir(), 'run')
     const server = await startSupervisorServer({
