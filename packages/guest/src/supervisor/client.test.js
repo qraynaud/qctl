@@ -97,7 +97,9 @@ describe('supervisor client', () => {
     const sockPath = join(makeTempDir(), 'ok.sock')
     const srv = await listen(sockPath, (c) => {
       c.on('data', () => {
-        c.write('{"ok":true,"result":{"stub":true,"method":"status","app":"web"}}\n')
+        c.write(
+          '{"ok":true,"result":{"method":"status","app":"web","ready":true,"failed":false}}\n',
+        )
         c.end()
       })
     })
@@ -108,7 +110,7 @@ describe('supervisor client', () => {
       })
       expect(res).toEqual({
         ok: true,
-        result: { stub: true, method: 'status', app: 'web' },
+        result: { method: 'status', app: 'web', ready: true, failed: false },
       })
     } finally {
       await srv.close()

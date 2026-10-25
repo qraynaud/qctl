@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@qctl/shared": "workspace:*",
+    "exit-hook": "^5.1.0",
     "yaml": "^2.9.1",
     "yargs": "^18.2.0",
     "zod": "^4.6.7"

@@ -35,9 +35,11 @@ describe('supervisor protocol', () => {
     const ok = {
       ok: /** @type {const} */ (true),
       result: {
-        stub: /** @type {const} */ (true),
         method: /** @type {const} */ ('ensure'),
         app: 'web',
+        refs: 1,
+        engine: /** @type {const} */ ('rootful'),
+        started: true,
       },
     }
     const err = { ok: /** @type {const} */ (false), error: 'permission denied' }

@@ -41,3 +41,12 @@ export function appStampDir(app, runDir = QCTL_RUN_DIR_DEFAULT) {
 export function appReadyPath(app, runDir = QCTL_RUN_DIR_DEFAULT) {
   return `${appStampDir(app, runDir)}/ready`
 }
+
+/**
+ * @param {string} app
+ * @param {string} [runDir]
+ * @returns {string}
+ */
+export function appFailedPath(app, runDir = QCTL_RUN_DIR_DEFAULT) {
+  return `${appStampDir(app, runDir)}/failed`
+}
