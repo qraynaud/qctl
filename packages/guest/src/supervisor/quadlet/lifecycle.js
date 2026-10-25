@@ -55,10 +55,10 @@ function installedContainers(dest) {
  * @param {'start' | 'stop'} action
  * @param {string} appArg
  */
-export function runStartStop(ctx, action, appArg) {
+export async function runStartStop(ctx, action, appArg) {
   const app = resolveAppName(appArg)
   const paths = resolveAppEngine(ctx, app)
-  appSystemctl(ctx, action, app, paths)
+  await appSystemctl(ctx, action, app, paths)
   ctx.log(`done (${action} ${app})`)
 }
 
@@ -67,7 +67,7 @@ export function runStartStop(ctx, action, appArg) {
  * @param {QuadletContext} ctx
  * @param {string} appArg
  */
-export function runRestart(ctx, appArg) {
+export async function runRestart(ctx, appArg) {
   const app = resolveAppName(appArg)
   const paths = resolveAppEngine(ctx, app)
   const dir = appDir(ctx, app)
@@ -79,15 +79,16 @@ export function runRestart(ctx, appArg) {
   for (const svc of svcs) {
     ctx.log(`restart ${svc} (${paths.engine})`)
     // Clear start-limit / failed state so a prior ExecStartPre failure can retry.
-    ctx.sys.systemctl(paths.engine, ['reset-failed', svc], { ignoreStderr: true })
+    await ctx.sys.systemctl(paths.engine, ['reset-failed', svc], { ignoreStderr: true })
     const active =
-      ctx.sys.systemctl(paths.engine, ['is-active', '--quiet', svc], { capture: true }).status === 0
+      (await ctx.sys.systemctl(paths.engine, ['is-active', '--quiet', svc], { capture: true }))
+        .status === 0
     const failed =
       !active
-      && ctx.sys.systemctl(paths.engine, ['is-failed', '--quiet', svc], { capture: true }).status
-        === 0
+      && (await ctx.sys.systemctl(paths.engine, ['is-failed', '--quiet', svc], { capture: true }))
+        .status === 0
     const verb = active || failed ? 'restart' : 'start'
-    const r = ctx.sys.systemctl(paths.engine, [verb, svc])
+    const r = await ctx.sys.systemctl(paths.engine, [verb, svc])
     if (r.status !== 0) die(`systemctl ${verb} ${svc} failed (exit ${r.status})`)
   }
   ctx.log(`done (restart ${app})`)
@@ -98,7 +99,7 @@ export function runRestart(ctx, appArg) {
  * @param {QuadletContext} ctx
  * @param {string} appArg
  */
-export function runDown(ctx, appArg) {
+export async function runDown(ctx, appArg) {
   const app = resolveAppName(appArg)
 
   /** @type {Engine | ""} */
@@ -132,8 +133,8 @@ export function runDown(ctx, appArg) {
         if (has) {
           found = true
           ctx.log(`down ${app} (${probe})`)
-          stopAndRemoveApp(ctx, app, paths)
-          ctx.sys.systemctl(probe, ['daemon-reload'])
+          await stopAndRemoveApp(ctx, app, paths)
+          await ctx.sys.systemctl(probe, ['daemon-reload'])
         }
       }
       if (!found) die(`app '${app}' not installed and not in repo`)
@@ -144,8 +145,8 @@ export function runDown(ctx, appArg) {
 
   const paths = ctx.sys.paths(engine)
   ctx.log(`down ${app} (${engine})`)
-  stopAndRemoveApp(ctx, app, paths)
-  ctx.sys.systemctl(engine, ['daemon-reload'])
+  await stopAndRemoveApp(ctx, app, paths)
+  await ctx.sys.systemctl(engine, ['daemon-reload'])
   ctx.log(`done (down ${app})`)
 }
 
@@ -157,29 +158,37 @@ export function runDown(ctx, appArg) {
  * @param {QuadletContext} ctx
  * @param {Engine} engine
  * @param {string} unitFile
- * @returns {string[]}
+ * @returns {Promise<string[]>}
  */
-export function psUnitRow(ctx, engine, unitFile) {
+export async function psUnitRow(ctx, engine, unitFile) {
   const svc = `${basename(unitFile, '.container')}.service`
   const name = containerName(unitFile)
   let image = unitValue(unitFile, 'Image') || '-'
   const q = { capture: true }
 
-  const inspect = ctx.sys.podman(engine, ['container', 'inspect', name, '--format', '{{.Id}}'], q)
+  const inspect = await ctx.sys.podman(
+    engine,
+    ['container', 'inspect', name, '--format', '{{.Id}}'],
+    q,
+  )
   const cid = inspect.status === 0 ? inspect.stdout.trim() : ''
   let st = ''
   if (cid) {
-    st = ctx.sys
-      .podman(engine, ['ps', '-a', '--filter', `id=${cid}`, '--format', '{{.Status}}'], q)
-      .stdout.trim()
-    const img = ctx.sys.podman(
+    st = (
+      await ctx.sys.podman(
+        engine,
+        ['ps', '-a', '--filter', `id=${cid}`, '--format', '{{.Status}}'],
+        q,
+      )
+    ).stdout.trim()
+    const img = await ctx.sys.podman(
       engine,
       ['ps', '-a', '--filter', `id=${cid}`, '--format', '{{.Image}}'],
       q,
     )
     if (img.status === 0 && img.stdout.trim()) image = img.stdout.trim()
   } else {
-    st = ctx.sys.systemctl(engine, ['is-active', svc], q).stdout.replace(/\n/g, '').trim()
+    st = (await ctx.sys.systemctl(engine, ['is-active', svc], q)).stdout.replace(/\n/g, '').trim()
     if (st === '' || st === 'inactive') st = 'stopped'
   }
   if (!st) st = 'unknown'
@@ -208,7 +217,7 @@ export function formatTable(rows) {
  * @param {string} appArg
  * @param {string[][]} rows
  */
-function appendAppPsRows(ctx, appArg, rows) {
+async function appendAppPsRows(ctx, appArg, rows) {
   const app = resolveAppName(appArg)
   const paths = resolveAppEngine(ctx, app)
   const dir = appDir(ctx, app)
@@ -220,7 +229,7 @@ function appendAppPsRows(ctx, appArg, rows) {
       ? join(paths.dest, unitInstallName(udir), basename(f))
       : join(paths.dest, basename(f))
     if (existsSync(installed)) {
-      rows.push(psUnitRow(ctx, paths.engine, installed))
+      rows.push(await psUnitRow(ctx, paths.engine, installed))
     } else {
       // Not installed yet — still show expected name from template.
       rows.push([paths.engine, containerName(f), 'not-installed', unitValue(f, 'Image') || '-'])
@@ -232,7 +241,7 @@ function appendAppPsRows(ctx, appArg, rows) {
  * @param {QuadletContext} ctx
  * @param {string | string[]} [appArg] one app, several, or omit for all installed
  */
-export function runPs(ctx, appArg) {
+export async function runPs(ctx, appArg) {
   /** @type {string[][]} */
   const rows = [['ENGINE', 'NAMES', 'STATUS', 'IMAGE']]
   const apps = Array.isArray(appArg)
@@ -245,10 +254,12 @@ export function runPs(ctx, appArg) {
     for (const eng of /** @type {const} */ (['rootless', 'rootful'])) {
       const paths = ctx.sys.paths(eng)
       if (eng === 'rootless') ctx.sys.ensureRootlessBus()
-      for (const f of installedContainers(paths.dest)) rows.push(psUnitRow(ctx, eng, f))
+      for (const f of installedContainers(paths.dest)) {
+        rows.push(await psUnitRow(ctx, eng, f))
+      }
     }
   } else {
-    for (const app of apps) appendAppPsRows(ctx, app, rows)
+    for (const app of apps) await appendAppPsRows(ctx, app, rows)
   }
   for (const line of formatTable(rows)) ctx.print(line)
 }

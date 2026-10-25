@@ -3,9 +3,9 @@ import { join } from 'node:path'
 
 import { makeTempDir, writeMinimalInstance } from '@qctl/shared/test-helpers'
 
-import { createContext } from '../quadlet/context.js'
-import { createFakeSystem } from '../quadlet/test/fake-system.js'
 import { appsSockPath } from './paths.js'
+import { createContext } from './quadlet/context.js'
+import { createFakeSystem } from './quadlet/test/fake-system.js'
 import { runSupervisorDaemon } from './run.js'
 import { describe, expect, test } from 'bun:test'
 

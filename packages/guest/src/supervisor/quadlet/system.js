@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { chownSync, statSync } from 'node:fs'
 
 import { die } from './errors.js'
+
 /** @import { StdioOptions } from 'node:child_process' */
 
 /** @typedef {'rootless' | 'rootful'} Engine */
@@ -51,8 +52,12 @@ import { die } from './errors.js'
  * @param {ExecOpts & { cwd?: string, env?: NodeJS.ProcessEnv }} [opts]
  * @returns {ExecResult}
  */
-export function execSync(cmd, args, opts = {}) {
-  const stdio = /** @type {StdioOptions} */ (
+/**
+ * @param {ExecOpts} opts
+ * @returns {StdioOptions}
+ */
+function stdioFor(opts) {
+  return /** @type {StdioOptions} */ (
     opts.capture
       ? [opts.input !== undefined ? 'pipe' : 'inherit', 'pipe', 'ignore']
       : [
@@ -61,8 +66,17 @@ export function execSync(cmd, args, opts = {}) {
           opts.ignoreStderr ? 'ignore' : 'inherit',
         ]
   )
+}
+
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {ExecOpts & { cwd?: string, env?: NodeJS.ProcessEnv }} [opts]
+ * @returns {ExecResult}
+ */
+export function execSync(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
-    stdio,
+    stdio: stdioFor(opts),
     input: opts.input,
     cwd: opts.cwd,
     env: opts.env,
@@ -230,15 +244,4 @@ export function tryEnsureRoot(userArgv, sys) {
     process.exit(r.status ?? 1)
   }
   return false
-}
-
-/**
- * Re-exec this qctl invocation via passwordless sudo when not root.
- * Returns normally only when already root; otherwise exits or dies.
- * @param {string[]} userArgv args after the binary (e.g. ["quadlet", "up"])
- * @param {System} sys
- */
-export function ensureRoot(userArgv, sys) {
-  if (tryEnsureRoot(userArgv, sys)) return
-  die(`need root — try: sudo ${selfCmd(userArgv).join(' ')}`)
 }

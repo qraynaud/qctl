@@ -51,7 +51,7 @@ export function wantedNetworkBasenames(s, engine) {
  * @param {UpSession} s
  * @param {Engine} engine
  */
-export function pruneOrphanNetworks(s, engine) {
+export async function pruneOrphanNetworks(s, engine) {
   const { ctx, dry } = s
   const paths = ctx.sys.paths(engine)
   if (!existsSync(paths.dest)) return
@@ -65,7 +65,7 @@ export function pruneOrphanNetworks(s, engine) {
       continue
     }
     ctx.log(`remove orphan network ${base} (${engine})`)
-    removeNetworkUnit(ctx, paths, base)
+    await removeNetworkUnit(ctx, paths, base)
     s.needReload = true
     noteEngine(s, engine)
   }
@@ -74,11 +74,11 @@ export function pruneOrphanNetworks(s, engine) {
 /**
  * @param {UpSession} s
  */
-export function pruneOrphansForFilter(s) {
+export async function pruneOrphansForFilter(s) {
   const { ctx, filtered, filterList } = s
   if (!filtered) {
-    pruneOrphanNetworks(s, 'rootless')
-    pruneOrphanNetworks(s, 'rootful')
+    await pruneOrphanNetworks(s, 'rootless')
+    await pruneOrphanNetworks(s, 'rootful')
     return
   }
   /** @type {Set<Engine>} */
@@ -88,11 +88,11 @@ export function pruneOrphansForFilter(s) {
     if (dir) engines.add(readEngine(dir))
   }
   if (engines.size === 0) {
-    pruneOrphanNetworks(s, 'rootless')
-    pruneOrphanNetworks(s, 'rootful')
+    await pruneOrphanNetworks(s, 'rootless')
+    await pruneOrphanNetworks(s, 'rootful')
     return
   }
-  for (const eng of engines) pruneOrphanNetworks(s, eng)
+  for (const eng of engines) await pruneOrphanNetworks(s, eng)
 }
 
 /**
@@ -143,7 +143,9 @@ export async function installSharedNetworks(s) {
       const renv = await loadNetworkRenderEnv(ctx, f)
       if (dry) {
         if (templateDiffers(ctx, f, dest, renv, paths.engine)) noteDirtyNetwork(s, base)
-        else if (existsSync(dest) && networkLiveStale(ctx, paths, dest)) noteDirtyNetwork(s, base)
+        else if (existsSync(dest) && (await networkLiveStale(ctx, paths, dest))) {
+          noteDirtyNetwork(s, base)
+        }
         continue
       }
       if (installIfChanged(ctx, paths, f, dest, renv)) {
@@ -151,14 +153,14 @@ export async function installSharedNetworks(s) {
         noteDirtyNetwork(s, base)
         s.needReload = true
         noteEngine(s, engine)
-      } else if (existsSync(dest) && networkLiveStale(ctx, paths, dest)) {
+      } else if (existsSync(dest) && (await networkLiveStale(ctx, paths, dest))) {
         ctx.log(`stale podman network vs ${dest} (${engine}) — will recreate`)
         noteDirtyNetwork(s, base)
         noteEngine(s, engine)
       }
       // Host macvlan shim — reconcile when the package ships it.
       try {
-        installNetworkHostMacvlan(ctx, paths, f, renv)
+        await installNetworkHostMacvlan(ctx, paths, f, renv)
       } catch (e) {
         ctx.log(`warning: host macvlan for ${base}: ${e instanceof Error ? e.message : String(e)}`)
       }
@@ -188,7 +190,7 @@ export function restartAppsUsingDirtyNetworks(s) {
  * Stop consumers, recreate dirty Podman networks from Quadlet units.
  * @param {UpSession} s
  */
-export function recreateDirtyNetworks(s) {
+export async function recreateDirtyNetworks(s) {
   const { ctx, markers, dirtyNetworks } = s
   if (dirtyNetworks.length === 0) return
   for (const m of markers) {
@@ -200,7 +202,7 @@ export function recreateDirtyNetworks(s) {
     if (engine === 'rootless') ctx.sys.ensureRootlessBus()
     for (const svc of appServiceNames(dir)) {
       ctx.log(`stop ${svc} (${engine}; network recreate)`)
-      ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
+      await ctx.sys.systemctl(engine, ['stop', svc], { ignoreStderr: true })
     }
   }
   for (const base of dirtyNetworks) {
@@ -209,7 +211,7 @@ export function recreateDirtyNetworks(s) {
     const eng = networkSharedEngine(f)
     const paths = ctx.sys.paths(eng)
     if (eng === 'rootless') ctx.sys.ensureRootlessBus()
-    if (!recreatePodmanNetwork(ctx, paths, base)) {
+    if (!(await recreatePodmanNetwork(ctx, paths, base))) {
       ctx.log(`warning: could not recreate ${base} (${eng})`)
     }
   }

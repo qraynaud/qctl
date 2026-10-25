@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runDown } from '../../quadlet/lifecycle.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'down <apps..>'
 export const describe = 'Stop and unregister apps (data stays)'
@@ -18,8 +17,5 @@ export function builder(yargs) {
 
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
-  const apps = argvApps(argv)
-  await runQuadletCommand((ctx) => {
-    for (const app of apps) runDown(ctx, app)
-  })
+  await callQuadlet({ op: 'down', apps: argvApps(argv) })
 }

@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { ensurePackageDependencies, findPackageRoot } from '@qctl/shared'
 
 import { tryReadOsConfig } from '../../os-config.js'
-import { resolveInstanceRoot } from '../../quadlet/context.js'
-import { detectQctlEnvFor } from '../../quadlet/env.js'
+import { resolveInstanceRoot } from '../../supervisor/quadlet/context.js'
+import { detectQctlEnvFor } from '../../supervisor/quadlet/env.js'
 
 /** @import { Argv } from 'yargs' */
 

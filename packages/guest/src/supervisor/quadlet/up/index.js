@@ -30,20 +30,20 @@ export async function runUp(ctx, opts = {}) {
   if (s.dry) {
     await planApps(s)
     restartAppsUsingDirtyNetworks(s)
-    pruneOrphansForFilter(s)
+    await pruneOrphansForFilter(s)
     if (s.dryActions === 0) ctx.print('nothing to do')
     return
   }
 
   await reconcileApps(s)
   if (s.markers.length > 0) restartAppsUsingDirtyNetworks(s)
-  pruneOrphansForFilter(s)
+  await pruneOrphansForFilter(s)
 
-  reloadDaemons(s)
+  await reloadDaemons(s)
   // Podman does not mutate an existing network when the Quadlet .network file
   // changes. Stop consumers, rm, start unit.
-  recreateDirtyNetworks(s)
-  const restartList = restartChangedApps(s)
-  startFilteredIfNeeded(s)
+  await recreateDirtyNetworks(s)
+  const restartList = await restartChangedApps(s)
+  await startFilteredIfNeeded(s)
   logUpDone(s, restartList)
 }

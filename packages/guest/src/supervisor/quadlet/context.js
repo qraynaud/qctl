@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 
 import { isInstanceRoot } from '@qctl/shared'
 
-import { tryReadOsConfig } from '../os-config.js'
+import { tryReadOsConfig } from '../../os-config.js'
 import { die } from './errors.js'
 import { createSystem } from './system.js'
 /** @import { OsConfig } from '@qctl/shared' */

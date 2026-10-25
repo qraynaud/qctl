@@ -72,12 +72,59 @@ export const watchRequestSchema = z.strictObject({
   params: appParamsSchema,
 })
 
+/** Quadlet ops on the admin socket (structured; not raw argv). */
+export const QUADLET_OP = Object.freeze({
+  UP: 'up',
+  DOWN: 'down',
+  ENABLE: 'enable',
+  START: 'start',
+  STOP: 'stop',
+  RESTART: 'restart',
+  PS: 'ps',
+})
+
+/** @typedef {typeof QUADLET_OP[keyof typeof QUADLET_OP]} QuadletOp */
+
+const appsRequired = nonEmpty.array().min(1)
+const appsOptional = nonEmpty.array().optional()
+
+export const quadletParamsSchema = z.discriminatedUnion('op', [
+  z.strictObject({
+    op: z.literal(QUADLET_OP.UP),
+    apps: appsOptional,
+    dryRun: z.boolean().optional(),
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.DOWN),
+    apps: appsRequired,
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.ENABLE),
+    apps: appsRequired,
+    install: z.boolean().optional(),
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.START),
+    apps: appsRequired,
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.STOP),
+    apps: appsRequired,
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.RESTART),
+    apps: appsRequired,
+  }),
+  z.strictObject({
+    op: z.literal(QUADLET_OP.PS),
+    apps: appsOptional,
+  }),
+])
+
 export const quadletRequestSchema = z.strictObject({
   id: requestIdSchema,
   method: z.literal(SUPERVISOR_METHOD.QUADLET),
-  params: z.strictObject({
-    argv: nonEmpty.array(),
-  }),
+  params: quadletParamsSchema,
 })
 
 export const supervisorRequestSchema = z.discriminatedUnion('method', [
@@ -117,9 +164,8 @@ export const watchResultSchema = z.strictObject({
 })
 
 export const quadletResultSchema = z.strictObject({
-  stub: z.literal(true),
   method: z.literal(SUPERVISOR_METHOD.QUADLET),
-  argv: nonEmpty.array(),
+  exitCode: z.number().int(),
 })
 
 export const supervisorResultSchema = z.discriminatedUnion('method', [
@@ -147,11 +193,22 @@ export const supervisorResponseSchema = z.discriminatedUnion('ok', [
   supervisorErrSchema,
 ])
 
+/**
+ * Intermediate NDJSON frame while a long RPC (quadlet) streams stdio.
+ * Distinct from {@link supervisorOkSchema} (no `ok` / `result`).
+ */
+export const supervisorStreamSchema = z.strictObject({
+  id: requestIdSchema,
+  stream: z.enum(['stdout', 'stderr']),
+  data: z.string(),
+})
+
 /** @typedef {z.infer<typeof supervisorRequestSchema>} SupervisorRequest */
 /** @typedef {z.infer<typeof ensureRequestSchema>} EnsureRequest */
 /** @typedef {z.infer<typeof releaseRequestSchema>} ReleaseRequest */
 /** @typedef {z.infer<typeof statusRequestSchema>} StatusRequest */
 /** @typedef {z.infer<typeof watchRequestSchema>} WatchRequest */
+/** @typedef {z.infer<typeof quadletParamsSchema>} QuadletParams */
 /** @typedef {z.infer<typeof quadletRequestSchema>} QuadletRequest */
 /** @typedef {z.infer<typeof ensureResultSchema>} EnsureResult */
 /** @typedef {z.infer<typeof releaseResultSchema>} ReleaseResult */
@@ -162,6 +219,7 @@ export const supervisorResponseSchema = z.discriminatedUnion('ok', [
 /** @typedef {z.infer<typeof supervisorResponseSchema>} SupervisorResponse */
 /** @typedef {z.infer<typeof supervisorOkSchema>} SupervisorOk */
 /** @typedef {z.infer<typeof supervisorErrSchema>} SupervisorErr */
+/** @typedef {z.infer<typeof supervisorStreamSchema>} SupervisorStream */
 
 /**
  * Wire JSON string ↔ domain schema (shared client/server).
@@ -189,6 +247,7 @@ export function jsonCodec(schema) {
 
 export const supervisorRequestCodec = jsonCodec(supervisorRequestSchema)
 export const supervisorResponseCodec = jsonCodec(supervisorResponseSchema)
+export const supervisorStreamCodec = jsonCodec(supervisorStreamSchema)
 
 /**
  * @param {string} method
@@ -240,4 +299,32 @@ export function decodeResponseLine(line) {
  */
 export function encodeResponseLine(res) {
   return `${supervisorResponseCodec.encode(res)}\n`
+}
+
+/**
+ * Encode a stdio stream frame as one NDJSON line (includes trailing newline).
+ * @param {SupervisorStream} frame
+ * @returns {string}
+ */
+export function encodeStreamLine(frame) {
+  return `${supervisorStreamCodec.encode(frame)}\n`
+}
+
+/**
+ * Decode a stream frame or final response (trailing newline optional).
+ * @param {string} line
+ * @returns {SupervisorStream | SupervisorResponse}
+ */
+export function decodeWireLine(line) {
+  const raw = line.replace(/\n$/, '')
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : String(err))
+  }
+  if (parsed && typeof parsed === 'object' && 'stream' in parsed) {
+    return supervisorStreamSchema.parse(parsed)
+  }
+  return supervisorResponseSchema.parse(parsed)
 }

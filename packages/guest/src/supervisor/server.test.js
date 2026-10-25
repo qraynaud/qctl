@@ -2,7 +2,11 @@ import { join } from 'node:path'
 
 import { makeTempDir } from '@qctl/shared/test-helpers'
 
-import { SupervisorUnavailableError, supervisorRequest } from './client.js'
+import {
+  SupervisorUnavailableError,
+  supervisorQuadletRequest,
+  supervisorRequest,
+} from './client.js'
 import { startSupervisorServer } from './server.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
@@ -76,7 +80,7 @@ describe('supervisor server + client', () => {
     const denied = await supervisorRequest(server.appsPath, {
       id: '2',
       method: 'quadlet',
-      params: { argv: ['ps'] },
+      params: { op: 'ps' },
     })
     expect(denied.ok).toBe(false)
     if (!denied.ok) expect(denied.error).toMatch(/not allowed on apps/)
@@ -94,7 +98,7 @@ describe('supervisor server + client', () => {
 
     const ok = await supervisorRequest(server.adminPath, {
       method: 'quadlet',
-      params: { argv: ['quadlet', 'ps'] },
+      params: { op: 'ps' },
     })
     expect(ok.ok).toBe(true)
 
@@ -157,5 +161,40 @@ describe('supervisor server + client', () => {
       params: { app: 'web' },
     })
     expect(ok.ok).toBe(true)
+  })
+
+  test('quadlet streams stdio then exitCode on admin sock', async () => {
+    const runDir = join(makeTempDir(), 'run')
+    const server = await startSupervisorServer({
+      osConfig: os(),
+      runDir,
+      chownSockets: false,
+      getPeerCred: fixedPeer({ pid: 1, uid: 1000, gid: 1000 }),
+      handlers: {
+        quadlet: async (_req, ctx) => {
+          ctx.writeStdout?.('out-line\n')
+          ctx.writeStderr?.('err-line\n')
+          return { method: 'quadlet', exitCode: 7 }
+        },
+      },
+    })
+    servers.push(server)
+
+    /** @type {string[]} */
+    const out = []
+    /** @type {string[]} */
+    const err = []
+    const res = await supervisorQuadletRequest(
+      server.adminPath,
+      { method: 'quadlet', params: { op: 'ps' } },
+      {
+        onStdout: (d) => out.push(d),
+        onStderr: (d) => err.push(d),
+      },
+    )
+    expect(out).toEqual(['out-line\n'])
+    expect(err).toEqual(['err-line\n'])
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.result).toEqual({ method: 'quadlet', exitCode: 7 })
   })
 })

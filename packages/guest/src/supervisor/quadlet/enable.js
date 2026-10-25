@@ -93,12 +93,12 @@ export async function runEnable(ctx, opts) {
     const needRecreate =
       !existsSync(dest)
       || templateDiffers(ctx, net, dest, nenv, paths.engine)
-      || networkLiveStale(ctx, paths, dest)
+      || (await networkLiveStale(ctx, paths, dest))
     renderToFile(ctx, paths, net, dest, nenv)
     ctx.print(`${engine}: rendered ${dest} (shared)`)
     if (needRecreate) recreateNets.push(basename(net))
     try {
-      if (installNetworkHostMacvlan(ctx, paths, net, nenv)) {
+      if (await installNetworkHostMacvlan(ctx, paths, net, nenv)) {
         ctx.print(`${engine}: host macvlan for ${basename(net, '.network')}`)
       }
     } catch {
@@ -148,10 +148,10 @@ export async function runEnable(ctx, opts) {
     || sysunits.length > 0
     || sharedNets
   ) {
-    ctx.sys.systemctl(engine, ['daemon-reload'])
+    await ctx.sys.systemctl(engine, ['daemon-reload'])
   }
   for (const base of recreateNets) {
-    if (recreatePodmanNetwork(ctx, paths, base)) {
+    if (await recreatePodmanNetwork(ctx, paths, base)) {
       ctx.print(`${engine}: recreated podman network ${base}`)
     }
   }

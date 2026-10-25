@@ -1,7 +1,7 @@
 import * as shared from '@qctl/shared'
 import { makeTempDir, removeTempDir, writeFile } from '@qctl/shared/test-helpers'
 
-import * as contextMod from '../../quadlet/context.js'
+import * as contextMod from '../../supervisor/quadlet/context.js'
 import * as mod from './ensure.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 

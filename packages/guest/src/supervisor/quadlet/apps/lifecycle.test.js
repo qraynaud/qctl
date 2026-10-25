@@ -9,25 +9,25 @@ import { markEnabled } from './markers.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('app lifecycle helpers', () => {
-  test('appSystemctl starts each service; unknown / no units die', () => {
+  test('appSystemctl starts each service; unknown / no units die', async () => {
     const fx = makeQuadletInstance()
     try {
       const { ctx, sys, out } = makeContext(fx)
       const paths = sys.paths('rootless')
-      appSystemctl(ctx, 'start', 'proxy', paths)
+      await appSystemctl(ctx, 'start', 'proxy', paths)
       expect(out).toContain('quadlet: start proxy.service (rootless)')
       expect(sys.lines()).toContain('systemctl:rootless start proxy.service')
 
-      expect(() => appSystemctl(ctx, 'start', 'ghost', paths)).toThrow(QuadletError)
+      await expect(appSystemctl(ctx, 'start', 'ghost', paths)).rejects.toThrow(QuadletError)
       mkdirSync(join(fx.root, 'applications/empty'), { recursive: true })
       writeFileSync(join(fx.root, 'applications/empty/app.yaml'), 'engine: rootless\n')
-      expect(() => appSystemctl(ctx, 'start', 'empty', paths)).toThrow(/no startable units/)
+      await expect(appSystemctl(ctx, 'start', 'empty', paths)).rejects.toThrow(/no startable units/)
     } finally {
       cleanupQuadletFixture(fx)
     }
   })
 
-  test('stopAndRemoveApp stops units, removes install tree + marker', () => {
+  test('stopAndRemoveApp stops units, removes install tree + marker', async () => {
     const fx = makeQuadletInstance()
     try {
       const { ctx, sys } = makeContext(fx)
@@ -37,7 +37,7 @@ describe('app lifecycle helpers', () => {
       writeFileSync(join(paths.dest, 'proxy.network'), 'n\n')
       markEnabled(ctx, 'proxy', paths)
 
-      stopAndRemoveApp(ctx, 'proxy', paths)
+      await stopAndRemoveApp(ctx, 'proxy', paths)
       expect(sys.lines()).toContain('systemctl:rootless stop proxy.service')
       expect(sys.lines()).toContain('systemctl:rootless disable proxy.service')
       expect(existsSync(join(paths.dest, 'proxy'))).toBe(false)

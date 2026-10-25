@@ -1,7 +1,6 @@
-import { argvApps, runQuadletCommand } from '../../quadlet/cli.js'
-import { runUp } from '../../quadlet/up/index.js'
+import { argvApps, callQuadlet } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { QuadletArgv } from '../../quadlet/cli.js' */
+/** @import { QuadletArgv } from './rpc.js' */
 
 export const command = 'up [apps..]'
 export const describe = 'Reconcile apps with the repo (compose up–ish)'
@@ -25,10 +24,9 @@ export function builder(yargs) {
 /** @param {QuadletArgv} argv */
 export async function handler(argv) {
   const apps = argvApps(argv)
-  await runQuadletCommand((ctx) =>
-    runUp(ctx, {
-      dryRun: Boolean(argv.dryRun),
-      apps: apps.length ? apps : undefined,
-    }),
-  )
+  await callQuadlet({
+    op: 'up',
+    dryRun: Boolean(argv.dryRun),
+    ...(apps.length ? { apps } : {}),
+  })
 }

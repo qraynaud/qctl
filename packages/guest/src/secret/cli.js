@@ -7,8 +7,8 @@
  */
 import { hideBin } from 'yargs/helpers'
 
-import { resolveInstanceRoot } from '../quadlet/context.js'
-import { createSystem, tryEnsureRoot } from '../quadlet/system.js'
+import { resolveInstanceRoot } from '../supervisor/quadlet/context.js'
+import { createSystem, tryEnsureRoot } from '../supervisor/quadlet/system.js'
 
 /**
  * @typedef {object} SecretArgv
