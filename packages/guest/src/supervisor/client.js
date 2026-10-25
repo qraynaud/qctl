@@ -26,7 +26,8 @@ export class SupervisorUnavailableError extends Error {
  * Send one request and wait for one response line.
  * @param {string} sockPath
  * @param {SupervisorRequest} req
- * @param {{ timeoutMs?: number }} [opts]
+ * @param {{ timeoutMs?: number, signal?: AbortSignal }} [opts]
+ *   `timeoutMs: 0` disables the client timeout (long `watch` RPCs).
  * @returns {Promise<SupervisorResponse>}
  */
 export function supervisorRequest(sockPath, req, opts = {}) {
@@ -41,6 +42,30 @@ export function supervisorRequest(sockPath, req, opts = {}) {
     sock = net.connect(sockPath)
     sock.setEncoding('utf8')
     let buf = ''
+    let settled = false
+    /**
+     * @param {(v: SupervisorResponse) => void} ok
+     * @param {(e: Error) => void} bad
+     */
+    const settle = (ok, bad) => ({
+      /**
+       * @param {SupervisorResponse} v
+       */
+      resolve(v) {
+        if (settled) return
+        settled = true
+        ok(v)
+      },
+      /**
+       * @param {Error} e
+       */
+      reject(e) {
+        if (settled) return
+        settled = true
+        bad(e)
+      },
+    })
+    const s = settle(resolve, reject)
 
     sock.on('connect', () => {
       sock?.write(line)
@@ -51,36 +76,64 @@ export function supervisorRequest(sockPath, req, opts = {}) {
       if (nl < 0) return
       const one = buf.slice(0, nl)
       try {
-        resolve(decodeResponseLine(one))
+        s.resolve(decodeResponseLine(one))
       } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)))
+        s.reject(err instanceof Error ? err : new Error(String(err)))
       }
     })
     sock.on('error', (err) => {
-      const code = /** @type {NodeJS.ErrnoException} */ (err).code
-      if (code === 'ECONNREFUSED' || code === 'ENOENT') {
-        reject(new SupervisorUnavailableError(sockPath, err))
+      if (ac.signal.aborted || opts.signal?.aborted) {
+        s.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
         return
       }
-      reject(err)
+      const code = /** @type {NodeJS.ErrnoException} */ (err).code
+      if (code === 'ECONNREFUSED' || code === 'ENOENT') {
+        s.reject(new SupervisorUnavailableError(sockPath, err))
+        return
+      }
+      s.reject(err)
+    })
+    sock.on('close', () => {
+      if (settled) return
+      if (ac.signal.aborted || opts.signal?.aborted) {
+        s.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        return
+      }
+      s.reject(new Error(`qctl-supervisor: connection closed before response (${sockPath})`))
     })
   })
 
-  const timeout = new Promise((_resolve, reject) => {
-    const t = setTimeout(() => {
-      reject(new Error(`qctl-supervisor: timeout waiting for response (${sockPath})`))
-    }, timeoutMs)
-    ac.signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(t)
-      },
-      { once: true },
-    )
-  })
+  /** @type {Promise<SupervisorResponse>} */
+  let raced = once
+  if (timeoutMs > 0) {
+    const timeout = new Promise((_resolve, reject) => {
+      const t = setTimeout(() => {
+        reject(new Error(`qctl-supervisor: timeout waiting for response (${sockPath})`))
+      }, timeoutMs)
+      ac.signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(t)
+        },
+        { once: true },
+      )
+    })
+    raced = Promise.race([once, timeout])
+  }
 
-  return Promise.race([once, timeout]).finally(() => {
+  const onAbort = () => {
+    try {
+      sock?.destroy()
+    } catch {
+      // ignore
+    }
+  }
+  opts.signal?.addEventListener('abort', onAbort, { once: true })
+  if (opts.signal?.aborted) onAbort()
+
+  return raced.finally(() => {
     ac.abort()
+    opts.signal?.removeEventListener('abort', onAbort)
     try {
       sock?.destroy()
     } catch {

@@ -9,6 +9,7 @@ describe('guest commands registry', () => {
       '_internal_stage <name>',
       '_internal_plugins',
       '_internal_supervisor',
+      '_internal_app_proxy <app>',
       'quadlet',
       'secret',
     ])
@@ -29,6 +30,7 @@ describe('guest commands registry', () => {
     expect(byCmd._internal_stage?.internal).toBe(true)
     expect(byCmd._internal_plugins?.internal).toBe(true)
     expect(byCmd._internal_supervisor?.internal).toBe(true)
+    expect(byCmd._internal_app_proxy?.internal).toBe(true)
     expect(byCmd.quadlet?.internal).toBe(false)
     expect(byCmd.secret?.internal).toBe(false)
   })

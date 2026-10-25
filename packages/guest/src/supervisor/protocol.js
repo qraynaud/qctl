@@ -88,29 +88,32 @@ export const supervisorRequestSchema = z.discriminatedUnion('method', [
   quadletRequestSchema,
 ])
 
-/** Stub results for this slice; real ensure/systemctl shapes replace these later. */
 export const ensureResultSchema = z.strictObject({
-  stub: z.literal(true),
   method: z.literal(SUPERVISOR_METHOD.ENSURE),
   app: nonEmpty,
+  refs: z.number().int().positive(),
+  engine: z.enum(['rootless', 'rootful']),
+  started: z.boolean(),
 })
 
 export const releaseResultSchema = z.strictObject({
-  stub: z.literal(true),
   method: z.literal(SUPERVISOR_METHOD.RELEASE),
   app: nonEmpty,
+  refs: z.number().int().nonnegative(),
+  stopped: z.boolean(),
 })
 
 export const statusResultSchema = z.strictObject({
-  stub: z.literal(true),
   method: z.literal(SUPERVISOR_METHOD.STATUS),
   app: nonEmpty,
+  ready: z.boolean(),
+  failed: z.boolean(),
 })
 
 export const watchResultSchema = z.strictObject({
-  stub: z.literal(true),
   method: z.literal(SUPERVISOR_METHOD.WATCH),
   app: nonEmpty,
+  reason: z.enum(['cleared', 'failed']),
 })
 
 export const quadletResultSchema = z.strictObject({

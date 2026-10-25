@@ -1,19 +1,24 @@
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { makeTempDir } from '@qctl/shared/test-helpers'
+import { makeTempDir, writeMinimalInstance } from '@qctl/shared/test-helpers'
 
+import { createContext } from '../quadlet/context.js'
+import { createFakeSystem } from '../quadlet/test/fake-system.js'
 import { appsSockPath } from './paths.js'
 import { runSupervisorDaemon } from './run.js'
 import { describe, expect, test } from 'bun:test'
 
 /** @import { OsConfig } from '@qctl/shared' */
 
-/** @returns {OsConfig} */
-function sampleOs() {
+/**
+ * @param {string} root
+ * @returns {OsConfig}
+ */
+function sampleOs(root) {
   return {
     env: 'dev',
-    root: '/tank/rocky',
+    root,
     repo: { vcs: 'hg' },
     quadletUser: 'apps',
     apps: {
@@ -32,16 +37,27 @@ function sampleOs() {
 describe('runSupervisorDaemon', () => {
   test('starts sockets then shuts down on AbortSignal', async () => {
     const dir = makeTempDir()
+    const root = join(dir, 'instance')
+    writeMinimalInstance(root, { withEnvRefs: false, withSchema: false, withOverlay: false })
     const runDir = join(dir, 'run')
     const osPath = join(dir, 'config.json')
-    writeFileSync(osPath, `${JSON.stringify(sampleOs(), null, 2)}\n`)
+    const osConfig = sampleOs(root)
+    writeFileSync(osPath, `${JSON.stringify(osConfig, null, 2)}\n`)
     /** @type {string[]} */
     const logs = []
     const ac = new AbortController()
 
+    const ctx = createContext({
+      root,
+      osConfig,
+      sys: createFakeSystem({ dir: join(dir, 'sys') }),
+      log: () => {},
+    })
+
     const done = runSupervisorDaemon({
       runDir,
       osConfigPath: osPath,
+      ctx,
       log: (l) => logs.push(l),
       signal: ac.signal,
       exitProcess: false,

@@ -63,7 +63,15 @@ describe('supervisor server + client', () => {
       params: { app: 'web' },
     })
     expect(ok.ok).toBe(true)
-    if (ok.ok) expect(ok.result).toMatchObject({ stub: true, method: 'ensure', app: 'web' })
+    if (ok.ok) {
+      expect(ok.result).toMatchObject({
+        method: 'ensure',
+        app: 'web',
+        refs: 1,
+        engine: 'rootful',
+        started: false,
+      })
+    }
 
     const denied = await supervisorRequest(server.appsPath, {
       id: '2',

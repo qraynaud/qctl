@@ -9,7 +9,7 @@ import { authorizeRpc } from './acl.js'
 import { adminSockPath, appsSockPath } from './paths.js'
 import { getPeerCred } from './peercred.js'
 import { decodeRequestLine, encodeResponseLine } from './protocol.js'
-import { ensureRunDir } from './stamps.js'
+import { ensureRunDir, isAppFailed, isAppReady, watchAppUntilNotReady } from './stamps.js'
 
 /** @import { Socket } from 'node:net' */
 /** @import { OsConfig } from '@qctl/shared' */
@@ -72,15 +72,36 @@ import { ensureRunDir } from './stamps.js'
  */
 
 /**
- * Default stub handlers for this slice (real ensure/systemctl comes later).
+ * Fallback handlers when no AppHolds wired (tests): stamp status/watch only;
+ * ensure/release are no-ops that do not touch systemd.
+ * @param {string} runDir
  * @returns {SupervisorHandlers}
  */
-export function stubHandlers() {
+export function stubHandlers(runDir) {
   return {
-    ensure: (req) => ({ stub: true, method: 'ensure', app: req.params.app }),
-    release: (req) => ({ stub: true, method: 'release', app: req.params.app }),
-    status: (req) => ({ stub: true, method: 'status', app: req.params.app }),
-    watch: (req) => ({ stub: true, method: 'watch', app: req.params.app }),
+    ensure: (req) => ({
+      method: 'ensure',
+      app: req.params.app,
+      refs: 1,
+      engine: 'rootful',
+      started: false,
+    }),
+    release: (req) => ({
+      method: 'release',
+      app: req.params.app,
+      refs: 0,
+      stopped: false,
+    }),
+    status: (req) => ({
+      method: 'status',
+      app: req.params.app,
+      ready: isAppReady(req.params.app, runDir),
+      failed: isAppFailed(req.params.app, runDir),
+    }),
+    watch: async (req) => {
+      const reason = await watchAppUntilNotReady(req.params.app, { runDir })
+      return { method: 'watch', app: req.params.app, reason }
+    },
     quadlet: (req) => ({ stub: true, method: 'quadlet', argv: req.params.argv }),
   }
 }
@@ -144,8 +165,8 @@ async function serveConnection(kind, socket, peer, osConfig, handlers) {
 export async function startSupervisorServer(opts) {
   const log = opts.log ?? (() => {})
   const peerCredFn = opts.getPeerCred ?? getPeerCred
-  const handlers = { ...stubHandlers(), ...opts.handlers }
   const runDir = opts.runDir
+  const handlers = { ...stubHandlers(runDir), ...opts.handlers }
   const appsPath = appsSockPath(runDir)
   const adminPath = adminSockPath(runDir)
 
