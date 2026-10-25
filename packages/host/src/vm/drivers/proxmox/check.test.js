@@ -4,7 +4,7 @@ import { check } from './check.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 /** @import { LoadedProvision } from '../../../lib/load-config-types.js' */
-/** @import { VmArgv } from '../../types.js' */
+/** @import { VmContext } from '../../driver-contract.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
@@ -45,10 +45,14 @@ describe('proxmox check', () => {
     spyOn(console, 'error').mockImplementation(() => {})
 
     await check(
-      /** @type {VmArgv} */ ({
-        env: 'dev',
-        target: 'proxmox',
-      }),
+      /** @type {VmContext} */ (
+        /** @type {never} */ ({
+          env: 'dev',
+          name: 'rocky-dev',
+          timeout: 120,
+          dryRun: false,
+        })
+      ),
     )
     expect(process.exitCode).toBe(1)
   })

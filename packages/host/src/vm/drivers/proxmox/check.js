@@ -9,8 +9,8 @@ import { createCheckReport } from '../../libs/check-report.js'
 import { createProxmoxClient } from '../../libs/proxmox/client.js'
 import { formatNetsLabel, tryLoadProxmoxConfig } from '../../libs/proxmox/config.js'
 
+/** @import { VmContext } from '../../driver-contract.js' */
 /** @import { ProxmoxConfig } from '../../libs/proxmox/types.js' */
-/** @import { VmArgv } from '../../types.js' */
 
 /**
  * @typedef {object} PveStorageEntry
@@ -42,17 +42,17 @@ function contentTypes(entry) {
 }
 
 /**
- * @param {VmArgv} argv
+ * @param {VmContext} ctx
  * @returns {Promise<boolean>}
  */
-export async function check(argv) {
+export async function check(ctx) {
   const report = createCheckReport('proxmox')
-  const envName = String(argv.env || 'dev')
+  const envName = String(ctx.env || 'dev')
 
   report.section('Provision / API config')
   const { config, errors, usable } = await tryLoadProxmoxConfig({
     env: envName,
-    profile: /** @type {string} */ (argv.profile),
+    profile: /** @type {string} */ (ctx.profile),
   })
   for (const e of errors) report.fail(e)
   if (config) {
@@ -70,7 +70,7 @@ export async function check(argv) {
   const loaded = await loadEnvProvisionSafe({
     env: envName,
     target: 'proxmox',
-    profile: /** @type {string} */ (argv.profile),
+    profile: /** @type {string} */ (ctx.profile),
   })
   if (!loaded.ok) {
     report.fail(loaded.error)
@@ -99,7 +99,7 @@ export async function check(argv) {
   }
 
   const production =
-    argv.production
+    ctx.production
     ?? (loaded.ok
       ? isProductionEnv(envName, loaded.provision.data.qctl?.environments ?? BUILTIN_ENVIRONMENTS)
       : false)

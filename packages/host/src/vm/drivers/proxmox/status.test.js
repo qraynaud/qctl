@@ -1,29 +1,33 @@
 import * as shared from './shared.js'
-import { status } from './status.js'
+import { getStatus } from './status.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv } from '../../types.js' */
+/** @import { VmContext } from '../../driver-contract.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
   shared.clientFrom.mockRestore?.()
-  // @ts-expect-error restore
-  console.log.mockRestore?.()
 })
 
-describe('proxmox status', () => {
-  test('dry-run logs and returns', async () => {
-    const log = spyOn(console, 'log').mockImplementation(() => {})
-    await status(
-      /** @type {VmArgv} */ ({
-        name: 'rocky-dev',
-        dryRun: true,
-      }),
-    )
-    expect(String(log.mock.calls[0]?.[0])).toMatch(/would query Proxmox/)
+/** @param {Partial<VmContext>} patch */
+function ctx(patch) {
+  return /** @type {VmContext} */ ({
+    name: 'rocky-dev',
+    env: 'dev',
+    timeout: 120,
+    dryRun: false,
+    ...patch,
+  })
+}
+
+describe('proxmox getStatus', () => {
+  test('dry-run returns summary without API', async () => {
+    const snap = await getStatus(ctx({ dryRun: true }))
+    expect(snap.summary).toMatch(/would query Proxmox/)
+    expect(snap.hints?.title).toMatch(/Proxmox/)
   })
 
-  test('prints status when VM found', async () => {
+  test('returns fields when VM found', async () => {
     spyOn(shared, 'clientFrom').mockResolvedValue(
       /** @type {Awaited<ReturnType<typeof shared.clientFrom>>} */ (
         /** @type {never} */ ({
@@ -38,16 +42,8 @@ describe('proxmox status', () => {
         })
       ),
     )
-    const log = spyOn(console, 'log').mockImplementation(() => {})
-    await status(
-      /** @type {VmArgv} */ ({
-        name: 'rocky-dev',
-        dryRun: false,
-        env: 'dev',
-      }),
-    )
-    const joined = log.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(joined).toMatch(/vmid=101/)
-    expect(joined).toMatch(/running/)
+    const snap = await getStatus(ctx({}))
+    expect(snap.summary).toMatch(/vmid=101/)
+    expect(snap.fields?.status).toBe('running')
   })
 })

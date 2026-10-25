@@ -125,4 +125,11 @@ describe('stripOppositeTarget', () => {
     stripOppositeTarget(data, 'proxmox')
     expect(data).toEqual({ proxmox: { node: 'pve' } })
   })
+
+  test('strips custom knownTargets', () => {
+    /** @type {YamlMapping} */
+    const data = { lab: { slot: 1 }, workstation: { cpu: 2 }, disks: {} }
+    stripOppositeTarget(data, 'lab', ['lab', 'workstation'])
+    expect(data).toEqual({ lab: { slot: 1 }, disks: {} })
+  })
 })

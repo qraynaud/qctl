@@ -2,9 +2,6 @@
  * Race guest poweroff wait against serial fatal patterns (init-tank).
  * Shared by local and Proxmox drivers.
  */
-import { chalk } from 'zx'
-
-import { errMessage } from '../../lib/util.js'
 import { isAbortError } from './wait.js'
 /** @import { SerialFollow } from './console.js' */
 
@@ -86,26 +83,4 @@ export async function waitForSuccessOrGuestFatal(opts) {
   } finally {
     signal?.removeEventListener('abort', onParentAbort)
   }
-}
-
-/**
- * @typedef {object} GuestFatalLeaveHints
- * @property {string} leaveHint
- * @property {string} destroyHint
- */
-
-/**
- * Stop serial follow (if any) and print the standard “left running for diagnosis” banner.
- * @param {SerialFollow | null} consoleFollow
- * @param {Error | string} err
- * @param {GuestFatalLeaveHints} hints
- * @returns {Promise<void>}
- */
-export async function reportGuestFatalLeaveRunning(consoleFollow, err, hints) {
-  if (consoleFollow) await consoleFollow.stop()
-  console.error(chalk.red(`vm: guest failure detected on serial — stopping wait`))
-  console.error(chalk.red(`  ${errMessage(err)}`))
-  console.error(chalk.yellow(hints.leaveHint))
-  console.error(chalk.dim(hints.destroyHint))
-  process.exitCode = 1
 }

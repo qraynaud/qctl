@@ -6,10 +6,11 @@ import {
   refineQctlHostMeta,
 } from '@qctl/shared'
 
+import { getDriverModule, listDriverIds } from '../../vm/drivers/registry.js'
 import { disksSchema } from './disks.js'
 import { filesSchema } from './files.js'
 import { registriesSchema } from './first-boot.js'
-import { alignProxmoxNets, networkingSchema } from './networking.js'
+import { networkingSchema } from './networking.js'
 import { packagesFieldSchema } from './packages.js'
 import { proxmoxSchema, workstationSchema } from './targets.js'
 import { usersSchema } from './users.js'
@@ -19,6 +20,10 @@ import {
   optionalTrimmedText,
   trimmedText,
 } from './zod-utils.js'
+
+// Builtin drivers self-register (overlay schemas + refineProvision).
+import '../../vm/drivers/proxmox.js'
+import '../../vm/drivers/workstation.js'
 
 /** @import { YamlMapping } from '@qctl/shared' */
 
@@ -34,11 +39,47 @@ export const qctlSchema = qctlHostMetaFieldsSchema
   .transform(enrichQctlHostMetaFields)
   .superRefine(refineQctlHostMeta)
 
-/** Strict provision document shape (before cross-field refines). */
+/**
+ * Overlay field from the registered driver (runtime), typed via the schema param.
+ * @template {z.ZodType} S
+ * @param {string} id
+ * @param {S} schema  same object the driver registers as provisionOverlaySchema
+ * @returns {z.ZodDefault<z.ZodNullable<S>>}
+ */
+function overlayField(id, schema) {
+  const mod = getDriverModule(id)
+  if (mod?.provisionOverlaySchema && mod.provisionOverlaySchema !== schema) {
+    throw new Error(`provision parse: driver ${id} provisionOverlaySchema !== typed schema export`)
+  }
+  // Prefer registered module schema when present; typed export covers empty registry
+  // (tests that clear drivers after this module was first evaluated).
+  const registered = /** @type {S} */ (mod?.provisionOverlaySchema ?? schema)
+  return registered.nullable().default(null)
+}
+
+/**
+ * Extra registered drivers beyond the builtin keys typed on {@link ProvisionBody}.
+ * @returns {Record<string, z.ZodTypeAny>}
+ */
+function extraDriverOverlayFields() {
+  /** @type {Record<string, z.ZodTypeAny>} */
+  const fields = {}
+  for (const id of listDriverIds()) {
+    const key = String(id)
+    if (key === 'workstation' || key === 'proxmox') continue
+    const mod = getDriverModule(id)
+    if (!mod?.provisionOverlaySchema) continue
+    fields[key] = mod.provisionOverlaySchema.nullable().default(null)
+  }
+  return fields
+}
+
+/** Strict provision document shape (before driver refineProvision). */
 const provisionBodySchema = z.strictObject({
   qctl: qctlSchema,
   networking: networkingSchema,
-  workstation: workstationSchema.nullable().default(null),
+  /** Libvirt target overlay — schema from workstation driver module. */
+  workstation: overlayField('workstation', workstationSchema),
   /** Admin SSH pubkeys + optional host-key tarball for seed. */
   ssh: z
     .strictObject({
@@ -66,7 +107,9 @@ const provisionBodySchema = z.strictObject({
       deploy_key: optionalCredentialBytes,
     })
     .optional(),
-  proxmox: proxmoxSchema.nullable().default(null),
+  /** PVE target overlay — schema from proxmox driver module. */
+  proxmox: overlayField('proxmox', proxmoxSchema),
+  ...extraDriverOverlayFields(),
   /**
    * Extra packages by install source (cloud-init after the platform baseline).
    * Keys are sources: `distro` (dnf/apt), `pipx`, `http` (URL / zip), …
@@ -81,47 +124,12 @@ const provisionBodySchema = z.strictObject({
 
 /** @typedef {z.infer<typeof provisionBodySchema>} ProvisionBody */
 
-/** @param {ProvisionBody} data */
-function proxmoxNetNamesMatchUplinks(data) {
-  if (!data.proxmox?.net) return true
-  const uplinkNames = new Set(Object.keys(data.networking.uplinks))
-  return Object.keys(data.proxmox.net).every((name) => uplinkNames.has(name))
-}
-
-/** @param {ProvisionBody} data */
-function everyUplinkHasProxmoxNet(data) {
-  if (!data.proxmox?.net) return true
-  const netNames = new Set(Object.keys(data.proxmox.net))
-  return Object.keys(data.networking.uplinks).every((name) => netNames.has(name))
-}
-
-/** @param {ProvisionBody} data */
-function vlansCarriedOnProxmoxNets(data) {
-  if (!data.proxmox) return true
-  const nets = alignProxmoxNets(data.networking.uplinks, data.proxmox.net)
-  const byUplink = new Map(nets.map((n) => [n.name, n]))
-  return Object.values(data.networking.vlans).every((v) => {
-    if (!v.link) return true
-    const net = byUplink.get(v.link)
-    if (!net) return true
-    return (net.vlan && net.vlan === v.id) || (net.trunks?.includes(v.id) ?? false)
-  })
-}
-
-/** Strict provision document. */
-export const provisionSchema = provisionBodySchema
-  .refine(proxmoxNetNamesMatchUplinks, {
-    message: 'each proxmox.net key must match an networking.uplinks key',
-    path: ['proxmox', 'net'],
-  })
-  .refine(everyUplinkHasProxmoxNet, {
-    message: 'each networking.uplinks entry needs a matching proxmox.net.<name>',
-    path: ['proxmox', 'net'],
-  })
-  .refine(vlansCarriedOnProxmoxNets, {
-    message: 'each networking.vlans id must be carried on proxmox.net.<link> (tag or trunks)',
-    path: ['proxmox', 'net'],
-  })
+/** Strict provision document (driver overlay refines applied). */
+export const provisionSchema = provisionBodySchema.superRefine((data, ctx) => {
+  for (const id of listDriverIds()) {
+    getDriverModule(id)?.refineProvision?.(data, ctx)
+  }
+})
 
 /**
  * Parse provision YAML at a load boundary; Zod failures become labeled Errors.

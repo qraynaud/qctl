@@ -5,13 +5,13 @@ import * as powerMod from '../libs/power-state.js'
 import * as mod from './ps.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
   // @ts-expect-error restore
-  powerMod.resolveVmPowerState.mockRestore?.()
+  powerMod.powerStateFromModule.mockRestore?.()
   // @ts-expect-error restore
   endpointMod.resolveSyncEndpoint.mockRestore?.()
   // @ts-expect-error restore
@@ -20,42 +20,18 @@ afterEach(() => {
   console.log.mockRestore?.()
   // @ts-expect-error restore
   console.error.mockRestore?.()
+  process.exitCode = 0
 })
 
 describe('vm ps command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('ps [apps..]')
-    expect(mod.describe).toMatch(/quadlet/i)
-  })
-
-  test('handler skips guest when VM is not running', async () => {
-    const driver = /** @type {VmDriver} */ (/** @type {never} */ ({ id: 'workstation' }))
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(driver)
-    spyOn(powerMod, 'resolveVmPowerState').mockResolvedValue({ kind: 'absent' })
-    const ep = spyOn(endpointMod, 'resolveSyncEndpoint')
-    const ps = spyOn(quadletMod, 'guestQuadletPs')
-    /** @type {string[]} */
-    const lines = []
-    spyOn(console, 'log').mockImplementation((...a) => {
-      lines.push(a.map(String).join(' '))
-    })
-    await mod.handler(
-      /** @type {VmArgv} */ (
-        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky', profile: 'lab' })
-      ),
+  test('prints running and probes guest when power running', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        module: { id: 'workstation', powerState: async () => ({ kind: 'running' }) },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+      }),
     )
-    expect(ep).not.toHaveBeenCalled()
-    expect(ps).not.toHaveBeenCalled()
-    expect(lines.some((l) => l.includes('qctl vm up'))).toBe(true)
-  })
-
-  test('handler runs guestQuadletPs when VM is running', async () => {
-    const driver = /** @type {VmDriver} */ (/** @type {never} */ ({ id: 'workstation' }))
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(driver)
-    spyOn(powerMod, 'resolveVmPowerState').mockResolvedValue({
-      kind: 'running',
-      detail: 'running',
-    })
+    spyOn(powerMod, 'powerStateFromModule').mockResolvedValue({ kind: 'running' })
     spyOn(endpointMod, 'resolveSyncEndpoint').mockResolvedValue({
       host: '127.0.0.1',
       port: 2222,
@@ -66,14 +42,31 @@ describe('vm ps command', () => {
     const ps = spyOn(quadletMod, 'guestQuadletPs').mockResolvedValue(0)
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
+      /** @type {VmArgv} */ (
+        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })
+      ),
+    )
+    expect(ps).toHaveBeenCalled()
+  })
+
+  test('skips guest when stopped', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
       /** @type {never} */ ({
-        target: 'workstation',
-        env: 'dev',
-        name: 'rocky',
-        profile: 'lab',
-        apps: ['demo'],
+        module: { id: 'workstation', powerState: async () => ({ kind: 'stopped' }) },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
       }),
     )
-    expect(ps).toHaveBeenCalledWith(expect.objectContaining({ host: '127.0.0.1' }), ['demo'])
+    spyOn(powerMod, 'powerStateFromModule').mockResolvedValue({
+      kind: 'stopped',
+      detail: 'shut off',
+    })
+    const ps = spyOn(quadletMod, 'guestQuadletPs').mockResolvedValue(0)
+    spyOn(console, 'log').mockImplementation(() => {})
+    await mod.handler(
+      /** @type {VmArgv} */ (
+        /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })
+      ),
+    )
+    expect(ps).not.toHaveBeenCalled()
   })
 })

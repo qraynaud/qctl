@@ -10,8 +10,8 @@ import { tankPassphraseCredName } from '../../../provision/schema/first-boot.js'
 import { createCheckReport } from '../../libs/check-report.js'
 import { virsh } from '../../libs/libvirt/index.js'
 
+/** @import { VmContext } from '../../driver-contract.js' */
 /** @import { CheckReport } from '../../libs/check-report.js' */
-/** @import { VmArgv } from '../../types.js' */
 
 /**
  * @param {CheckReport} report
@@ -29,13 +29,16 @@ async function checkBin(report, name, hint) {
 }
 
 /**
- * @param {VmArgv} argv
+ * @param {VmContext} ctx
  * @returns {Promise<boolean>}
  */
-export async function check(argv) {
+export async function check(ctx) {
   const report = createCheckReport('workstation')
-  const connect = argv.connect || 'qemu:///system'
-  const envName = String(argv.env || 'dev')
+  const connect =
+    ctx.connect != null && String(ctx.connect).trim() !== ''
+      ? String(ctx.connect).trim()
+      : 'qemu:///system'
+  const envName = String(ctx.env || 'dev')
 
   report.section('Host tools')
   for (const bin of ['virsh', 'virt-install', 'qemu-img']) {
@@ -94,13 +97,13 @@ export async function check(argv) {
     }
   }
 
-  const target = argv.target || 'workstation'
+  const target = 'workstation'
   report.section(`Config (provision/, env=${envName}, target=${target})`)
   report.ok('instance provision/ found')
   const loaded = await loadEnvProvisionSafe({
     env: envName,
     target,
-    profile: /** @type {string} */ (argv.profile),
+    profile: /** @type {string} */ (ctx.profile),
   })
   if (!loaded.ok) {
     report.fail(loaded.error)

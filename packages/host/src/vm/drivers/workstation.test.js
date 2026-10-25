@@ -1,12 +1,21 @@
-import { createDriver } from './workstation.js'
+import { module } from './workstation.js'
 import { describe, expect, test } from 'bun:test'
 
-describe('workstation createDriver', () => {
-  test('returns workstation driver with lifecycle methods', () => {
-    const driver = createDriver()
-    expect(driver.id).toBe('workstation')
-    for (const key of ['check', 'up', 'down', 'destroy', 'status', 'initTank', 'sshInfo']) {
-      expect(typeof driver[/** @type {keyof typeof driver} */ (key)]).toBe('function')
+describe('workstation module', () => {
+  test('exposes thin ops + getStatus / targetCheck', () => {
+    expect(String(module.id)).toBe('workstation')
+    for (const key of [
+      'find',
+      'create',
+      'start',
+      'stop',
+      'destroy',
+      'getStatus',
+      'targetCheck',
+      'powerState',
+      'createFlagStore',
+    ]) {
+      expect(typeof module[/** @type {keyof typeof module} */ (key)]).toBe('function')
     }
   })
 })

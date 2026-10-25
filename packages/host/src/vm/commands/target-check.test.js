@@ -1,27 +1,28 @@
 import * as driversMod from '../drivers/index.js'
+import * as checkPipe from '../libs/check-pipeline.js'
 import * as mod from './target-check.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  checkPipe.runVmCheck.mockRestore?.()
   // @ts-expect-error restore
   console.log.mockRestore?.()
 })
 
 describe('vm target-check command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('target-check')
-  })
-
-  test('handler loads driver and calls check', async () => {
-    const check = async () => {}
-    const spy = spyOn({ check }, 'check')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ check: spy })),
+  test('handler resolveDriver + runVmCheck', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        module: { id: 'workstation' },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+      }),
     )
+    const spy = spyOn(checkPipe, 'runVmCheck').mockResolvedValue(true)
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
       /** @type {VmArgv} */ (

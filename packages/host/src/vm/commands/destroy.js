@@ -2,8 +2,11 @@ import { chalk } from 'zx'
 
 import { sharedDryRun, sharedLibvirt } from '../../lib/options.js'
 import { die } from '../../lib/util.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
 import { confirmProdFullDestroy } from '../libs/confirm-destroy.js'
+import { runVmDestroy } from '../libs/destroy-pipeline.js'
+import { persistentDiskLabels } from '../libs/disk-plan.js'
+import { resolveProvisionDisks } from '../libs/resolve-provision-disks.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -36,7 +39,7 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
-  const driver = await loadDriver(argv)
+  const { module, ctx } = await resolveDriver(argv)
   console.log(
     chalk.cyan('vm destroy'),
     chalk.dim(`target=${argv.target} env=${argv.env} name=${argv.name}`),
@@ -48,9 +51,19 @@ export async function handler(argv) {
 
   const fullWipe = !argv.keepPersistent
   if (fullWipe && argv.production && !argv.dryRun) {
-    // Always interactive on production full wipe (-y cannot skip).
     await confirmProdFullDestroy(argv.name)
   }
 
-  await driver.destroy(argv)
+  /** @type {string[]} */
+  let keepDisks = []
+  if (argv.keepPersistent) {
+    const resolved = await resolveProvisionDisks({
+      env: argv.env || 'dev',
+      target: String(module.id),
+      profile: argv.profile,
+    })
+    keepDisks = persistentDiskLabels(resolved)
+  }
+
+  await runVmDestroy(ctx, { keepDisks, yes: argv.yes }, module)
 }

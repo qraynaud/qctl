@@ -1,8 +1,8 @@
 import { chalk } from 'zx'
 
 import { sharedLibvirt } from '../../lib/options.js'
-import { die } from '../../lib/util.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmCheck } from '../libs/check-pipeline.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -23,10 +23,7 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
-  const driver = await loadDriver(argv)
-  if (typeof driver.check !== 'function') {
-    die(`target-check not implemented for target ${argv.target}`)
-  }
+  const { module, ctx } = await resolveDriver(argv)
   console.log(chalk.cyan('vm target-check'), chalk.dim(`target=${argv.target} env=${argv.env}`))
-  await driver.check(argv)
+  await runVmCheck(ctx, module)
 }

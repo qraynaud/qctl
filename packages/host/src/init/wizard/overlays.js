@@ -540,7 +540,7 @@ export async function promptOverlays(opts) {
   const topology = opts.networking?.topology ?? null
   const uplinkKeys = topology ? Object.keys(topology.uplinks) : ['eth0']
 
-  /** @type {Set<'workstation' | 'proxmox'>} */
+  /** @type {Set<string>} */
   const targets = new Set()
   for (const spec of Object.values(profiles)) targets.add(spec.target)
 

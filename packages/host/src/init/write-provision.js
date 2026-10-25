@@ -13,6 +13,8 @@ import {
   scaffoldTemplatePath,
 } from '../templates.js'
 import { getScaffoldTemplatesRoot } from '../templates-root.js'
+import '../vm/drivers/index.js'
+import { assertScaffoldTarget, resolveTargetYamlStub } from '../vm/drivers/scaffold.js'
 
 /** @import { ProvisionFileInput } from '../provision/schema/types.js' */
 /** @import { ProvisionTemplateVars } from '../templates.js' */
@@ -25,7 +27,7 @@ import { getScaffoldTemplatesRoot } from '../templates-root.js'
 /**
  * @typedef {object} ProfileWriteSpec
  * @property {string} env
- * @property {'workstation' | 'proxmox'} target
+ * @property {string} target
  */
 
 /** Extra common.yaml keys (e.g. networking) when multi-env shares topology. */
@@ -177,30 +179,6 @@ function stubEnvYaml(env) {
 }
 
 /**
- * @param {'workstation' | 'proxmox'} target
- * @returns {string}
- */
-function stubTargetYaml(target) {
-  if (target === 'workstation') {
-    return `# Defaults for profiles with target: workstation (VM on this machine).
-
-workstation:
-  cpu: 2
-  memory: 4096
-`
-  }
-  return `# Defaults for profiles with target: proxmox.
-
-proxmox:
-  api_url: https://pve.example:8006
-  api_token: SET_PROXMOX_API_TOKEN
-  node: pve
-  cpu: 2
-  memory: 4096
-`
-}
-
-/**
  * @param {string} profile
  * @param {ProfileWriteSpec} spec
  * @returns {string}
@@ -217,8 +195,8 @@ function stubProfileYaml(profile, spec) {
  *   force?: boolean,
  *   dryRun?: boolean,
  *   meta?: ProvisionWriteMeta,
- *   extraTargets?: ('workstation' | 'proxmox')[],
- *   extraOverlays?: { env: string, target: 'workstation' | 'proxmox' }[],
+ *   extraTargets?: string[],
+ *   extraOverlays?: { env: string, target: string }[],
  *   provisionEnvFiles?: string[],
  *   templateVars?: Partial<ProvisionTemplateVars>,
  * }} [opts]
@@ -271,17 +249,18 @@ export function writeProvision(root, opts = {}) {
     writeOrSkip(join(root, rel), template, fileOpts, report, rel)
   }
 
-  // Target layers (unique targets from profiles + extras)
-  /** @type {Set<'workstation' | 'proxmox'>} */
+  // Target layers (unique targets from profiles + extras) — stubs via driver registry
+  /** @type {Set<string>} */
   const targets = new Set()
-  for (const spec of Object.values(meta.profiles)) targets.add(spec.target)
-  for (const t of opts.extraTargets ?? []) targets.add(t)
-  for (const extra of opts.extraOverlays ?? []) targets.add(extra.target)
+  for (const spec of Object.values(meta.profiles)) targets.add(assertScaffoldTarget(spec.target))
+  for (const t of opts.extraTargets ?? []) targets.add(assertScaffoldTarget(t))
+  for (const extra of opts.extraOverlays ?? []) targets.add(assertScaffoldTarget(extra.target))
 
   for (const target of targets) {
     const basename = provisionTargetFile(target)
     const rel = `provision/${basename}`
-    const contents = tryLoadProvisionTemplate(basename, templateVars) ?? stubTargetYaml(target)
+    const contents =
+      tryLoadProvisionTemplate(basename, templateVars) ?? resolveTargetYamlStub(target)
     writeOrSkip(join(root, rel), contents, fileOpts, report, rel)
   }
 

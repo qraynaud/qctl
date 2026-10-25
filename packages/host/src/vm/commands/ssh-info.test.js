@@ -1,25 +1,26 @@
 import * as driversMod from '../drivers/index.js'
+import * as statusPipe from '../libs/status-pipeline.js'
 import * as mod from './ssh-info.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  statusPipe.runVmSshInfo.mockRestore?.()
 })
 
 describe('vm ssh-info command', () => {
-  test('exports yargs metadata', () => {
-    expect(mod.command).toBe('ssh-info')
-  })
-
-  test('handler loads driver and calls sshInfo', async () => {
-    const sshInfo = async () => {}
-    const spy = spyOn({ sshInfo }, 'sshInfo')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ sshInfo: spy })),
+  test('handler resolveDriver + runVmSshInfo', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(
+      /** @type {never} */ ({
+        module: { id: 'workstation' },
+        ctx: { name: 'rocky', env: 'dev', timeout: 1, dryRun: false },
+      }),
     )
+    const spy = spyOn(statusPipe, 'runVmSshInfo').mockResolvedValue(undefined)
     await mod.handler(
       /** @type {VmArgv} */ (
         /** @type {never} */ ({ target: 'workstation', env: 'dev', name: 'rocky' })

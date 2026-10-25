@@ -3,7 +3,8 @@ import { chalk } from 'zx'
 import { sharedDryRun, sharedLibvirt } from '../../lib/options.js'
 import { resolveSyncEndpoint } from '../../sync/endpoint.js'
 import { waitForSsh } from '../../sync/wait-ssh.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmDown } from '../libs/down-pipeline.js'
 import { resolveVmAppSelection } from '../libs/guest-apps.js'
 import { guestQuadletDown } from '../libs/guest-quadlet.js'
 
@@ -86,14 +87,14 @@ export async function handler(argv) {
   const selection = resolveVmAppSelection(argv)
 
   if (selection.mode === 'none') {
-    const driver = await loadDriver(argv)
+    const { module, ctx } = await resolveDriver(argv)
     console.log(
       chalk.cyan('vm down'),
       chalk.dim(
         `profile=${argv.profile ?? '(default)'} target=${argv.target} env=${argv.env} name=${argv.name}`,
       ),
     )
-    await driver.down(argv)
+    await runVmDown(ctx, { force: argv.force, timeout: argv.timeout }, module)
     return
   }
 

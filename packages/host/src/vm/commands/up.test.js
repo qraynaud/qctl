@@ -1,16 +1,22 @@
 import * as endpointMod from '../../sync/endpoint.js'
 import * as waitMod from '../../sync/wait-ssh.js'
 import * as driversMod from '../drivers/index.js'
+import * as destroyPipe from '../libs/destroy-pipeline.js'
 import * as appsMod from '../libs/guest-apps.js'
 import * as quadletMod from '../libs/guest-quadlet.js'
+import * as upPipe from '../libs/up-pipeline.js'
 import * as mod from './up.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
-/** @import { VmArgv, VmDriver } from '../types.js' */
+/** @import { VmArgv } from '../types.js' */
 
 afterEach(() => {
   // @ts-expect-error restore
-  driversMod.loadDriver.mockRestore?.()
+  driversMod.resolveDriver.mockRestore?.()
+  // @ts-expect-error restore
+  upPipe.runVmUp.mockRestore?.()
+  // @ts-expect-error restore
+  destroyPipe.runVmDestroy.mockRestore?.()
   // @ts-expect-error restore
   appsMod.resolveVmAppSelection.mockRestore?.()
   // @ts-expect-error restore
@@ -25,18 +31,25 @@ afterEach(() => {
   console.log.mockRestore?.()
 })
 
+const fakeResolved = {
+  module: { id: 'workstation' },
+  ctx: {
+    name: 'rocky',
+    env: 'dev',
+    timeout: 2700,
+    dryRun: false,
+  },
+}
+
 describe('vm up command', () => {
   test('exports yargs metadata', () => {
     expect(mod.command).toBe('up [apps..]')
     expect(mod.describe).toMatch(/quadlet/i)
   })
 
-  test('handler loads driver and calls up (VM only)', async () => {
-    const up = async () => {}
-    const spy = spyOn({ up }, 'up')
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ up: spy })),
-    )
+  test('handler resolveDriver + runVmUp (VM only)', async () => {
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(/** @type {never} */ (fakeResolved))
+    const spy = spyOn(upPipe, 'runVmUp').mockResolvedValue(undefined)
     spyOn(appsMod, 'resolveVmAppSelection').mockReturnValue({ mode: 'none' })
     spyOn(console, 'log').mockImplementation(() => {})
     await mod.handler(
@@ -48,10 +61,8 @@ describe('vm up command', () => {
   })
 
   test('handler waits for SSH then guestQuadletUp when apps given', async () => {
-    const up = async () => {}
-    spyOn(driversMod, 'loadDriver').mockResolvedValue(
-      /** @type {VmDriver} */ (/** @type {never} */ ({ up })),
-    )
+    spyOn(driversMod, 'resolveDriver').mockResolvedValue(/** @type {never} */ (fakeResolved))
+    spyOn(upPipe, 'runVmUp').mockResolvedValue(undefined)
     spyOn(appsMod, 'resolveVmAppSelection').mockReturnValue({
       mode: 'list',
       apps: ['demo'],

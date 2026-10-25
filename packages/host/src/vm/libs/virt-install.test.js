@@ -1,6 +1,6 @@
 import * as paths from '../../lib/paths.js'
 import { resolveDisks } from '../../provision/schema/resolve-disks.js'
-import { vmPaths } from './disks.js'
+import { toInitTankDiskPlan, toVmDiskPlan } from './disk-plan.js'
 import { buildVirtInstallArgs } from './virt-install.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
@@ -41,7 +41,7 @@ describe('buildVirtInstallArgs', () => {
         osDisk: { id: 'os', size: '20G' },
       },
     )
-    const disks = vmPaths('rocky', resolved)
+    const disks = toVmDiskPlan('rocky', resolved, { baseOsImage: '/base.qcow2' })
     const args = buildVirtInstallArgs({
       connect: 'qemu:///system',
       name: 'rocky',
@@ -70,7 +70,7 @@ describe('buildVirtInstallArgs', () => {
     expect(args).toContain('backend.type=emulator,backend.version=2.0,model=tpm-crb')
   })
 
-  test('bootDiskPath is first disk with boot.order=1 (init-tank)', () => {
+  test('init-tank plan boots disposable disk first', () => {
     spyOn(paths, 'getVms').mockReturnValue('/vms')
     const resolved = resolveDisks(
       {
@@ -84,7 +84,10 @@ describe('buildVirtInstallArgs', () => {
         osDisk: { id: 'os', size: '20G' },
       },
     )
-    const disks = vmPaths('rocky', resolved)
+    const disks = toInitTankDiskPlan('rocky', resolved, {
+      baseOsImage: '/base.qcow2',
+      bootDiskPath: '/vms/rocky/init-tank-boot.qcow2',
+    })
     const args = buildVirtInstallArgs({
       connect: 'qemu:///system',
       name: 'rocky',
@@ -98,7 +101,6 @@ describe('buildVirtInstallArgs', () => {
       },
       network: 'default',
       osinfo: 'rocky10',
-      bootDiskPath: '/vms/rocky/init-tank-boot.qcow2',
     })
     const joined = args.join(' ')
     expect(joined).toContain('path=/vms/rocky/init-tank-boot.qcow2')

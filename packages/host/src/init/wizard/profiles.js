@@ -4,6 +4,8 @@
 import * as clack from '@clack/prompts'
 
 import { asBindingPrompts } from '../../lib/binding.js'
+import '../../vm/drivers/index.js'
+import { listScaffoldTargets, scaffoldHintFor } from '../../vm/drivers/scaffold.js'
 import { validateLayerName } from './layer-name.js'
 import { wizardScoped, wizardStep } from './ui.js'
 
@@ -77,19 +79,21 @@ export async function promptProfiles(opts) {
     })
     if (p.isCancel(env)) return /** @type {symbol} */ (env)
 
+    const targets = listScaffoldTargets()
     const target = await p.select({
       message: wizardScoped({ profile: pKey }, 'Target'),
-      options: [
-        { value: 'workstation', label: 'workstation', hint: 'this machine' },
-        { value: 'proxmox', label: 'proxmox', hint: 'remote hypervisor' },
-      ],
-      initialValue: 'workstation',
+      options: targets.map((t) => ({
+        value: t,
+        label: t,
+        hint: scaffoldHintFor(t),
+      })),
+      initialValue: targets.includes('workstation') ? 'workstation' : targets[0],
     })
     if (p.isCancel(target)) return /** @type {symbol} */ (target)
 
     profiles[pKey] = {
       env: String(env),
-      target: /** @type {'workstation' | 'proxmox'} */ (target),
+      target: String(target),
     }
     firstProfile = false
 

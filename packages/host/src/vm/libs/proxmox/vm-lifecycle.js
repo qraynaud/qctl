@@ -25,13 +25,13 @@ import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
  */
 
 /**
- * Create a rocky-shaped VM (OS import + persistent disks + NoCloud CDROM) and start it.
+ * Define a rocky-shaped VM (OS import + disks + NoCloud CDROM) without starting it.
  *
  * @param {ProxmoxClient} client
  * @param {CreateRockyVmOpts} opts
  * @returns {Promise<{ vmid: number }>}
  */
-export async function createAndStartRockyVm(client, opts) {
+export async function createRockyVm(client, opts) {
   const {
     name,
     memory,
@@ -109,15 +109,36 @@ export async function createAndStartRockyVm(client, opts) {
   )
   const createUpid = await client.post(`/nodes/${encodeURIComponent(node)}/qemu`, form)
   if (createUpid) await client.waitTask(String(createUpid), { timeoutSec: 1800 })
+  console.log(chalk.green(`vm: Proxmox VM ${name} (vmid=${vmid}) defined`))
+  return { vmid }
+}
 
+/**
+ * Create + start (legacy fat up path). Prefer {@link createRockyVm} + {@link startProxmoxVm}.
+ * @param {ProxmoxClient} client
+ * @param {CreateRockyVmOpts} opts
+ * @returns {Promise<{ vmid: number }>}
+ */
+export async function createAndStartRockyVm(client, opts) {
+  const { vmid } = await createRockyVm(client, opts)
+  await startProxmoxVm(client, vmid, opts.name)
+  return { vmid }
+}
+
+/**
+ * @param {ProxmoxClient} client
+ * @param {number} vmid
+ * @param {string} name
+ * @returns {Promise<void>}
+ */
+export async function startProxmoxVm(client, vmid, name) {
   console.log(chalk.cyan(`vm: starting ${name}…`))
   const startUpid = await client.post(
-    `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/start`,
+    `/nodes/${encodeURIComponent(client.config.node)}/qemu/${vmid}/status/start`,
     {},
   )
   if (startUpid) await client.waitTask(String(startUpid), { timeoutSec: 120 })
   console.log(chalk.green(`vm: Proxmox VM ${name} (vmid=${vmid}) running`))
-  return { vmid }
 }
 
 /**

@@ -208,14 +208,14 @@ export function resolveEnvRefs(value, env, path = '') {
 }
 
 /**
- * Drop the opposite hypervisor block after merge (workstation vs proxmox).
+ * Drop sibling hypervisor overlay blocks after merge (keep `target` only).
  * @param {YamlMapping | ProvisionMapping} data
- * @param {'workstation' | 'proxmox'} target
+ * @param {string} target
+ * @param {Iterable<string>} [knownTargets] - defaults to workstation|proxmox builtins
  */
-export function stripOppositeTarget(data, target) {
-  if (target === 'workstation') {
-    delete data.proxmox
-  } else {
-    delete data.workstation
+export function stripOppositeTarget(data, target, knownTargets) {
+  const ids = knownTargets != null ? [...knownTargets] : ['workstation', 'proxmox']
+  for (const id of ids) {
+    if (id !== target) delete data[id]
   }
 }

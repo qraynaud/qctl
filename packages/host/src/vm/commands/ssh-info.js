@@ -1,5 +1,6 @@
 import { sharedLibvirt } from '../../lib/options.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmSshInfo } from '../libs/status-pipeline.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -26,6 +27,6 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
-  const driver = await loadDriver(argv)
-  await driver.sshInfo(argv)
+  const { module, ctx } = await resolveDriver(argv)
+  await runVmSshInfo(ctx, module)
 }

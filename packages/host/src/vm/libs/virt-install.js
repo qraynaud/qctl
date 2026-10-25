@@ -1,7 +1,15 @@
-import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
+import { $ } from 'zx'
+
+import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
+import { die } from '../../lib/util.js'
+import { virsh } from './libvirt/virsh.js'
+
+/** @import { VmSpecs } from '../driver-contract.js' */
 /** @import { PortsMap } from '../types.js' */
-/** @import { VmDiskPaths } from './disks.js' */
 
 /**
  * @param {{
@@ -9,16 +17,13 @@ import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
  *   name: string,
  *   memory: number|string,
  *   vcpus: number|string,
- *   disks: VmDiskPaths,
+ *   disks: Pick<VmSpecs, 'disks' | 'bootDrive'>,
  *   seed: { device: string, path: string, format?: string },
  *   ports: PortsMap,
  *   network: string,
  *   osinfo: string,
  *   serialTcpPort?: number,
- *   bootDiskPath?: string,
  * }} opts
- * When `bootDiskPath` is set, that file is the first disk (init-tank disposable root);
- * `disks.os` is not attached — only `disks.attached` persistent members.
  * @returns {string[]}
  */
 export function buildVirtInstallArgs({
@@ -26,17 +31,21 @@ export function buildVirtInstallArgs({
   name,
   memory,
   vcpus,
-  disks,
+  disks: plan,
   seed,
   ports,
   network,
   osinfo,
-  /** @type {number | undefined} TCP port we listen on; qemu connects (no PTY). */
   serialTcpPort,
-  bootDiskPath,
 }) {
-  const rootPath = bootDiskPath || disks.os.path
-  const rootDisk = `path=${rootPath},format=qcow2,bus=virtio${bootDiskPath ? ',boot.order=1' : ''}`
+  const labels = Object.keys(plan?.disks || {})
+  if (!labels.length) die('buildVirtInstallArgs: disks is empty')
+  const bootLabel = plan.bootDrive || labels[0]
+  const boot = plan.disks[bootLabel]
+  if (!boot?.path) die(`buildVirtInstallArgs: boot disk ${bootLabel} missing path`)
+  const format = boot.format || (boot.path.endsWith('.qcow2') ? 'qcow2' : 'raw')
+  const rootDisk = `path=${boot.path},format=${format},bus=virtio,serial=${bootLabel},boot.order=1`
+
   /** @type {string[]} */
   const args = [
     'virt-install',
@@ -60,9 +69,11 @@ export function buildVirtInstallArgs({
     rootDisk,
   ]
 
-  for (const d of disks.attached) {
-    const format = d.path.endsWith('.qcow2') ? 'qcow2' : 'raw'
-    args.push('--disk', `path=${d.path},format=${format},bus=virtio,serial=${d.id}`)
+  for (const [label, d] of Object.entries(plan.disks)) {
+    if (label === bootLabel) continue
+    if (!d.path) die(`buildVirtInstallArgs: disk ${label} missing path`)
+    const fmt = d.format || (d.path.endsWith('.qcow2') ? 'qcow2' : 'raw')
+    args.push('--disk', `path=${d.path},format=${fmt},bus=virtio,serial=${label}`)
   }
 
   if (seed.device === 'cdrom') {
@@ -78,9 +89,6 @@ export function buildVirtInstallArgs({
   }
 
   if (serialTcpPort) {
-    // Host listens; qemu connects — no PTY, no root-owned log file.
-    // Keep a VGA device even with --graphics none: libvirt -nodefaults +
-    // isa-serial alone yields a silent ttyS0; VGA makes serial actually emit.
     args.push(
       '--graphics',
       'none',
@@ -91,8 +99,46 @@ export function buildVirtInstallArgs({
     )
   }
 
-  // Always-on emulated TPM 2.0 (needs host `swtpm`).
   args.push('--tpm', 'backend.type=emulator,backend.version=2.0,model=tpm-crb')
 
   return args
+}
+
+/**
+ * Define a domain from virt-install args without starting it (`--print-xml` + `virsh define`).
+ * @param {string[]} args from {@link buildVirtInstallArgs}
+ * @returns {Promise<void>}
+ */
+export async function defineDomainFromVirtInstallArgs(args) {
+  const connectIdx = args.indexOf('--connect')
+  const nameIdx = args.indexOf('--name')
+  if (connectIdx < 0 || nameIdx < 0) {
+    die('defineDomainFromVirtInstallArgs: missing --connect/--name in virt-install args')
+  }
+  const connect = args[connectIdx + 1]
+  const name = args[nameIdx + 1]
+  const printArgs = [...args, '--print-xml']
+  const r = await $`${printArgs}`.nothrow()
+  if (r.exitCode !== 0) {
+    console.error(String(r.stderr || r.stdout))
+    die(`virt-install --print-xml failed (exit ${r.exitCode})`)
+  }
+  const xml = String(r.stdout || '').trim()
+  if (!xml.includes('<domain')) {
+    die('virt-install --print-xml produced no domain XML')
+  }
+  const tmp = path.join(os.tmpdir(), `rocky-${name}-define.xml`)
+  fs.writeFileSync(tmp, xml, 'utf8')
+  try {
+    const def = await virsh(connect, 'define', tmp).nothrow()
+    if (def.exitCode !== 0) {
+      die(`virsh define ${name} failed: ${String(def.stderr || def.stdout).trim()}`)
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tmp)
+    } catch {
+      /* ignore */
+    }
+  }
 }

@@ -41,25 +41,27 @@ function instanceRoot(commonYaml) {
   return root
 }
 
-describe('loadDriver', () => {
-  test('loads workstation driver and resolves name', async () => {
+describe('resolveDriver', () => {
+  test('resolveDriver returns module + ctx for workstation', async () => {
     instanceRoot('qctl:\n  platform: rocky\n')
     const argv = /** @type {VmArgv} */ (
       /** @type {never} */ ({
-        memory: '4G',
+        memory: 4096,
         vcpus: 2,
       })
     )
-    const driver = await mod.loadDriver(argv)
-    expect(driver.id).toBe('workstation')
+    const { module: drv, ctx, specs } = await mod.resolveDriver(argv)
+    expect(String(drv.id)).toBe('workstation')
+    expect(ctx.name).toBe('rocky')
+    expect(ctx.env).toBe('dev')
+    expect(specs.memory).toBe(4096)
+    expect(specs.vcpus).toBe(2)
     expect(argv.target).toBe('workstation')
-    expect(argv.env).toBe('dev')
     expect(argv.name).toBe('rocky')
-    expect(typeof driver.up).toBe('function')
-    expect(typeof driver.check).toBe('function')
+    expect(typeof drv.getStatus).toBe('function')
   })
 
-  test('loads proxmox driver', async () => {
+  test('resolveDriver loads proxmox module and name', async () => {
     instanceRoot(
       [
         'qctl:',
@@ -78,11 +80,11 @@ describe('loadDriver', () => {
         vcpus: 2,
       })
     )
-    const driver = await mod.loadDriver(argv)
-    expect(driver.id).toBe('proxmox')
+    const { module: drv, ctx } = await mod.resolveDriver(argv)
+    expect(String(drv.id)).toBe('proxmox')
+    expect(ctx.name).toBe('rocky-dev')
     expect(argv.target).toBe('proxmox')
     expect(argv.env).toBe('dev')
-    expect(argv.name).toBe('rocky-dev')
   })
 
   test('dies on unknown target after profile resolve', async () => {
@@ -101,6 +103,6 @@ describe('loadDriver', () => {
         _qctlProfileResolved: true,
       })
     )
-    await expect(mod.loadDriver(argv)).rejects.toThrow(/exit/)
+    await expect(mod.resolveDriver(argv)).rejects.toThrow(/exit/)
   })
 })

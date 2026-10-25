@@ -1,7 +1,8 @@
 import { chalk } from 'zx'
 
 import { sharedBoot, sharedDryRun } from '../../lib/options.js'
-import { loadDriver } from '../drivers/index.js'
+import { resolveDriver } from '../drivers/index.js'
+import { runVmInitTank } from '../libs/up-pipeline.js'
 
 /** @import { Argv } from 'yargs' */
 /** @import { VmArgv } from '../types.js' */
@@ -48,7 +49,7 @@ export function builder(yargs) {
  * @returns {Promise<void>}
  */
 export async function handler(argv) {
-  const driver = await loadDriver(argv)
+  const { module, ctx, specs } = await resolveDriver(argv)
   const pools = argv.poolIds?.length ? argv.poolIds.join(',') : 'all tanks'
   console.log(
     chalk.cyan('vm init-tank'),
@@ -62,5 +63,16 @@ export async function handler(argv) {
       '  disposable boot disk (keep disks.os); -f wipes tank members; guest zpool create→export→poweroff',
     ),
   )
-  await driver.initTank(argv)
+  await runVmInitTank(
+    ctx,
+    {
+      console: !argv.noConsole,
+      timeout: argv.timeout,
+      poolIds: argv.poolIds,
+      force: argv.force,
+      forceDownload: argv.forceDownload,
+    },
+    module,
+    specs,
+  )
 }
