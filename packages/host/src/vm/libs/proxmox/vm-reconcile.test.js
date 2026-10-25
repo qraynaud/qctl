@@ -19,6 +19,7 @@ describe('reconcileRockyAppliance', () => {
       scsi0: 'local-lvm:vm-101-disk-0',
       scsi1: 'local-lvm:vm-101-disk-1,serial=vw',
       scsi2: 'local-lvm:vm-101-data-0,serial=rocky-data0',
+      tags: 'qctl.installed=true;lab',
     }
     /** @type {{ path: string, form: Record<string, string> }[]} */
     const puts = []
@@ -60,6 +61,7 @@ describe('reconcileRockyAppliance', () => {
     expect(last?.form.machine).toBe('q35')
     expect(last?.form.memory).toBe('4096')
     expect(last?.form.tpmstate0).toBe('local-lvm:1,version=v2.0')
+    expect(String(last?.form.tags)).toMatch(/qctl\.installed=true/)
   })
 
   test('keeps existing tpmstate0 and does not delete it as cruft', async () => {

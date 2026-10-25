@@ -1,5 +1,6 @@
 import {
   classifyCloudInitOutcome,
+  classifyContinueFirstBoot,
   classifyRebootReady,
   createSerialLineSink,
   matchInitTankFatal,
@@ -63,6 +64,16 @@ describe('console helpers', () => {
       classifyRebootReady('[  OK  ] Reached target multi-user.target - Multi-User System.'),
     ).toMatchObject({ status: 'ok' })
     expect(classifyRebootReady('noise')).toBeNull()
+  })
+
+  test('classifyContinueFirstBoot accepts cloud-init or multi-user', () => {
+    expect(classifyContinueFirstBoot('[  OK  ] Finished Cloud-init: Final Stage')).toMatchObject({
+      status: 'ok',
+    })
+    expect(classifyContinueFirstBoot('[  OK  ] Reached target Multi-User System')).toMatchObject({
+      status: 'ok',
+    })
+    expect(classifyContinueFirstBoot('noise')).toBeNull()
   })
 
   test('createSerialLineSink classifies lines', async () => {

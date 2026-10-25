@@ -1,3 +1,5 @@
+import * as lifecycle from '../../libs/installed-lifecycle.js'
+import * as vm from '../../libs/proxmox/vm.js'
 import * as resolveDisks from '../../libs/resolve-provision-disks.js'
 import * as seedRun from '../../libs/seed/run.js'
 import * as pipeline from '../../libs/up-pipeline.js'
@@ -19,6 +21,29 @@ const sampleResolved = {
   encryptedTankIds: [],
 }
 
+/** @typedef {VmUpBackend<any, any>} AnyBackend */
+
+/**
+ * @returns {Promise<{ backend: AnyBackend }>}
+ */
+async function captureBackend() {
+  /** @type {AnyBackend | null} */
+  let backend = null
+  spyOn(pipeline, 'runVmUp').mockImplementation(async (_argv, b) => {
+    backend = /** @type {AnyBackend} */ (/** @type {never} */ (b))
+  })
+  await up(
+    /** @type {VmArgv} */ ({
+      name: 'rocky-dev',
+      target: 'proxmox',
+      env: 'dev',
+      dryRun: true,
+    }),
+  )
+  if (!backend) throw new Error('backend not captured')
+  return { backend }
+}
+
 afterEach(() => {
   // @ts-expect-error restore
   pipeline.runVmUp.mockRestore?.()
@@ -30,6 +55,14 @@ afterEach(() => {
   resolveDisks.resolveProvisionDisks.mockRestore?.()
   // @ts-expect-error restore
   process.exit.mockRestore?.()
+  // @ts-expect-error restore
+  vm.detachAndDeleteSeedIso.mockRestore?.()
+  // @ts-expect-error restore
+  vm.destroyRockyVm.mockRestore?.()
+  // @ts-expect-error restore
+  lifecycle.composeScrubSeed.mockRestore?.()
+  // @ts-expect-error restore
+  console.log.mockRestore?.()
 })
 
 describe('proxmox up', () => {
@@ -46,21 +79,53 @@ describe('proxmox up', () => {
     expect(run.mock.calls[0]?.[0]).toBe(argv)
     expect(run.mock.calls[0]?.[1]).toMatchObject({
       dryRun: expect.any(Function),
-      findRunnableExisting: expect.any(Function),
+      probeExisting: expect.any(Function),
       createFirstBoot: expect.any(Function),
+      scrubSeed: expect.any(Function),
     })
   })
 
-  test('createFirstBoot passes target=proxmox to runSeed', async () => {
-    const bag = {
-      /** @type {VmUpBackend<string, string>['createFirstBoot'] | null} */
-      createFirstBoot: null,
-    }
-    spyOn(pipeline, 'runVmUp').mockImplementation(async (_argv, b) => {
-      bag.createFirstBoot = /** @type {NonNullable<(typeof bag)['createFirstBoot']>} */ (
-        /** @type {never} */ (b.createFirstBoot)
-      )
+  test('probeExisting (installed or incomplete) does not call runSeed', async () => {
+    const { backend } = await captureBackend()
+    const seed = spyOn(seedRun, 'runSeed')
+    spyOn(shared, 'ping').mockResolvedValue(
+      /** @type {Awaited<ReturnType<typeof shared.ping>>} */ (
+        /** @type {never} */ ({
+          config: { node: 'pve' },
+          findVmidByName: async () => 101,
+          qemuConfig: async () => ({ tags: 'qctl.installed=true' }),
+          put: async () => {},
+        })
+      ),
+    )
+    const probe = await backend.probeExisting(
+      /** @type {VmArgv} */ ({ name: 'rocky-dev', env: 'dev', wipeOs: false }),
+    )
+    expect(probe?.installed).toBe(true)
+    expect(seed).not.toHaveBeenCalled()
+
+    spyOn(shared, 'ping').mockResolvedValue(
+      /** @type {Awaited<ReturnType<typeof shared.ping>>} */ (
+        /** @type {never} */ ({
+          config: { node: 'pve' },
+          findVmidByName: async () => 102,
+          qemuConfig: async () => ({ tags: '' }),
+          put: async () => {},
+        })
+      ),
+    )
+    const incomplete = await backend.probeExisting(
+      /** @type {VmArgv} */ ({ name: 'rocky-dev', env: 'dev', wipeOs: false }),
+    )
+    expect(incomplete).toEqual({
+      existing: expect.objectContaining({ vmid: 102 }),
+      installed: false,
     })
+    expect(seed).not.toHaveBeenCalled()
+  })
+
+  test('createFirstBoot (wipe/create) calls runSeed', async () => {
+    const { backend } = await captureBackend()
     spyOn(resolveDisks, 'resolveProvisionDisks').mockResolvedValue(sampleResolved)
     spyOn(shared, 'ping').mockResolvedValue(
       /** @type {Awaited<ReturnType<typeof shared.ping>>} */ (
@@ -84,18 +149,10 @@ describe('proxmox up', () => {
         throw new Error(`exit ${code}`)
       },
     )
+    spyOn(console, 'log').mockImplementation(() => {})
 
-    await up(
-      /** @type {VmArgv} */ ({
-        name: 'rocky-dev',
-        target: 'proxmox',
-        env: 'dev',
-        dryRun: false,
-      }),
-    )
-    expect(bag.createFirstBoot).toBeTypeOf('function')
     await expect(
-      /** @type {NonNullable<(typeof bag)['createFirstBoot']>} */ (bag.createFirstBoot)(
+      backend.createFirstBoot(
         /** @type {VmArgv} */ ({
           name: 'rocky-dev',
           target: 'proxmox',
@@ -113,5 +170,28 @@ describe('proxmox up', () => {
       target: 'proxmox',
       env: 'dev',
     })
+  })
+
+  test('scrubSeed detaches PVE seed ISO after probe binds scrub target', async () => {
+    const { backend } = await captureBackend()
+    const detach = spyOn(vm, 'detachAndDeleteSeedIso').mockResolvedValue(undefined)
+    spyOn(lifecycle, 'composeScrubSeed').mockImplementation((opts) => async () => {
+      if (opts.after) await opts.after()
+    })
+    spyOn(shared, 'ping').mockResolvedValue(
+      /** @type {Awaited<ReturnType<typeof shared.ping>>} */ (
+        /** @type {never} */ ({
+          config: { node: 'pve' },
+          findVmidByName: async () => 101,
+          qemuConfig: async () => ({ tags: '' }),
+          put: async () => {},
+        })
+      ),
+    )
+    await backend.probeExisting(
+      /** @type {VmArgv} */ ({ name: 'rocky-dev', env: 'dev', wipeOs: false }),
+    )
+    await backend.scrubSeed()
+    expect(detach).toHaveBeenCalledWith(expect.anything(), 101, null)
   })
 })

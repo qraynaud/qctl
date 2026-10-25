@@ -8,13 +8,19 @@ import {
   summarizeAttachModes,
   withAttachModes,
 } from '../../libs/attach-mode.js'
-import { classifyCloudInitOutcome, classifyRebootReady } from '../../libs/console.js'
+import {
+  classifyCloudInitOutcome,
+  classifyContinueFirstBoot,
+  classifyRebootReady,
+} from '../../libs/console.js'
+import { clearInstalled, composeScrubSeed, isInstalled } from '../../libs/installed-lifecycle.js'
 import {
   assertNameFreeForCreate,
   holderVmName,
   loadDisksFromHolder,
   promoteHolderToAppliance,
 } from '../../libs/proxmox/disk-holder.js'
+import { createFlagStore } from '../../libs/proxmox/flag-store.js'
 import { startProxmoxSerialFollow } from '../../libs/proxmox/serial.js'
 import {
   createAndStartRockyVm,
@@ -112,19 +118,81 @@ async function startProxmoxVm(client, vmid, name) {
  * @returns {VmUpBackend<ProxmoxExisting, ProxmoxCreated>}
  */
 function proxmoxBackend() {
+  /** @type {Awaited<ReturnType<typeof ping>> | null} */
+  let client = null
+  /** @type {number | null} */
+  let flagVmid = null
+  /** @type {ReturnType<typeof createFlagStore> | null} */
+  let flags = null
+  /** @type {string} */
+  let seedEnv = 'dev'
+  /**
+   * Bound for scrubSeed after probe/create (isoVolid known on create only).
+   * @type {{
+   *   client: Awaited<ReturnType<typeof ping>>,
+   *   vmid: number,
+   *   isoVolid: string | null,
+   * } | null}
+   */
+  let scrubTarget = null
+
+  /**
+   * @param {Awaited<ReturnType<typeof ping>>} c
+   * @param {number} vmid
+   * @param {string | null} [isoVolid]
+   */
+  function bindFlags(c, vmid, isoVolid = null) {
+    client = c
+    flagVmid = vmid
+    flags = createFlagStore(c, vmid)
+    scrubTarget = { client: c, vmid, isoVolid }
+    return flags
+  }
+
+  /**
+   * @returns {ReturnType<typeof createFlagStore>}
+   */
+  function requireFlags() {
+    if (!flags || client == null || flagVmid == null) {
+      throw new Error('proxmox up: flag store not bound (probe/create did not run)')
+    }
+    return flags
+  }
+
   return {
+    get flags() {
+      return flags
+    },
+
+    scrubSeed: async () => {
+      const target = scrubTarget
+      await composeScrubSeed({
+        env: seedEnv,
+        seedProfile: 'appliance',
+        after: async () => {
+          if (!target) return
+          await detachAndDeleteSeedIso(target.client, target.vmid, target.isoVolid)
+        },
+      })()
+    },
+
     assertReady: async () => {
       /* attach-mode enforced at create/reconcile */
     },
 
     dryRun: (argv) => proxmoxDryRun(argv),
 
-    findRunnableExisting: async (argv) => {
-      if (argv.wipeOs) return null
-      const client = await ping(argv)
-      const vmid = await client.findVmidByName(argv.name)
-      if (vmid == null) return null
-      return { client, vmid, name: argv.name }
+    probeExisting: async (argv) => {
+      seedEnv = argv.env || 'dev'
+      const c = await ping(argv)
+      const vmid = await c.findVmidByName(argv.name)
+      // Bind early so wipeOs → clearInstalled can delete the tag before recreate.
+      if (vmid != null) bindFlags(c, vmid)
+      if (argv.wipeOs || vmid == null) return null
+      return {
+        existing: { client: c, vmid, name: argv.name },
+        installed: await isInstalled(requireFlags()),
+      }
     },
 
     reconcile: async (argv, existing) => {
@@ -148,10 +216,11 @@ function proxmoxBackend() {
       console.log(chalk.green(`vm: Proxmox VM ${existing.name} started`))
     },
 
-    startWithSerial: async (_argv, existing) => {
+    startWithSerial: async (_argv, existing, mode) => {
       await startProxmoxVm(existing.client, existing.vmid, existing.name)
+      const classify = mode === 'cloud-init' ? classifyContinueFirstBoot : classifyRebootReady
       return startProxmoxSerialFollow(existing.client, existing.vmid, existing.name, {
-        classify: classifyRebootReady,
+        classify,
       })
     },
 
@@ -170,6 +239,7 @@ function proxmoxBackend() {
 
     createFirstBoot: async (argv, _signal, _opts) => {
       const { name, memory, vcpus, wipeOs, forceDownload, env, cidata } = argv
+      seedEnv = env || 'dev'
 
       const client = await ping(argv)
       let vmid = await client.findVmidByName(name)
@@ -181,6 +251,18 @@ function proxmoxBackend() {
       const expectedIds = persistentDiskIds(resolved.members)
       const osSize = resolved.os.size || '20G'
       const diskSpecs = attachSpecsFromMembers(resolved.members)
+
+      // clearInstalled → demote, then seed + create (no re-seed on incomplete).
+      if (vmid != null && wipeOs) {
+        console.log(
+          chalk.yellow(`vm: --wipe-os — demote ${name} to holder, then promote with fresh OS`),
+        )
+        await clearInstalled(flags ?? createFlagStore(client, vmid))
+        await destroyRockyVm(client, { vmid, name, keep: 'persistent' })
+        vmid = null
+        flags = null
+        scrubTarget = null
+      }
 
       console.log(chalk.cyan('vm: building appliance seed…'))
       const seedResult = await runSeed({
@@ -195,14 +277,6 @@ function proxmoxBackend() {
       const isoPath = seedResult.isoPath
       if (!fs.existsSync(isoPath)) {
         die(`appliance ISO missing at ${isoPath} — run \`qctl vm seed\``)
-      }
-
-      if (vmid != null && wipeOs) {
-        console.log(
-          chalk.yellow(`vm: --wipe-os — demote ${name} to holder, then promote with fresh OS`),
-        )
-        await destroyRockyVm(client, { vmid, name, keep: 'persistent' })
-        vmid = null
       }
 
       const importVolid = await ensureCloudImageImport(client, {
@@ -249,6 +323,7 @@ function proxmoxBackend() {
         }))
       }
 
+      bindFlags(client, /** @type {number} */ (vmid), isoVolid)
       return {
         created: { client, vmid: /** @type {number} */ (vmid), name, isoVolid },
         follow: null,
@@ -272,7 +347,7 @@ function proxmoxBackend() {
     },
 
     finishFirstBootOk: async (_argv, created) => {
-      await detachAndDeleteSeedIso(created.client, created.vmid, created.isoVolid)
+      // Seed scrub (detach+delete ISO) runs in markInstalled → scrubSeed.
       await restoreProxmoxDisplay(created.client, created.vmid)
       await printSshHint()
       console.log(chalk.dim(`  image: ${IMAGE.file}`))
@@ -280,6 +355,27 @@ function proxmoxBackend() {
 
     firstBootFailHint: (_argv, created) =>
       `vm: VM ${created.name} left running for diagnosis (seed ISO + serial display kept)`,
+
+    finishContinueNoConsole: async (existing) => {
+      await restoreProxmoxDisplay(existing.client, existing.vmid)
+      await printSshHint()
+      console.log(chalk.dim(`  image: ${IMAGE.file}`))
+      console.log(
+        chalk.yellow(
+          '  seed ISO may still be attached (--no-console); delete after first boot or re-run without --no-console',
+        ),
+      )
+    },
+
+    finishContinueOk: async (existing) => {
+      // Seed scrub runs in markInstalled → scrubSeed.
+      await restoreProxmoxDisplay(existing.client, existing.vmid)
+      await printSshHint()
+      console.log(chalk.dim(`  image: ${IMAGE.file}`))
+    },
+
+    continueFailHint: (existing) =>
+      `vm: VM ${existing.name} left running for diagnosis (seed ISO + serial display kept)`,
   }
 }
 
