@@ -5,6 +5,7 @@ export type QctlRole = 'host' | 'guest' | 'platform'
 export type InitProfile = 'default' | 'init-tank'
 
 export type PlatformStage =
+  | 'vlan-parents'
   | 'network-up'
   | 'host-baseline'
   | 'data-mounts'

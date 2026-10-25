@@ -1,5 +1,6 @@
 /**
- * Re-check egress; bring up eth0 if needed (bootcmd owns macvlan parents).
+ * Re-check egress; bring up eth0 if needed.
+ * Lab VLAN dummy parents: {@link ./vlan-parents.js} (seed config + boot unit).
  * OS-specific work lives on `platform.networking` (guest loads the staged module).
  */
 import { StageError } from '../errors.js'
@@ -17,7 +18,7 @@ function networkCtx(ctx) {
 
 export default {
   name: 'network-up',
-  describe: 'Re-check egress; bring up eth0 if needed (bootcmd owns macvlan parents)',
+  describe: 'Re-check egress; bring up eth0 if needed',
   /**
    * @param {StageContext} ctx
    */
