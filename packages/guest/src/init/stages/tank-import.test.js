@@ -194,7 +194,6 @@ describe('tank-import stage', () => {
     expect(logs.some((l) => /verified tank mounted/i.test(l))).toBe(true)
     expect(logs.some((l) => l.includes('tank-import: done'))).toBe(true)
     const state = JSON.parse(readFileSync(initState, 'utf8'))
-    expect(state.tanks.tank.canary.line).toBeTruthy()
     expect(state.tanks.tank.importedAt).toMatch(/^\d{4}-/)
   })
 

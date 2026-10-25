@@ -76,8 +76,6 @@ describe('zfs-drill stage', () => {
     temps.push(dir)
     const mountTank = join(dir, 'mnt-tank')
     mkdirSync(mountTank, { recursive: true })
-    const canary = join(mountTank, '.rocky-canary')
-    writeFileSync(canary, 'canary-body\n')
     const disks = {
       os: { id: 'os' },
       data: {},
@@ -115,10 +113,7 @@ describe('zfs-drill stage', () => {
         tanks: {
           tank: {
             mount: mountTank,
-            canary: {
-              line: 'canary-body\n',
-              writtenAt: '2020-01-01T00:00:00.000Z',
-            },
+            importedAt: '2020-01-01T00:00:00.000Z',
           },
         },
       }),
@@ -177,8 +172,7 @@ describe('zfs-drill stage', () => {
     )
     expect(execs.some((a) => a[0] === 'zpool' && a[1] === 'import')).toBe(true)
     const state = JSON.parse(readFileSync(initState, 'utf8'))
-    expect(state.tanks.tank.canary.line).toBe('canary-body\n')
-    expect(state.tanks.tank.canary.writtenAt).toBe('2020-01-01T00:00:00.000Z')
-    expect(state.tanks.tank.canary.drillVerifiedAt).toMatch(/^\d{4}-/)
+    expect(state.tanks.tank.importedAt).toBe('2020-01-01T00:00:00.000Z')
+    expect(state.tanks.tank.drillVerifiedAt).toMatch(/^\d{4}-/)
   })
 })

@@ -140,7 +140,6 @@ describe('tank-create stage', () => {
     const state = JSON.parse(readFileSync(initState, 'utf8'))
     expect(state.profile).toBe('init-tank')
     expect(state.initTank.pools).toEqual(['tank'])
-    expect(state.tanks.tank.canary.line).toBeTruthy()
-    expect(existsSync(join(dir, 'tank', '.rocky-canary'))).toBe(true)
+    expect(state.tanks?.tank).toBeUndefined()
   })
 })

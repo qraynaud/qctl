@@ -132,14 +132,14 @@ Pool must already exist (`qctl vm init-tank` or dedicated
 - [ ] `zpool list` shows `tank`; health ONLINE
 - [ ] Encryption on; `zfs get encryption,keystatus,keylocation tank`
 - [ ] `keylocation` is `file:///etc/credstore/rocky/tank_passphrase_tank`
-- [ ] Datasets mounted under `/tank`; canary recorded in `/var/lib/qctl/init-state.json` (and `/tank/.rocky-canary` for drill)
+- [ ] Datasets mounted under `/tank`; import recorded in `/var/lib/qctl/init-state.json`
 - [ ] `/tank/rocky` clone path exists after Gate 7 (may be empty until then)
 
 ```bash
 zpool status tank | head -30
 zfs get -H encryption,keystatus,keylocation tank
 findmnt /tank
-jq '.tanks.tank.canary' /var/lib/qctl/init-state.json
+jq '.tanks.tank' /var/lib/qctl/init-state.json
 ```
 
 ---
@@ -149,7 +149,7 @@ jq '.tanks.tank.canary' /var/lib/qctl/init-state.json
 ## Gate 5 — ZFS export → import → unlock (required)
 
 - [ ] `zfs-drill` stage (`qctl _internal_stage zfs-drill`) completed successfully
-- [ ] After drill: pool online, key loaded, canary intact
+- [ ] After drill: pool online, key loaded, remounted (`drillVerifiedAt` in init-state)
 - [ ] Skip only for debug: `ROCKY_SKIP_ZFS_DRILL=1`
 - [ ] Mental map to prod: export on old host → attach disks → Rocky import+unlock
 
@@ -168,7 +168,7 @@ journalctl -u rocky-first-boot.service -b --no-pager | grep -E 'drill|== zfs-dri
 - [ ] Reboot VM; `tank` imported + unlocked **without** interactive passphrase
 - [ ] Official path: `/etc/zfs/zfs-list.cache/tank` present; `zfs-load-key@tank.service` generated (vendor `zfs-load-key.service` stays a `/dev/null` stub)
 - [ ] Key file still `file:///etc/credstore/rocky/tank_passphrase_tank`
-- [ ] Tank canary still present in init-state (and on-disk `.rocky-canary`)
+- [ ] Tank still mounted; `drillVerifiedAt` still present in init-state after prior drill
 - [ ] `/vw` still mounted; bootstrap / `qctl secret sync` can resolve VW secrets again if needed
 
 ```bash
@@ -177,7 +177,7 @@ reboot
 test -s /etc/zfs/zfs-list.cache/tank && systemctl cat zfs-load-key@tank.service | head -15
 test -r /etc/credstore/rocky/tank_passphrase_tank
 zfs get -H keystatus tank   # available
-findmnt /tank && jq '.tanks.tank.canary' /var/lib/qctl/init-state.json
+findmnt /tank && jq '.tanks.tank' /var/lib/qctl/init-state.json
 ```
 
 ---

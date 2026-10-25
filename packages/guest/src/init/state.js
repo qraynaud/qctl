@@ -36,16 +36,10 @@ export const initStateDataMountSchema = z.strictObject({
   uuid: nonEmpty.optional(),
 })
 
-export const initStateTankCanarySchema = z.strictObject({
-  line: z.string().min(1),
-  writtenAt: nonEmpty,
-  drillVerifiedAt: nonEmpty.optional(),
-})
-
 export const initStateTankSchema = z.strictObject({
   mount: nonEmpty,
   importedAt: nonEmpty.optional(),
-  canary: initStateTankCanarySchema.optional(),
+  drillVerifiedAt: nonEmpty.optional(),
 })
 
 export const initStateInitTankSchema = z.strictObject({
@@ -188,13 +182,7 @@ function mergeTanks(cur, patch) {
     out[id] = {
       mount: tank.mount ?? prev?.mount ?? '',
       importedAt: tank.importedAt ?? prev?.importedAt,
-      canary: tank.canary
-        ? {
-            line: tank.canary.line,
-            writtenAt: tank.canary.writtenAt,
-            drillVerifiedAt: tank.canary.drillVerifiedAt ?? prev?.canary?.drillVerifiedAt,
-          }
-        : prev?.canary,
+      drillVerifiedAt: tank.drillVerifiedAt ?? prev?.drillVerifiedAt,
     }
   }
   return out

@@ -18,7 +18,6 @@ import {
   tankImportPool,
   tankPoolImportable,
   tankPoolImported,
-  writeTankCanary,
 } from './lib/tank.js'
 
 /** @import { DisksJson } from '@qctl/shared' */
@@ -56,7 +55,6 @@ async function importOneTank(ctx, disks, poolId) {
   // rely on zfs-drill alone (it can be skipped) for reboot remount.
   await tankEnableBootUnlock(ctx, poolId, tank.mount)
 
-  await writeTankCanary(ctx, { poolId, mountPath: tank.mount })
   mergeInitState(
     {
       tanks: {
@@ -91,7 +89,6 @@ export default {
       `ensure tank_passphrase_<poolId> for encrypted tanks (QCTL_ENV=${detectQctlEnv(ctx.osConfig)})`,
       'import/unlock each pool (never create); mount from topology',
       'enable zfs-list.cache / zfs-load-key@<pool> for reboot remount',
-      'write canary under each mount + record in init-state',
       'assert each tank.mount is zfs + zfs mounted=yes (fail closed)',
     ]
   },

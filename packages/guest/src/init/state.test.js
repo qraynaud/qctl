@@ -30,7 +30,7 @@ describe('init state', () => {
     expect(resolveInitStatePath({})).toBe('/var/lib/qctl/init-state.json')
   })
 
-  test('mergeInitState deep-merges tanks + dataMounts and folds canary', () => {
+  test('mergeInitState deep-merges tanks + dataMounts and preserves drillVerifiedAt', () => {
     const dir = makeTempDir()
     temps.push(dir)
     const path = join(dir, 'init-state.json')
@@ -40,7 +40,6 @@ describe('init state', () => {
         tanks: {
           tank: {
             mount: '/tank',
-            canary: { line: 'a\n', writtenAt: '2020-01-01T00:00:00.000Z' },
           },
         },
       },
@@ -52,11 +51,7 @@ describe('init state', () => {
           tank: {
             mount: '/tank',
             importedAt: '2020-01-02T00:00:00.000Z',
-            canary: {
-              line: 'a\n',
-              writtenAt: '2020-01-01T00:00:00.000Z',
-              drillVerifiedAt: '2020-01-02T00:00:00.000Z',
-            },
+            drillVerifiedAt: '2020-01-02T00:00:00.000Z',
           },
         },
       },
@@ -65,7 +60,7 @@ describe('init state', () => {
     const state = readInitState(path)
     expect(state.dataMounts?.vw.mount).toBe('/vw')
     expect(state.tanks?.tank.importedAt).toBe('2020-01-02T00:00:00.000Z')
-    expect(state.tanks?.tank.canary?.drillVerifiedAt).toBe('2020-01-02T00:00:00.000Z')
+    expect(state.tanks?.tank.drillVerifiedAt).toBe('2020-01-02T00:00:00.000Z')
   })
 
   test('writeThinStamp writes only the primary path', () => {

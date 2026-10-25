@@ -1,15 +1,13 @@
 /**
- * Validate cold-handoff per disks.json tank: export → import → load-key → mount → canary.
+ * Validate cold-handoff per disks.json tank: export → import → load-key → mount.
  * Skip with ROCKY_SKIP_ZFS_DRILL=1.
  */
-import { readFile } from 'node:fs/promises'
-
 import { resolveDisks } from '../disks-json.js'
 import { StageError } from '../errors.js'
-import { mergeInitState, readInitState, resolveInitStatePath } from '../state.js'
+import { mergeInitState } from '../state.js'
 import {
   mustExec,
-  tankCanary,
+  tankAssertZfsMounted,
   tankEnableBootUnlock,
   tankEnsureKeyLoaded,
   tankEnsureMounted,
@@ -17,7 +15,6 @@ import {
   tankImportPool,
   tankMountUnit,
   tankPoolImported,
-  writeTankCanary,
 } from './lib/tank.js'
 
 /** @import { DisksJson } from '@qctl/shared' */
@@ -32,43 +29,13 @@ async function drillOneTank(ctx, disks, poolId) {
   const tank = disks.tanks[poolId]
   if (!tank) throw new Error(`disks.json has no tank ${JSON.stringify(poolId)}`)
   const encrypted = disks.encryptedTankIds.includes(poolId)
-  const canary = tankCanary(ctx, tank.mount)
 
   if (!(await tankPoolImported(ctx, poolId))) {
     throw new Error(`pool ${poolId} not imported — run the tank-import stage first`)
   }
   if (encrypted) await tankEnsureKeyLoaded(ctx, poolId)
   await tankEnsureMounted(ctx, poolId, tank.mount)
-
-  let before
-  try {
-    before = await readFile(canary, 'utf8')
-  } catch {
-    ctx.log(`zfs-drill: canary missing for ${poolId}; writing one before drill`)
-    await writeTankCanary(ctx, { poolId, path: canary, mountPath: tank.mount })
-    before = await readFile(canary, 'utf8')
-  }
-  if (!before.trim()) throw new Error(`canary empty at ${canary}`)
-  const prevCanary = readInitState(resolveInitStatePath(ctx.paths)).tanks?.[poolId]?.canary
-  if (prevCanary?.line && prevCanary.line !== before) {
-    throw new Error(
-      `canary init-state mismatch before drill (${poolId})\n  file: ${before}\n  state: ${prevCanary.line}`,
-    )
-  }
-  if (!prevCanary?.line) {
-    mergeInitState(
-      {
-        tanks: {
-          [poolId]: {
-            mount: tank.mount,
-            canary: { line: before, writtenAt: new Date().toISOString() },
-          },
-        },
-      },
-      { paths: ctx.paths },
-    )
-  }
-  ctx.log(`zfs-drill: ${poolId} canary before export: ${before.replace(/\n/g, ' ').trim()}`)
+  await tankAssertZfsMounted(ctx, poolId, tank.mount)
 
   ctx.log(`zfs-drill: exporting ${poolId} (mirrors prod cold handoff)`)
   const mountUnit = await tankMountUnit(ctx, tank.mount)
@@ -89,28 +56,21 @@ async function drillOneTank(ctx, disks, poolId) {
 
   await tankImportPool(ctx, poolId, tank.mount)
   await tankEnsureSystemdMount(ctx, poolId, tank.mount)
+  await tankAssertZfsMounted(ctx, poolId, tank.mount)
 
-  const after = await readFile(canary, 'utf8')
-  if (after !== before) {
-    throw new Error(
-      `canary mismatch after drill (${poolId})\n  before: ${before}\n  after:  ${after}`,
-    )
-  }
   const verifiedAt = new Date().toISOString()
-  const writtenAt =
-    readInitState(resolveInitStatePath(ctx.paths)).tanks?.[poolId]?.canary?.writtenAt || verifiedAt
   mergeInitState(
     {
       tanks: {
         [poolId]: {
           mount: tank.mount,
-          canary: { line: before, writtenAt, drillVerifiedAt: verifiedAt },
+          drillVerifiedAt: verifiedAt,
         },
       },
     },
     { paths: ctx.paths },
   )
-  ctx.log(`zfs-drill: ${poolId} canary intact after export→import→unlock`)
+  ctx.log(`zfs-drill: ${poolId} remounted after export→import→unlock`)
   await tankEnableBootUnlock(ctx, poolId, tank.mount)
   const status = await ctx.exec(['zpool', 'status', poolId])
   for (const line of (status.stdout || '').split('\n').slice(0, 20)) {
@@ -120,7 +80,7 @@ async function drillOneTank(ctx, disks, poolId) {
 
 export default {
   name: 'zfs-drill',
-  describe: 'ZFS export → import → unlock canary drill (per disks.json tank)',
+  describe: 'ZFS export → import → unlock remount drill (per disks.json tank)',
   /**
    * @param {StageContext} ctx
    */
@@ -130,7 +90,7 @@ export default {
     }
     return [
       'read disks.json tanks',
-      'per pool: export → re-import + unlock + verify canary',
+      'per pool: export → re-import + unlock + assert remount',
       'enable boot unlock cache',
     ]
   },

@@ -9,7 +9,6 @@ import { dirname } from 'node:path'
 import { tankPassphraseCredName } from '@qctl/shared'
 
 import { StageError } from '../../errors.js'
-import { mergeInitState } from '../../state.js'
 import { secretString } from './credentials.js'
 
 /** @import { StageContext } from '../../context.js' */
@@ -54,15 +53,6 @@ export function tankCredFile(ctx, poolId) {
  */
 export function tankKeyLocation(ctx, poolId) {
   return `file://${tankCredFile(ctx, poolId)}`
-}
-
-/**
- * @param {StageContext} ctx
- * @param {string} [mount]
- */
-export function tankCanary(ctx, mount) {
-  if (ctx.paths.tankCanary?.trim()) return ctx.paths.tankCanary.trim()
-  return `${tankMount(ctx, mount)}/.rocky-canary`
 }
 
 /**
@@ -350,40 +340,4 @@ export async function tankEnableBootUnlock(ctx, poolId, mountPath) {
   }
   await ctx.exec(['systemctl', 'daemon-reload'])
   await tankEnsureSystemdMount(ctx, pool, mountPath)
-}
-
-/**
- * Write canary bytes onto the tank dataset (for ZFS drill) and record in init-state.
- *
- * @param {StageContext} ctx
- * @param {{
- *   poolId: string,
- *   path?: string,
- *   mountPath?: string,
- *   line?: string,
- * }} opts
- * @returns {Promise<{ path: string, line: string }>}
- */
-export async function writeTankCanary(ctx, opts) {
-  const poolId = opts.poolId.trim()
-  const mount = tankMount(ctx, opts.mountPath)
-  const path = opts.path || tankCanary(ctx, mount)
-  const writtenAt = new Date().toISOString()
-  const line = opts.line ?? `rocky tank canary ${writtenAt}\n`
-  await fsp.mkdir(dirname(path), { recursive: true })
-  await fsp.writeFile(path, line, { mode: 0o644 })
-  await ctx.exec(['sync', path])
-  mergeInitState(
-    {
-      tanks: {
-        [poolId]: {
-          mount,
-          canary: { line, writtenAt },
-        },
-      },
-    },
-    { paths: ctx.paths },
-  )
-  ctx.log(`tank: canary → init-state + ${path}`)
-  return { path, line }
 }
