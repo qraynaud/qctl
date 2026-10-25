@@ -4,13 +4,15 @@
  */
 import { tryReadOsConfig } from '../os-config.js'
 import { detectQctlEnvFor } from '../supervisor/quadlet/env.js'
+import { secretNamesConsumedByApp } from './consumers.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'
 import {
   defaultPodman,
-  discoverSchemaDirs,
   podmanSecretName,
   readSecretHash,
+  schemaDirIsCommon,
   schemaDirIsRootful,
+  schemaDirsForSync,
 } from './sync.js'
 import { loadSensitiveItems } from './varlock.js'
 /** @import { Engine, PodmanRunner } from './sync.js' */
@@ -27,6 +29,8 @@ import { loadSensitiveItems } from './varlock.js'
 /**
  * @typedef {object} CheckOptions
  * @property {string} root
+ * @property {string} [app] scope to one app (+ common secrets it `Secret=`s)
+ * @property {boolean} [rootlessOnly] skip rootful stores (apps-socket Pre)
  * @property {string} [qctlEnv]
  * @property {string} [quadletUser]
  * @property {Record<string, string | undefined>} [env]
@@ -47,9 +51,20 @@ export async function runSecretCheck(o) {
   const podman = o.podman ?? defaultPodman(uid, o.quadletUser ?? os?.quadletUser ?? 'apps')
   const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, { osConfigEnv: os?.env })
 
-  const dirs = discoverSchemaDirs(o.root)
-  if (dirs.length === 0)
-    throw new Error('no unit .env.schema under applications/<app>/<unit>/ or common/<lib>/')
+  const dirs = schemaDirsForSync(o.root, o.app)
+  if (dirs.length === 0) {
+    throw new Error(
+      o.app
+        ? `no .env.schema for app '${o.app}' (or common libs) under applications/ or common/`
+        : 'no unit .env.schema under applications/<app>/<unit>/ or common/<lib>/',
+    )
+  }
+
+  /** @type {Set<string> | null} */
+  const consumed =
+    o.app && dirs.some((d) => schemaDirIsCommon(o.root, d))
+      ? secretNamesConsumedByApp(o.root, o.app)
+      : null
 
   /** @type {CheckRow[]} */
   const rows = []
@@ -63,6 +78,8 @@ export async function runSecretCheck(o) {
     const items = await loadSensitiveItems(dir, { env, qctlEnv, rootful })
     for (const item of items) {
       const name = podmanSecretName(item.key)
+      if (consumed && schemaDirIsCommon(o.root, dir) && !consumed.has(name)) continue
+
       const owner = seen.get(name)
       if (owner) throw new Error(`secret ${name} declared twice (${owner} and ${dir})`)
       seen.set(name, dir)
@@ -82,6 +99,16 @@ export async function runSecretCheck(o) {
 
       const want = secretContentHash(item.value)
       for (const engine of item.engines) {
+        if (o.rootlessOnly && engine === 'rootful') {
+          rows.push({
+            name,
+            key: item.key,
+            engine,
+            status: 'skipped',
+            detail: 'rootful; rootless-only',
+          })
+          continue
+        }
         if (engine === 'rootful' && uid !== 0) {
           rows.push({
             name,

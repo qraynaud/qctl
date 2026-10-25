@@ -52,12 +52,12 @@ Details: [docs/instance.md](../../docs/instance.md).
 ### `qctl secret …`
 
 Resolve unit-schema `@sensitive` values through the varlock graph and compare or write
-Podman secrets. Prefers root via passwordless sudo; without sudo, operates on the
-rootless store only.
+Podman secrets. Run as the admin user (or root); no `sudo` needed.
 
 | Option | Description |
 |--------|-------------|
 | `--env` | Override env label for schema `@import` |
+| `--app` | Limit to one app (and shared secrets it uses) |
 
 | Subcommand | Description |
 |------------|-------------|
@@ -70,14 +70,17 @@ rootless store only.
 |--------|---------|-------------|
 | `--dry-run` | `false` | Print actions only |
 | `--restart` | `false` | Restart apps whose secrets changed |
+| `--app` | — | One app only; use this in `ExecStartPre` |
 
 ```bash
 qctl secret check
 qctl secret sync
 qctl secret sync --restart
+qctl secret sync --app=caddy
 ```
 
-After vault changes: `check` then `sync --restart`. See [docs/secrets.md](../../docs/secrets.md).
+After vault changes: `check` then `sync --restart`. Before a unit starts:
+`ExecStartPre=qctl secret sync --app=<name>`. See [docs/secrets.md](../../docs/secrets.md).
 
 ## Develop
 

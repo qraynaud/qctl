@@ -251,34 +251,3 @@ export function createSystem(opts = {}) {
     exec: execSync,
   }
 }
-
-/**
- * Build argv for re-exec of this qctl binary with `userArgv`.
- * @param {string[]} userArgv
- * @returns {string[]}
- */
-function selfCmd(userArgv) {
-  const script = process.argv[1]
-  const isJs =
-    typeof script === 'string' && /\.[cm]?[jt]s$/.test(script) && !script.startsWith('/$bunfs')
-  const self = isJs ? [process.execPath, /** @type {string} */ (script)] : [process.execPath]
-  return [...self, ...userArgv]
-}
-
-/**
- * Prefer root via `sudo -n`. Returns true when already root.
- * On successful sudo re-exec, does not return (`process.exit`).
- * Returns false when passwordless sudo is unavailable (caller may continue as non-root).
- * @param {string[]} userArgv args after the binary (e.g. ["quadlet", "up"])
- * @param {System} sys
- * @returns {boolean}
- */
-export function tryEnsureRoot(userArgv, sys) {
-  if (sys.uid() === 0) return true
-  const cmd = selfCmd(userArgv)
-  if (execSync('sudo', ['-n', 'true'], { capture: true }).status === 0) {
-    const r = spawnSync('sudo', ['-n', '--', ...cmd], { stdio: 'inherit' })
-    process.exit(r.status ?? 1)
-  }
-  return false
-}

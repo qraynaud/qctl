@@ -1,4 +1,4 @@
-import { authorizeRpc, peerMayConnect } from './acl.js'
+import { authorizeRpc, authorizeSecretParams, peerMayConnect } from './acl.js'
 import { describe, expect, test } from 'bun:test'
 
 /** @import { OsConfig } from '@qctl/shared' */
@@ -52,5 +52,23 @@ describe('supervisor acl', () => {
     const denied = authorizeRpc('admin', { pid: 1, uid: 42, gid: 42 }, 'quadlet', cfg)
     expect(denied.ok).toBe(false)
     if (!denied.ok) expect(denied.error).toMatch(/uid 42/)
+  })
+
+  test('authorizeRpc: apps may secret (param ACL separate)', () => {
+    const cfg = os()
+    expect(authorizeRpc('apps', { pid: 1, uid: 900, gid: 900 }, 'secret', cfg).ok).toBe(true)
+    expect(authorizeRpc('admin', { pid: 1, uid: 1000, gid: 1000 }, 'secret', cfg).ok).toBe(true)
+  })
+
+  test('authorizeSecretParams: apps requires app; rejects restart; admin free', () => {
+    expect(authorizeSecretParams('apps', { op: 'sync' }).ok).toBe(false)
+    expect(authorizeSecretParams('apps', { op: 'check' }).ok).toBe(false)
+    expect(authorizeSecretParams('apps', { op: 'sync', app: 'web' }).ok).toBe(true)
+    expect(authorizeSecretParams('apps', { op: 'check', app: 'web' }).ok).toBe(true)
+    const restart = authorizeSecretParams('apps', { op: 'sync', app: 'web', restart: true })
+    expect(restart.ok).toBe(false)
+    if (!restart.ok) expect(restart.error).toMatch(/restart/)
+    expect(authorizeSecretParams('admin', { op: 'sync' }).ok).toBe(true)
+    expect(authorizeSecretParams('admin', { op: 'sync', restart: true }).ok).toBe(true)
   })
 })

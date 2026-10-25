@@ -10,6 +10,7 @@ import { z } from 'zod'
 
 /**
  * Supervisor RPC method names (apps socket ⊂ all; admin adds QUADLET).
+ * SECRET is on apps too (scoped Pre); param ACL still requires `app` there.
  * @see js-enum-pattern
  */
 export const SUPERVISOR_METHOD = Object.freeze({
@@ -18,20 +19,28 @@ export const SUPERVISOR_METHOD = Object.freeze({
   STATUS: 'status',
   WATCH: 'watch',
   QUADLET: 'quadlet',
+  SECRET: 'secret',
 })
 
 /** @typedef {typeof SUPERVISOR_METHOD[keyof typeof SUPERVISOR_METHOD]} SupervisorMethod */
 
-/** Methods allowed on the apps socket (dependency proxies). */
+/** Methods allowed on the apps socket (dependency proxies + scoped secret). */
 export const APPS_METHODS = Object.freeze([
   SUPERVISOR_METHOD.ENSURE,
   SUPERVISOR_METHOD.RELEASE,
   SUPERVISOR_METHOD.STATUS,
   SUPERVISOR_METHOD.WATCH,
+  SUPERVISOR_METHOD.SECRET,
 ])
 
 /** Extra methods allowed only on the admin socket (day-2 quadlet control). */
 export const ADMIN_ONLY_METHODS = Object.freeze([SUPERVISOR_METHOD.QUADLET])
+
+/** Methods that stream stdout/stderr frames before the final response. */
+export const STREAMING_METHODS = Object.freeze([
+  SUPERVISOR_METHOD.QUADLET,
+  SUPERVISOR_METHOD.SECRET,
+])
 
 /**
  * Non-empty string with no leading/trailing whitespace.
@@ -127,12 +136,44 @@ export const quadletRequestSchema = z.strictObject({
   params: quadletParamsSchema,
 })
 
+/** Secret ops (structured; not raw argv). */
+export const SECRET_OP = Object.freeze({
+  SYNC: 'sync',
+  CHECK: 'check',
+})
+
+/** @typedef {typeof SECRET_OP[keyof typeof SECRET_OP]} SecretOp */
+
+const secretAppOptional = nonEmpty.optional()
+
+export const secretParamsSchema = z.discriminatedUnion('op', [
+  z.strictObject({
+    op: z.literal(SECRET_OP.SYNC),
+    app: secretAppOptional,
+    dryRun: z.boolean().optional(),
+    restart: z.boolean().optional(),
+    env: nonEmpty.optional(),
+  }),
+  z.strictObject({
+    op: z.literal(SECRET_OP.CHECK),
+    app: secretAppOptional,
+    env: nonEmpty.optional(),
+  }),
+])
+
+export const secretRequestSchema = z.strictObject({
+  id: requestIdSchema,
+  method: z.literal(SUPERVISOR_METHOD.SECRET),
+  params: secretParamsSchema,
+})
+
 export const supervisorRequestSchema = z.discriminatedUnion('method', [
   ensureRequestSchema,
   releaseRequestSchema,
   statusRequestSchema,
   watchRequestSchema,
   quadletRequestSchema,
+  secretRequestSchema,
 ])
 
 export const ensureResultSchema = z.strictObject({
@@ -168,12 +209,18 @@ export const quadletResultSchema = z.strictObject({
   exitCode: z.number().int(),
 })
 
+export const secretResultSchema = z.strictObject({
+  method: z.literal(SUPERVISOR_METHOD.SECRET),
+  exitCode: z.number().int(),
+})
+
 export const supervisorResultSchema = z.discriminatedUnion('method', [
   ensureResultSchema,
   releaseResultSchema,
   statusResultSchema,
   watchResultSchema,
   quadletResultSchema,
+  secretResultSchema,
 ])
 
 export const supervisorOkSchema = z.strictObject({
@@ -194,7 +241,7 @@ export const supervisorResponseSchema = z.discriminatedUnion('ok', [
 ])
 
 /**
- * Intermediate NDJSON frame while a long RPC (quadlet) streams stdio.
+ * Intermediate NDJSON frame while a long RPC (quadlet/secret) streams stdio.
  * Distinct from {@link supervisorOkSchema} (no `ok` / `result`).
  */
 export const supervisorStreamSchema = z.strictObject({
@@ -210,11 +257,14 @@ export const supervisorStreamSchema = z.strictObject({
 /** @typedef {z.infer<typeof watchRequestSchema>} WatchRequest */
 /** @typedef {z.infer<typeof quadletParamsSchema>} QuadletParams */
 /** @typedef {z.infer<typeof quadletRequestSchema>} QuadletRequest */
+/** @typedef {z.infer<typeof secretParamsSchema>} SecretParams */
+/** @typedef {z.infer<typeof secretRequestSchema>} SecretRequest */
 /** @typedef {z.infer<typeof ensureResultSchema>} EnsureResult */
 /** @typedef {z.infer<typeof releaseResultSchema>} ReleaseResult */
 /** @typedef {z.infer<typeof statusResultSchema>} StatusResult */
 /** @typedef {z.infer<typeof watchResultSchema>} WatchResult */
 /** @typedef {z.infer<typeof quadletResultSchema>} QuadletResult */
+/** @typedef {z.infer<typeof secretResultSchema>} SecretResult */
 /** @typedef {z.infer<typeof supervisorResultSchema>} SupervisorResult */
 /** @typedef {z.infer<typeof supervisorResponseSchema>} SupervisorResponse */
 /** @typedef {z.infer<typeof supervisorOkSchema>} SupervisorOk */
@@ -263,6 +313,14 @@ export function isAppsMethod(method) {
  */
 export function isAdminOnlyMethod(method) {
   return ADMIN_ONLY_METHODS.includes(/** @type {typeof ADMIN_ONLY_METHODS[number]} */ (method))
+}
+
+/**
+ * @param {string} method
+ * @returns {boolean}
+ */
+export function isStreamingMethod(method) {
+  return STREAMING_METHODS.includes(/** @type {typeof STREAMING_METHODS[number]} */ (method))
 }
 
 /**

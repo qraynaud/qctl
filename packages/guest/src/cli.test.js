@@ -103,15 +103,23 @@ describe('guest CLI', () => {
     try {
       const { stderr, code } = await runGuest(['secret', 'sync'], { cwd: dir })
       expect(code).toBe(1)
-      expect(stderr).toMatch(/missing instance root|\/etc\/qctl\/config\.json/)
+      expect(stderr).toMatch(/missing OS config|\/etc\/qctl\/config\.json/)
     } finally {
       removeTempDir(dir)
     }
   })
+
+  test('secret sync --help documents --app and ExecStartPre', async () => {
+    const { stdout, code } = await runGuest(['secret', 'sync', '--help'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('--app')
+    expect(stdout).toContain('ExecStartPre=qctl secret sync --app=')
+    expect(stdout).not.toContain('sudo')
+  })
 })
 
 describe('secret sync end-to-end (varlock graph + podman shim)', () => {
-  // CLI `secret sync` ensureRoot/sudo — exercise the library path here (same as root after escalate).
+  // Library path (supervisor owns day-2 CLI RPC).
   test('creates rootless podman secrets from graph-resolved unit literals', async () => {
     const { runSecretSync } = await import('./secret/sync.js')
     const root = makeSecretInstance()

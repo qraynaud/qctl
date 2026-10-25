@@ -51,4 +51,16 @@ Offline reinstall: seed while Vaultwarden is reachable, then `vm up --wipe-os`
 
 ## Day-2 Podman secrets
 
-Unchanged: unit `@sensitive` → `qctl secret sync` → Podman secrets.
+Unit `@sensitive` → `qctl secret sync` → Podman secrets. Run as admin (or root).
+
+```bash
+qctl secret check
+qctl secret sync --restart          # after vault / schema changes
+qctl secret sync --app=caddy        # one app only
+```
+
+In Quadlet units that need secrets at start:
+
+```text
+ExecStartPre=qctl secret sync --app=<name>
+```

@@ -1,13 +1,10 @@
-import * as cliMod from '../../secret/cli.js'
-import * as syncMod from '../../secret/sync.js'
+import * as rpcMod from './rpc.js'
 import * as mod from './sync.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 afterEach(() => {
   // @ts-expect-error restore
-  cliMod.runSecretCommand.mockRestore?.()
-  // @ts-expect-error restore
-  syncMod.runSecretSync.mockRestore?.()
+  rpcMod.callSecret.mockRestore?.()
   // @ts-expect-error restore
   console.error.mockRestore?.()
   process.exitCode = 0
@@ -21,26 +18,20 @@ describe('secret sync command', () => {
     expect(typeof mod.handler).toBe('function')
   })
 
-  test('handler delegates to runSecretSync', async () => {
-    spyOn(cliMod, 'runSecretCommand').mockImplementation(async (fn) => {
-      await fn('/repo')
-    })
-    const runSecretSync = spyOn(syncMod, 'runSecretSync').mockResolvedValue({
-      synced: 0,
-      skipped: 0,
-      changed: [],
-    })
-    await mod.handler({ dryRun: true, restart: true, env: 'dev' })
-    expect(runSecretSync).toHaveBeenCalledWith({
-      root: expect.stringMatching(/repo$/),
+  test('handler builds sync params and calls callSecret', async () => {
+    const callSecret = spyOn(rpcMod, 'callSecret').mockResolvedValue(undefined)
+    await mod.handler({ dryRun: true, restart: true, env: 'dev', app: 'caddy' })
+    expect(callSecret).toHaveBeenCalledWith({
+      op: 'sync',
       dryRun: true,
       restart: true,
-      qctlEnv: 'dev',
+      env: 'dev',
+      app: 'caddy',
     })
   })
 
   test('handler sets exitCode on error', async () => {
-    spyOn(cliMod, 'runSecretCommand').mockRejectedValue(new Error('sync failed'))
+    spyOn(rpcMod, 'callSecret').mockRejectedValue(new Error('sync failed'))
     spyOn(console, 'error').mockImplementation(() => {})
     await mod.handler({})
     expect(process.exitCode).toBe(1)

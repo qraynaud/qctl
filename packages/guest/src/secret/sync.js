@@ -24,7 +24,7 @@ import { createContext } from '../supervisor/quadlet/context.js'
 import { detectQctlEnvFor } from '../supervisor/quadlet/env.js'
 import { runRestart } from '../supervisor/quadlet/lifecycle.js'
 import { execSync } from '../supervisor/quadlet/system.js'
-import { discoverSecretConsumers } from './consumers.js'
+import { discoverSecretConsumers, secretNamesConsumedByApp } from './consumers.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'
 import { loadSensitiveItems } from './varlock.js'
 
@@ -47,6 +47,8 @@ import { loadSensitiveItems } from './varlock.js'
  * @property {string} root
  * @property {boolean} [dryRun]
  * @property {boolean} [restart]   restart apps that consume secrets we updated
+ * @property {string} [app] scope to one app (+ common secrets it `Secret=`s)
+ * @property {boolean} [rootlessOnly] skip rootful stores (apps-socket Pre)
  * @property {string} [qctlEnv]
  *   sets `QCTL_ENV` for schema `@import(..., enabled=…)`
  *   (default: CLI → `/etc/qctl/config.json` → repo `.env` ENV= → `dev`)
@@ -103,6 +105,43 @@ export function discoverSchemaDirs(root) {
     if (existsSync(join(dir, '.env.schema'))) out.push(dir)
   }
   return out.sort()
+}
+
+/**
+ * Whether `schemaDir` is under `applications/<app>/`.
+ * @param {string} root
+ * @param {string} schemaDir
+ * @param {string} app
+ * @returns {boolean}
+ */
+export function schemaDirBelongsToApp(root, schemaDir, app) {
+  const base = join(root, 'applications', app)
+  const rel = relative(base, schemaDir)
+  return Boolean(rel) && !rel.startsWith('..') && !rel.split(sep).includes('..')
+}
+
+/**
+ * Whether `schemaDir` is under `common/`.
+ * @param {string} root
+ * @param {string} schemaDir
+ * @returns {boolean}
+ */
+export function schemaDirIsCommon(root, schemaDir) {
+  const base = join(root, 'common')
+  const rel = relative(base, schemaDir)
+  return Boolean(rel) && !rel.startsWith('..') && !rel.split(sep).includes('..')
+}
+
+/**
+ * Schema dirs for a full sync, or scoped to one app (its units + common libs).
+ * @param {string} root
+ * @param {string} [app]
+ * @returns {string[]}
+ */
+export function schemaDirsForSync(root, app) {
+  const dirs = discoverSchemaDirs(root)
+  if (!app) return dirs
+  return dirs.filter((d) => schemaDirBelongsToApp(root, d, app) || schemaDirIsCommon(root, d))
 }
 
 /**
@@ -192,9 +231,20 @@ export async function syncAll(o) {
   const podman = o.podman ?? defaultPodman(uid, quadletUser)
   const qctlEnv = o.qctlEnv ?? detectQctlEnvFor(o.root, { osConfigEnv: os?.env })
 
-  const dirs = discoverSchemaDirs(o.root)
-  if (dirs.length === 0)
-    throw new Error('no unit .env.schema under applications/<app>/<unit>/ or common/<lib>/')
+  const dirs = schemaDirsForSync(o.root, o.app)
+  if (dirs.length === 0) {
+    throw new Error(
+      o.app
+        ? `no .env.schema for app '${o.app}' (or common libs) under applications/ or common/`
+        : 'no unit .env.schema under applications/<app>/<unit>/ or common/<lib>/',
+    )
+  }
+
+  /** @type {Set<string> | null} */
+  const consumed =
+    o.app && dirs.some((d) => schemaDirIsCommon(o.root, d))
+      ? secretNamesConsumedByApp(o.root, o.app)
+      : null
 
   /** @type {Map<string, string>} */
   const seen = new Map()
@@ -204,12 +254,14 @@ export async function syncAll(o) {
   const changed = []
 
   for (const dir of dirs) {
-    const app = dir.split('/').slice(-1)[0]
-    log(`schema ${app}`)
+    const label = dir.split('/').slice(-1)[0]
+    log(`schema ${label}`)
     const rootful = schemaDirIsRootful(o.root, dir)
     const items = await loadSensitiveItems(dir, { env, qctlEnv, rootful })
     for (const item of items) {
       const name = podmanSecretName(item.key)
+      if (consumed && schemaDirIsCommon(o.root, dir) && !consumed.has(name)) continue
+
       const owner = seen.get(name)
       if (owner) throw new Error(`secret ${name} declared twice (${owner} and ${dir})`)
       seen.set(name, dir)
@@ -220,6 +272,10 @@ export async function syncAll(o) {
       let nameChanged = false
 
       for (const engine of item.engines) {
+        if (o.rootlessOnly && engine === 'rootful') {
+          log(`skip ${name} (rootful; rootless-only)`)
+          continue
+        }
         if (engine === 'rootful' && uid !== 0) {
           log(`skip ${name} (rootful; run as root)`)
           continue
@@ -298,7 +354,7 @@ export async function restartSecretConsumers(o, changed) {
     log: (m) => log(m.replace(/^quadlet:\s*/, 'restart: ')),
   })
   for (const app of list) {
-    runRestart(ctx, app)
+    await runRestart(ctx, app)
   }
 }
 

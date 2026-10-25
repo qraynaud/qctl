@@ -3,10 +3,20 @@ import { join } from 'node:path'
 
 import { makeTempDir, removeTempDir, writeFile } from '@qctl/shared/test-helpers'
 
-import { discoverSecretConsumers, secretNamesInContainer } from './consumers.js'
+import {
+  discoverSecretConsumers,
+  secretNamesConsumedByApp,
+  secretNamesInContainer,
+} from './consumers.js'
 import { makeSecretInstance, makeShims } from './fixture.js'
 import { SECRET_HASH_LABEL, secretContentHash } from './hash.js'
-import { discoverSchemaDirs, podmanSecretName, schemaDirIsRootful, syncAll } from './sync.js'
+import {
+  discoverSchemaDirs,
+  podmanSecretName,
+  schemaDirIsRootful,
+  schemaDirsForSync,
+  syncAll,
+} from './sync.js'
 import { loadSensitiveItems } from './varlock.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -110,20 +120,79 @@ describe('naming + discovery', () => {
     }
   })
 
-  test('secretNamesInContainer + discoverSecretConsumers', () => {
+  test('secretNamesInContainer + discoverSecretConsumers + secretNamesConsumedByApp', () => {
     const root = makeTempDir()
     try {
       writeFile(
         root,
         'applications/caddy/caddy/caddy.container',
-        '[Container]\nSecret=CADDY_DNS,type=env,target=X\n',
+        '[Container]\nSecret=CADDY_DNS,type=env,target=X\nSecret=PG_PASS,type=env,target=P\n',
       )
       writeFile(root, 'applications/caddy/app.yaml', 'engine: rootless\n')
       expect(
         secretNamesInContainer(join(root, 'applications/caddy/caddy/caddy.container')),
-      ).toEqual(['CADDY_DNS'])
+      ).toEqual(['CADDY_DNS', 'PG_PASS'])
       const map = discoverSecretConsumers(root)
       expect([...(map.get('CADDY_DNS') ?? [])]).toEqual(['caddy'])
+      expect([...secretNamesConsumedByApp(root, 'caddy')].sort()).toEqual(['CADDY_DNS', 'PG_PASS'])
+      expect(secretNamesConsumedByApp(root, 'missing').size).toBe(0)
+    } finally {
+      removeTempDir(root)
+    }
+  })
+
+  test('schemaDirsForSync scopes to app units + common', () => {
+    const root = makeSecretInstance()
+    try {
+      writeFile(root, 'common/pg/.env.schema', '# ---\n# @sensitive\nPG_PASS=x\n')
+      const caddy = schemaDirsForSync(root, 'caddy').map((d) => d.slice(root.length + 1))
+      expect(caddy).toEqual(['applications/caddy/caddy', 'common/pg'])
+      expect(schemaDirsForSync(root, 'ad').map((d) => d.slice(root.length + 1))).toEqual([
+        'applications/ad/ad',
+        'common/pg',
+      ])
+    } finally {
+      removeTempDir(root)
+    }
+  })
+
+  test('syncAll app= only that app; common only if Secret=; rootlessOnly skips rootful', async () => {
+    const root = makeSecretInstance()
+    try {
+      writeFile(
+        root,
+        'common/pg/.env.schema',
+        '# ---\n# @sensitive @required\nPG_PASS=pg-secret-value\n# @sensitive @required\nOTHER=unused-secret-value\n',
+      )
+      writeFile(
+        root,
+        'applications/caddy/caddy/caddy.container',
+        '[Container]\nImage=x\nSecret=PG_PASS,type=env,target=P\n',
+      )
+      const rec = recordingPodman()
+      const r = await syncAll({
+        root,
+        app: 'caddy',
+        uid: 0,
+        env: {},
+        podman: rec.podman,
+        log: () => {},
+      })
+      expect(Object.keys(rec.created).sort()).toEqual(['rootless/CADDY_DNS', 'rootless/PG_PASS'])
+      expect(rec.created['rootless/OTHER']).toBeUndefined()
+      expect(r.synced).toBe(2)
+
+      const ad = recordingPodman()
+      await syncAll({
+        root,
+        app: 'ad',
+        rootlessOnly: true,
+        uid: 0,
+        env: {},
+        podman: ad.podman,
+        log: () => {},
+      })
+      expect(Object.keys(ad.created)).toEqual([])
     } finally {
       removeTempDir(root)
     }

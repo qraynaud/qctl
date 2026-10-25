@@ -8,6 +8,7 @@ import {
   encodeStreamLine,
   isAdminOnlyMethod,
   isAppsMethod,
+  isStreamingMethod,
   supervisorRequestCodec,
   supervisorRequestSchema,
   supervisorResponseCodec,
@@ -18,8 +19,12 @@ describe('supervisor protocol', () => {
   test('method enum + allowlists', () => {
     expect(SUPERVISOR_METHOD.ENSURE).toBe('ensure')
     expect(isAppsMethod(SUPERVISOR_METHOD.ENSURE)).toBe(true)
+    expect(isAppsMethod(SUPERVISOR_METHOD.SECRET)).toBe(true)
     expect(isAppsMethod(SUPERVISOR_METHOD.QUADLET)).toBe(false)
     expect(isAdminOnlyMethod(SUPERVISOR_METHOD.QUADLET)).toBe(true)
+    expect(isStreamingMethod(SUPERVISOR_METHOD.QUADLET)).toBe(true)
+    expect(isStreamingMethod(SUPERVISOR_METHOD.SECRET)).toBe(true)
+    expect(isStreamingMethod(SUPERVISOR_METHOD.ENSURE)).toBe(false)
   })
 
   test('request codec round-trip is idempotent', () => {
@@ -50,7 +55,7 @@ describe('supervisor protocol', () => {
     expect(supervisorResponseCodec.decode(supervisorResponseCodec.encode(ok))).toEqual(ok)
   })
 
-  test('decodeRequestLine accepts ensure / quadlet', () => {
+  test('decodeRequestLine accepts ensure / quadlet / secret', () => {
     expect(decodeRequestLine('{"method":"ensure","params":{"app":"web"}}')).toEqual({
       method: 'ensure',
       params: { app: 'web' },
@@ -64,6 +69,16 @@ describe('supervisor protocol', () => {
     ).toEqual({
       method: 'quadlet',
       params: { op: 'down', apps: ['web'] },
+    })
+    expect(
+      decodeRequestLine('{"method":"secret","params":{"op":"sync","app":"web","restart":true}}\n'),
+    ).toEqual({
+      method: 'secret',
+      params: { op: 'sync', app: 'web', restart: true },
+    })
+    expect(decodeRequestLine('{"method":"secret","params":{"op":"check"}}\n')).toEqual({
+      method: 'secret',
+      params: { op: 'check' },
     })
   })
 

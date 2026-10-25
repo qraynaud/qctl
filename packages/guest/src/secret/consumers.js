@@ -23,6 +23,28 @@ export function secretNamesInContainer(file) {
 }
 
 /**
+ * Secret names referenced by `Secret=` in one app's containers.
+ * @param {string} root
+ * @param {string} app
+ * @returns {Set<string>}
+ */
+export function secretNamesConsumedByApp(root, app) {
+  /** @type {Set<string>} */
+  const out = new Set()
+  const appDir = join(root, 'applications', app)
+  try {
+    for (const unit of listUnitDirs(appDir)) {
+      for (const file of globExts(unit, ['container'])) {
+        for (const name of secretNamesInContainer(file)) out.add(name)
+      }
+    }
+  } catch {
+    // missing app
+  }
+  return out
+}
+
+/**
  * @param {string} root
  * @returns {Map<string, Set<string>>} secret name → app names
  */

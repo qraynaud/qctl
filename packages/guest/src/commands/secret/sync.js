@@ -1,9 +1,7 @@
-import { resolve } from 'node:path'
-
-import { runSecretCommand } from '../../secret/cli.js'
-import { runSecretSync } from '../../secret/sync.js'
+import { callSecret } from './rpc.js'
 /** @import { Argv } from 'yargs' */
-/** @import { SecretArgv } from '../../secret/cli.js' */
+/** @import { SecretParams } from '../../supervisor/protocol.js' */
+/** @import { SecretArgv } from './rpc.js' */
 
 export const command = 'sync'
 export const describe =
@@ -14,6 +12,11 @@ export const describe =
  */
 export function builder(yargs) {
   return yargs
+    .option('app', {
+      type: 'string',
+      describe:
+        'Limit to one app (+ common secrets it Secret=s); required for ExecStartPre as apps',
+    })
     .option('dry-run', { type: 'boolean', default: false, describe: 'Print actions only' })
     .option('restart', {
       type: 'boolean',
@@ -26,9 +29,9 @@ export function builder(yargs) {
     })
     .epilog(
       [
-        'Prefers root via passwordless sudo; without sudo, syncs the rootless store only.',
+        'Run as admin (or root).',
         'After vault changes: qctl secret check && qctl secret sync --restart',
-        'Quadlet hook: ExecStartPre=qctl secret sync',
+        'Before start: ExecStartPre=qctl secret sync --app=<name>',
       ].join('\n'),
     )
 }
@@ -38,14 +41,15 @@ export function builder(yargs) {
  */
 export async function handler(argv) {
   try {
-    await runSecretCommand(async (root) => {
-      await runSecretSync({
-        root: resolve(root),
-        dryRun: Boolean(argv.dryRun),
-        restart: Boolean(argv.restart),
-        qctlEnv: typeof argv.env === 'string' ? argv.env : undefined,
-      })
-    })
+    /** @type {SecretParams} */
+    const params = {
+      op: 'sync',
+      dryRun: Boolean(argv.dryRun),
+      restart: Boolean(argv.restart),
+    }
+    if (typeof argv.app === 'string' && argv.app) params.app = argv.app
+    if (typeof argv.env === 'string' && argv.env) params.env = argv.env
+    await callSecret(params)
   } catch (e) {
     console.error(`secret-sync: ERROR: ${e instanceof Error ? e.message : String(e)}`)
     process.exitCode = 1
