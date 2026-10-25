@@ -31,8 +31,9 @@ export function vlanParentEnvLines(vlans) {
  * NoCloud network-config v2 — uplinks only.
  *
  * Do NOT emit 802.1Q here: on local libvirt/passt, a VLAN subiface on eth0
- * wedges hostfwd (SSH banner hangs / frozen TTY). Macvlan parents are created
- * as dummy ifaces from vlan-parents.env (see user-data bootcmd).
+ * wedges hostfwd (SSH banner hangs / frozen TTY). Lab macvlan parents
+ * (`vlanN` dummies) are created by guest init stage `vlan-parents` from seed
+ * config / vlan-parents.env (persistent boot oneshot — not cloud-init bootcmd).
  *
  * @param {Record<string, { dhcp4: boolean }>} uplinks
  * @param {Record<string, { id: number, link?: string }>} [_vlans] kept for API compat

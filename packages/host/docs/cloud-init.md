@@ -89,9 +89,11 @@ Cache downloads under `~/.cache/qctl/images/`.
 4. SSH as the VW Login **`rocky`** username with the injected admin key
    (`PermitRootLogin no`). Impersonate apps: `runuser -u apps -- …`.
 
-NoCloud applies seed-rendered `network-config` (uplinks only from provision; macvlan parents are dummy ifaces — not 802.1Q on eth0;
-fallback template is DHCP on `eth0`). That is the
-path that must work on a laptop libvirt/QEMU VM.
+NoCloud applies seed-rendered `network-config` (uplinks only from provision; lab
+macvlan parents are `vlanN` dummy ifaces created by guest init stage `vlan-parents`
+from seed JSON / `vlan-parents.env` — not 802.1Q on eth0 and not cloud-init bootcmd;
+fallback template is DHCP on `eth0`). That is the path that must work on a laptop
+libvirt/QEMU VM.
 
 ## Proxmox: cloud-init drive / snippets
 
@@ -154,8 +156,8 @@ then mounts. Key file: `file:///etc/credstore/rocky/tank_passphrase_<poolId>`. V
 `zfs-load-key.service` is a `/dev/null` stub — do not unmask it; there is no real unit
 underneath.
 
-**Export/import drill (`zfs-drill` stage):** `zpool export` → import → unlock → verify
-tank canary (on-disk `.rocky-canary` + `init-state.json`). Skip with `ROCKY_SKIP_ZFS_DRILL=1`.
+**Export/import drill (`zfs-drill` stage):** `zpool export` → import → unlock → remount
+assert; records `drillVerifiedAt` in `init-state.json`. Skip with `ROCKY_SKIP_ZFS_DRILL=1`.
 
 Never put Vaultwarden CLI apodata (`@initVw(appDataDir=…)`) on encrypted `tank`.
 On-box VW **container** data belongs on `/tank`.

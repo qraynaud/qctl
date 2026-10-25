@@ -14,6 +14,7 @@ import { describe, expect, test } from 'bun:test'
 describe('profiles', () => {
   test('default stage order (ordering constraint: seal → keys/admin → services → tank → clone → stamp)', () => {
     expect([...DEFAULT_STAGES]).toEqual([
+      'vlan-parents',
       'network-up',
       'host-baseline',
       'data-mounts',
@@ -59,6 +60,7 @@ describe('first-boot stages (provision → Tier-0)', () => {
 
   test('all former shell stages are JS', async () => {
     for (const name of [
+      'vlan-parents',
       'network-up',
       'host-baseline',
       'data-mounts',

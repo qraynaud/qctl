@@ -11,12 +11,14 @@ import startServices from './start-services.js'
 import tankCreate from './tank-create.js'
 import tankImport from './tank-import.js'
 import tier0Seal from './tier0-seal.js'
+import vlanParents from './vlan-parents.js'
 import zfsDrill from './zfs-drill.js'
 
 /** @import { Stage } from './types.js' */
 
 /** @type {ReadonlyArray<Stage>} */
 const ALL = [
+  vlanParents,
   networkUp,
   hostBaseline,
   dataMounts,
