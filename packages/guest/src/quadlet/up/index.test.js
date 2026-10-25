@@ -41,6 +41,8 @@ describe('quadlet up', () => {
       const web = readFileSync(join(rl.dest, 'web/web.container'), 'utf8')
       expect(web).toContain('Image=img/web:2.0-dev')
       expect(web).not.toContain('${')
+      expect(web).toContain('Requires=proxy.service')
+      expect(web).not.toContain('qctl-app@proxy.service')
       expect(readFileSync(join(rl.dest, 'web/web.container.d/autostart.conf'), 'utf8')).toContain(
         'WantedBy=default.target',
       )

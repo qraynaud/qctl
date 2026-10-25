@@ -142,7 +142,7 @@ export async function installSharedNetworks(s) {
       const dest = join(paths.dest, base)
       const renv = await loadNetworkRenderEnv(ctx, f)
       if (dry) {
-        if (templateDiffers(f, dest, renv)) noteDirtyNetwork(s, base)
+        if (templateDiffers(ctx, f, dest, renv, paths.engine)) noteDirtyNetwork(s, base)
         else if (existsSync(dest) && networkLiveStale(ctx, paths, dest)) noteDirtyNetwork(s, base)
         continue
       }

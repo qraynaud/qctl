@@ -42,11 +42,37 @@ describe('install helpers', () => {
       const dest = join(paths.dest, 'proxy/proxy.container')
       const renv = await loadRenderEnv(ctx, join(fx.root, 'applications/proxy'))
 
-      expect(templateDiffers(src, dest, renv)).toBe(true)
+      expect(templateDiffers(ctx, src, dest, renv, paths.engine)).toBe(true)
       expect(installIfChanged(ctx, paths, src, dest, renv)).toBe(true)
       expect(existsSync(dest)).toBe(true)
       expect(installIfChanged(ctx, paths, src, dest, renv)).toBe(false)
-      expect(templateDiffers(src, dest, renv)).toBe(false)
+      expect(templateDiffers(ctx, src, dest, renv, paths.engine)).toBe(false)
+    } finally {
+      cleanupQuadletFixture(fx)
+    }
+  })
+
+  test('install rewrites only cross-engine peers; same-engine stays peer.service', async () => {
+    const fx = makeQuadletInstance()
+    try {
+      const { ctx, sys } = makeContext(fx)
+      const paths = sys.paths('rootless')
+      const src = join(fx.root, 'applications/web/web/web.container')
+      // Add a cross-engine dep beside same-engine proxy.
+      writeFileSync(
+        src,
+        `${readFileSync(src, 'utf8').replace(
+          'After=network-online.target proxy.service',
+          'After=network-online.target proxy.service dbroot.service',
+        )}`,
+      )
+      const dest = join(paths.dest, 'web/web.container')
+      const renv = await loadRenderEnv(ctx, join(fx.root, 'applications/web'))
+      expect(installIfChanged(ctx, paths, src, dest, renv)).toBe(true)
+      const body = readFileSync(dest, 'utf8')
+      expect(body).toContain('After=network-online.target proxy.service qctl-app@dbroot.service')
+      expect(body).toContain('Requires=proxy.service')
+      expect(body).not.toContain('qctl-app@proxy.service')
     } finally {
       cleanupQuadletFixture(fx)
     }

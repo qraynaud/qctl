@@ -45,6 +45,10 @@ qctl quadlet restart caddy
 qctl quadlet down caddy active-directory
 ```
 
+Cross-app deps use `other.service` in unit templates (same-engine or
+rootful↔rootless). After a qctl upgrade, run `qctl quadlet up` once.
+Details: [docs/instance.md](../../docs/instance.md).
+
 ### `qctl secret …`
 
 Resolve unit-schema `@sensitive` values through the varlock graph and compare or write

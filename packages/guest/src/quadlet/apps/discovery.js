@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml'
 
 import { die } from '../errors.js'
 import { QUADLET_EXTS, SYSTEMD_EXTS } from './constants.js'
+import { DEP_LINE_RE, serviceTokenToApp } from './dep-keys.js'
 
 /** @import { Engine } from '../system.js' */
 
@@ -155,10 +156,9 @@ export function companionApps(dir) {
   return c.map((x) => String(x).trim()).filter(Boolean)
 }
 
-const DEP_LINE_RE = /^(After|Wants|Requires|Requisite|BindsTo|PartOf|Upholds)=(.*)$/
-
 /**
- * Other applications referenced via After=/Wants=/Requires=/… *.service in this app's units.
+ * Other applications referenced via After=/Wants=/Requires=/PropagatesStopTo=/… *.service
+ * in this app's units. Accepts both `peer.service` and `qctl-app@peer.service`.
  * @param {{ root: string }} ctx
  * @param {string} dir
  * @returns {string[]} sorted unique
@@ -172,9 +172,8 @@ export function unitDepApps(ctx, dir) {
       if (!m) continue
       const val = (m[2] ?? '').split('#')[0] ?? ''
       for (const unit of val.split(/\s+/).filter(Boolean)) {
-        if (!unit.endsWith('.service')) continue
-        const app = unit.slice(0, -'.service'.length)
-        if (appDir(ctx, app)) out.add(app)
+        const app = serviceTokenToApp(unit)
+        if (app && appDir(ctx, app)) out.add(app)
       }
     }
   }

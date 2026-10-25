@@ -14,6 +14,7 @@ import {
 import { basename, dirname, join } from 'node:path'
 
 import { rmdirQuiet, unitInstallName } from './apps/index.js'
+import { rewritePeerServiceDeps } from './apps/rewrite.js'
 import { renderFile, renderUnitEnvFile } from './env.js'
 import { die } from './errors.js'
 
@@ -54,6 +55,18 @@ export function unitInstallDir(paths, unitDir) {
 }
 
 /**
+ * Render a unit template and rewrite cross-engine peer deps to `qctl-app@…`.
+ * @param {QuadletContext} ctx
+ * @param {string} src
+ * @param {RenderEnv} renv
+ * @param {Engine} engine engine of the app/network being installed
+ * @returns {string}
+ */
+export function renderInstalledUnit(ctx, src, renv, engine) {
+  return rewritePeerServiceDeps(renderFile(src, renv), ctx, engine)
+}
+
+/**
  * Always write rendered template to dest (0644, chown for rootless).
  * @param {QuadletContext} ctx
  * @param {EnginePaths} paths
@@ -62,7 +75,7 @@ export function unitInstallDir(paths, unitDir) {
  * @param {RenderEnv} renv
  */
 export function renderToFile(ctx, paths, src, dest, renv) {
-  atomicWrite(dest, renderFile(src, renv))
+  atomicWrite(dest, renderInstalledUnit(ctx, src, renv, paths.engine))
   ctx.sys.chown(paths.engine, dest)
 }
 
@@ -82,13 +95,15 @@ export async function renderUnitEnvToFile(ctx, paths, unitDir, dest, packageRenv
 
 /**
  * Template differs from installed dest?
+ * @param {QuadletContext} ctx
  * @param {string} src
  * @param {string} dest
  * @param {RenderEnv} renv
+ * @param {Engine} engine
  * @returns {boolean}
  */
-export function templateDiffers(src, dest, renv) {
-  return differs(dest, renderFile(src, renv))
+export function templateDiffers(ctx, src, dest, renv, engine) {
+  return differs(dest, renderInstalledUnit(ctx, src, renv, engine))
 }
 
 /**
@@ -113,7 +128,7 @@ export async function unitEnvDiffers(unitDir, dest, packageRenv, ctx) {
  * @returns {boolean} true when written
  */
 export function installIfChanged(ctx, paths, src, dest, renv) {
-  const content = renderFile(src, renv)
+  const content = renderInstalledUnit(ctx, src, renv, paths.engine)
   if (!differs(dest, content)) return false
   atomicWrite(dest, content)
   ctx.sys.chown(paths.engine, dest)

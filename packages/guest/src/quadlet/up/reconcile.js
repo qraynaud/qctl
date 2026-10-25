@@ -44,19 +44,19 @@ import { markRestart, noteEngine, plan } from './session.js'
 export async function appUnitsDiffer(ctx, dir, paths, renv) {
   for (const f of globExts(dir, QUADLET_EXTS)) {
     const dest = join(paths.dest, basename(f))
-    if (templateDiffers(f, dest, renv)) return true
+    if (templateDiffers(ctx, f, dest, renv, paths.engine)) return true
     if (wantsAutostart(basename(f)) && autostartDiffers(dest, paths.engine)) return true
   }
   for (const udir of listUnitDirs(dir)) {
     const unitDest = unitInstallDir(paths, udir)
     for (const f of globExts(udir, QUADLET_EXTS)) {
       const dest = join(unitDest, basename(f))
-      if (templateDiffers(f, dest, renv)) return true
+      if (templateDiffers(ctx, f, dest, renv, paths.engine)) return true
       if (wantsAutostart(basename(f)) && autostartDiffers(dest, paths.engine)) return true
     }
   }
   for (const f of packageUnitFiles(dir, SYSTEMD_EXTS)) {
-    if (templateDiffers(f, join(paths.sysDest, basename(f)), renv)) return true
+    if (templateDiffers(ctx, f, join(paths.sysDest, basename(f)), renv, paths.engine)) return true
   }
   for (const udir of runtimeUnitDirs(dir)) {
     if (await unitEnvDiffers(udir, join(unitInstallDir(paths, udir), '.env'), renv, ctx))
