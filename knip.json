@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["qemu-img", "virsh"],
+  "ignoreBinaries": ["qemu-img", "virsh", "systemd-notify"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {

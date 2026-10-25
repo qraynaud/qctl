@@ -85,6 +85,11 @@ write_files:
     permissions: "0644"
     content: !file first-boot/rocky-first-boot.service
 
+  - path: /etc/systemd/system/qctl-supervisor.service
+    owner: root:root
+    permissions: "0644"
+    content: !file first-boot/qctl-supervisor.service
+
   - path: /etc/systemd/system/rocky-init-tank-prep.service
     owner: root:root
     permissions: "0644"
@@ -101,6 +106,8 @@ runcmd:
       systemctl start rocky-init-tank-prep.service
       {% else %}
       loginctl enable-linger {{ provision.users.apps.username }}
+      # Supervisor before workload autostart (qctl-app@ / day-2 quadlet).
+      systemctl enable qctl-supervisor.service
       # OS upgrade before first-boot oneshot: upgrading systemd/cloud-init under a
       # blocking `systemctl start` of rocky-first-boot resets D-Bus and fails
       # cloud-init while qctl is still running. Guest init then only installs.

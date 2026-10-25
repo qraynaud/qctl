@@ -216,11 +216,27 @@ export default {
       await ensureAdminKeysFile(ctx, keysSrc)
       await ensureAdminUser(ctx, admin, keysSrc)
       persistAdminOsConfig(ctx, { username: admin.user, uid: admin.uid, gid: admin.gid })
+      await refreshSupervisorAdminAcl(ctx)
     } catch (err) {
       throw new StageError('admin-user', err instanceof Error ? err.message : String(err))
     }
     ctx.log(`rocky-admin-user: user '${admin.user}' ready`)
   },
+}
+
+/**
+ * Re-read OsConfig (admin uid/gid) and re-chown sockets after Tier-0 admin is known.
+ * @param {StageContext} ctx
+ */
+async function refreshSupervisorAdminAcl(ctx) {
+  const r = await ctx.exec(['systemctl', 'try-restart', 'qctl-supervisor.service'])
+  if (r.code !== 0) {
+    ctx.log(
+      `rocky-admin-user: WARN try-restart qctl-supervisor failed: ${r.stderr.trim() || r.stdout.trim() || `exit ${r.code}`}`,
+    )
+    return
+  }
+  ctx.log('rocky-admin-user: restarted qctl-supervisor (admin socket ACL)')
 }
 
 /**

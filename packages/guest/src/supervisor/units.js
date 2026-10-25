@@ -1,11 +1,38 @@
 /**
- * systemd unit templates for cross-engine `qctl-app@` proxies.
+ * systemd unit templates: qctl-supervisor + cross-engine `qctl-app@` proxies.
  */
 
+export const QCTL_SUPERVISOR_UNIT = 'qctl-supervisor.service'
 export const QCTL_APP_PROXY_UNIT = 'qctl-app@.service'
 
 /** Default installed guest CLI path (cloud-init / sync-from-iso). */
 export const QCTL_BIN_DEFAULT = '/usr/local/bin/qctl'
+
+/**
+ * @param {{ qctlBin?: string }} [opts]
+ * @returns {string}
+ */
+export function qctlSupervisorUnitText(opts = {}) {
+  const qctl = opts.qctlBin?.trim() || QCTL_BIN_DEFAULT
+  return `# Managed by qctl — dual-socket supervisor (apps + admin)
+[Unit]
+Description=qctl supervisor (apps + admin sockets)
+Documentation=https://github.com/qctl/qctl
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${qctl} _internal_supervisor
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=qctl
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
+`
+}
 
 /**
  * @param {{ qctlBin?: string }} [opts]
@@ -17,13 +44,13 @@ export function qctlAppProxyUnitText(opts = {}) {
 [Unit]
 Description=qctl app proxy (%i)
 Documentation=https://github.com/qctl/qctl
-# Soft dep until seed ships qctl-supervisor.service (seed-baseline).
 Wants=qctl-supervisor.service
 After=qctl-supervisor.service
 
 [Service]
 Type=notify
-NotifyAccess=main
+# Bun cannot sd_notify via unix_dgram; we shell out to systemd-notify (child PID).
+NotifyAccess=all
 ExecStart=${qctl} _internal_app_proxy %i
 ExecStop=${qctl} _internal_app_proxy --release %i
 # Main exits non-zero when the peer stamp clears/fails so Requires=/BindsTo= tear down.
@@ -32,6 +59,33 @@ Restart=no
 [Install]
 WantedBy=multi-user.target
 `
+}
+
+/**
+ * @param {{
+ *   writeFile: (path: string, body: string) => void | Promise<void>,
+ *   mkdir: (path: string) => void | Promise<void>,
+ *   systemctl: (args: string[]) => { status: number, stdout?: string, stderr?: string } | Promise<{ status: number }>,
+ *   systemUnitDir?: string,
+ *   qctlBin?: string,
+ *   log?: (line: string) => void,
+ * }} opts
+ */
+export async function installQctlSupervisorUnit(opts) {
+  const log = opts.log ?? (() => {})
+  const systemDir = opts.systemUnitDir ?? '/etc/systemd/system'
+  const body = qctlSupervisorUnitText({ qctlBin: opts.qctlBin })
+  const systemPath = `${systemDir.replace(/\/+$/, '')}/${QCTL_SUPERVISOR_UNIT}`
+
+  await opts.mkdir(systemDir)
+  await opts.writeFile(systemPath, body)
+  log(`qctl-supervisor: installed ${systemPath}`)
+
+  const sys = await opts.systemctl(['daemon-reload'])
+  if (sys.status !== 0) {
+    throw new Error(`systemctl daemon-reload failed (status ${sys.status})`)
+  }
+  log('qctl-supervisor: daemon-reload')
 }
 
 /**

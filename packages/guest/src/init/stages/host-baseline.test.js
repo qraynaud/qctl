@@ -7,7 +7,10 @@ describe('host-baseline stage', () => {
   test('exports name and plan', () => {
     expect(hostBaseline.name).toBe('host-baseline')
     const ctx = createTestContext({ log: () => {} })
-    expect(hostBaseline.plan(ctx).some((l) => l.includes('linger'))).toBe(true)
+    const plan = hostBaseline.plan(ctx)
+    expect(plan.some((l) => l.includes('linger'))).toBe(true)
+    expect(plan.some((l) => l.includes('qctl-supervisor'))).toBe(true)
+    expect(plan.some((l) => l.includes('qctl-app@'))).toBe(true)
   })
 
   test('run requires root', async () => {

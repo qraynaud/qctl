@@ -1,10 +1,12 @@
 /**
  * Host baseline: timezone, linger, apps subids/podman socket, ZFS module,
- * sshd drops, offline firewall. Data volumes: {@link ./data-mounts.js}.
+ * sshd drops, offline firewall, qctl-supervisor + qctl-app@. Data volumes:
+ * {@link ./data-mounts.js}.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 
+import { installQctlAppProxyUnits, installQctlSupervisorUnit } from '../../supervisor/units.js'
 import { StageError } from '../errors.js'
 
 /** @import { StageContext } from '../context.js' */
@@ -188,9 +190,77 @@ async function ensureAppsPodmanApiSocket(ctx) {
   ctx.log(`rocky-baseline: ${user} podman.socket enabled → ${sock}`)
 }
 
+/**
+ * Install qctl-supervisor + qctl-app@ (system + apps user bus) and start supervisor.
+ * @param {StageContext} ctx
+ */
+async function ensureQctlSupervisorBaseline(ctx) {
+  const user = appsUser(ctx)
+  const uidR = await ctx.exec(['id', '-u', user])
+  if (uidR.code !== 0) throw new Error(`user ${user} missing`)
+  const uid = uidR.stdout.trim()
+  const rt = `/run/user/${uid}`
+  const bus = `${rt}/bus`
+
+  /**
+   * @param {string[]} args
+   */
+  const systemctl = async (args) => {
+    const r = await ctx.exec(['systemctl', ...args])
+    return { status: r.code, stdout: r.stdout, stderr: r.stderr }
+  }
+  /**
+   * @param {string[]} args
+   */
+  const systemctlUser = async (args) => {
+    const r = await ctx.exec([
+      'runuser',
+      '-u',
+      user,
+      '--',
+      'env',
+      `XDG_RUNTIME_DIR=${rt}`,
+      `DBUS_SESSION_BUS_ADDRESS=unix:path=${bus}`,
+      'systemctl',
+      '--user',
+      ...args,
+    ])
+    return { status: r.code, stdout: r.stdout, stderr: r.stderr }
+  }
+  /**
+   * @param {string} path
+   * @param {string} body
+   */
+  const writeUnit = async (path, body) => {
+    await writeFile(path, body)
+    await chmod(path, 0o644)
+  }
+
+  /** @param {string} p */
+  const mkdirP = async (p) => {
+    await mkdir(p, { recursive: true })
+  }
+  await installQctlSupervisorUnit({
+    mkdir: mkdirP,
+    writeFile: writeUnit,
+    systemctl,
+    log: ctx.log,
+  })
+  await installQctlAppProxyUnits({
+    mkdir: mkdirP,
+    writeFile: writeUnit,
+    systemctl,
+    systemctlUser,
+    log: ctx.log,
+  })
+  await must(ctx, 'systemctl', 'enable', '--now', 'qctl-supervisor.service')
+  ctx.log('rocky-baseline: qctl-supervisor enabled; qctl-app@ installed (system + user)')
+}
+
 export default {
   name: 'host-baseline',
-  describe: 'Timezone, linger, apps subids/podman socket, ZFS module, offline firewall',
+  describe:
+    'Timezone, linger, apps subids/podman socket, qctl-supervisor/qctl-app@, ZFS, offline firewall',
   /**
    * @param {StageContext} ctx
    */
@@ -201,6 +271,7 @@ export default {
       `timedatectl set-timezone ${tz}`,
       'login.defs SUB_*_COUNT=0 + umask 022',
       `linger ${user} + subids + podman.socket`,
+      'qctl-supervisor enable --now; qctl-app@ (system + user)',
       'modprobe zfs; sshd drops; firewall-offline-cmd ssh/cockpit/http/https',
     ]
   },
@@ -239,6 +310,7 @@ umask 022
       await ensureAppsSubids(ctx)
       await must(ctx, 'loginctl', 'enable-linger', user)
       await ensureAppsPodmanApiSocket(ctx)
+      await ensureQctlSupervisorBaseline(ctx)
 
       await mkdir('/etc/modules-load.d', { recursive: true })
       await writeFile('/etc/modules-load.d/zfs.conf', 'zfs\n')
