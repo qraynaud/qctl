@@ -174,7 +174,10 @@ Then **`wait-qctl-init.sh`** does `systemctl start --no-block` and **polls** for
 `--wait` + `RemainAfterExit=yes` hangs forever; blocking `start` dies with D-Bus reset
 when the oneshot upgrades systemd, while qctl is still running). If the unit fails or
 finishes without a stamp, the script exits non-zero so **`cloud-init status` is error**.
-The same script is installed as `scripts/per-boot/90-rocky-wait-qctl-init.sh` so a reboot
+When the stamp is present it prints a stamp-gated **`QCTL_READY stamp=…`** line to
+serial (`/dev/console`). Host **`qctl vm up`** waits for that line (not cloud-init Final
+Stage / seed `final_message`), then settles briefly before detaching serial. The same
+script is installed as `scripts/per-boot/90-rocky-wait-qctl-init.sh` so a reboot
 mid-runcmd cannot skip the gate: once the unit is enabled, every boot waits for the stamp
 until it exists.
 

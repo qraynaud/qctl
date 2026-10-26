@@ -23,8 +23,14 @@ say() {
   echo "$*" >/dev/console 2>/dev/null || true
 }
 
+# Host `vm up` scrapes this line (stamp-gated). Keep the token stable.
+say_ready() {
+  say "QCTL_READY stamp=$STAMP"
+}
+
 if [[ -f $STAMP ]]; then
   say "rocky-wait-qctl-init: stamp present ($STAMP) — qctl _internal_init already OK"
+  say_ready
   exit 0
 fi
 
@@ -47,6 +53,7 @@ while ((SECONDS < deadline)); do
   if [[ -f $STAMP ]]; then
     say "rocky-wait-qctl-init: OK — $STAMP"
     say "Rocky cloud-init OK — qctl _internal_init stamped ($STAMP)"
+    say_ready
     cat "$STAMP" || true
     exit 0
   fi
