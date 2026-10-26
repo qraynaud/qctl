@@ -13,6 +13,7 @@ import {
 } from './console.js'
 import { composeScrubSeed, isInstalled, markInstalled } from './installed-lifecycle.js'
 import { endpointNetworkFromNics } from './nic-plan.js'
+import { runSeed } from './seed/run.js'
 import {
   buildCreateSpec,
   dryRunUp,
@@ -325,6 +326,16 @@ async function runPersistentUp(ctx, prep, module, specs, timeoutSec, followConso
   }
 
   if (vm && !installed) {
+    // Same in-place ISO rebuild as create; domain CDROM already points at this path.
+    console.log(chalk.cyan(`vm: building ${prep.seedProfile} seed…`))
+    await runSeed({
+      seedProfile: prep.seedProfile,
+      profile: ctx.profile,
+      allowMissingTier0: false,
+      allowMissingFiles: false,
+      env: ctx.env || 'dev',
+      target: String(module.id),
+    })
     console.log(chalk.cyan('vm: existing VM not marked installed — continuing first-boot'))
     /** @type {SerialFollow | null} */
     let follow = null

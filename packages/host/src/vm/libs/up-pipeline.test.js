@@ -1,3 +1,4 @@
+import * as seedRun from './seed/run.js'
 import { reportSerialWaitOutcome, runVmInitTank, runVmUp } from './up-pipeline.js'
 import * as upPrepare from './up-prepare.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
@@ -94,6 +95,57 @@ describe('runVmUp (module)', () => {
     } finally {
       // @ts-expect-error restore
       upPrepare.prepareHostForUp.mockRestore?.()
+    }
+  })
+
+  test('continue first-boot seeds before start when not installed', async () => {
+    spyOn(upPrepare, 'prepareHostForUp').mockResolvedValue(undefined)
+    /** @type {string[]} */
+    const order = []
+    spyOn(seedRun, 'runSeed').mockImplementation(async () => {
+      order.push('seed')
+      return {
+        isoPath: '/tmp/seed.iso',
+        imgPath: '/tmp/seed.img',
+        profile: /** @type {const} */ ('appliance'),
+        env: 'dev',
+        instanceId: 'rocky-dev',
+        keepDir: null,
+      }
+    })
+    const handle = { name: 'rocky' }
+    try {
+      await expect(
+        runVmUp(
+          { ...ctx(), profile: 'workstation' },
+          { console: false },
+          mockModule({
+            id: /** @type {never} */ ('workstation'),
+            find: async () => handle,
+            createFlagStore: async () =>
+              /** @type {never} */ ({
+                has: async () => false,
+                get: async () => {
+                  throw Object.assign(new Error('missing'), { code: 'FLAG_NOT_FOUND' })
+                },
+                set: async () => {},
+                delete: async () => {},
+              }),
+            // Stop before markInstalled → scrubSeed (needs an instance repo).
+            start: async () => {
+              order.push('start')
+              throw new Error('stop-after-start')
+            },
+          }),
+          softSpecs(),
+        ),
+      ).rejects.toThrow('stop-after-start')
+      expect(order).toEqual(['seed', 'start'])
+    } finally {
+      // @ts-expect-error restore
+      upPrepare.prepareHostForUp.mockRestore?.()
+      // @ts-expect-error restore
+      seedRun.runSeed.mockRestore?.()
     }
   })
 })
