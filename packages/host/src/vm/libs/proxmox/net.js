@@ -1,10 +1,58 @@
 /**
- * Proxmox net0/netN value helpers.
+ * Proxmox net0/netN value helpers (from `ethernet.vm` / {@link AlignedVmNic} / {@link VmNicsSpec}).
  */
+import { VM_ATTACH_MODE, VM_VLAN_MODE } from '../../../provision/schema/networking.js'
 
-/** @import { ProxmoxNet, QemuConfig } from './types.js' */
+/** @import { VmNicBridgeSpec, VmNicsSpec } from '../../driver-contract.js' */
+/** @import { AlignedVmNic, EthernetVm, QemuConfig } from './types.js' */
 
-/** @typedef {Partial<ProxmoxNet>} NetIface */
+/** Bridge host-attach fields used to build a PVE `netN` string. */
+/** @typedef {Extract<EthernetVm, { mode: 'bridge' }>} NetIface */
+
+/**
+ * {@link VmNicsSpec} → sorted {@link AlignedVmNic}[] (label → net0, net1, …).
+ * Only `mode: bridge` entries (Proxmox has no userspace/NAT NIC); `nat` omitted.
+ * @param {VmNicsSpec | null | undefined} nics
+ * @returns {AlignedVmNic[]}
+ */
+export function nicsSpecToAligned(nics) {
+  return Object.entries(nics || {})
+    .filter(
+      /** @returns {entry is [string, VmNicBridgeSpec]} */ (entry) =>
+        entry[1].mode === VM_ATTACH_MODE.BRIDGE,
+    )
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, n]) => ({
+      label,
+      iface: n.iface,
+      vm: {
+        mode: /** @type {typeof VM_ATTACH_MODE.BRIDGE} */ (VM_ATTACH_MODE.BRIDGE),
+        bridge: n.bridge,
+        ...(n.mac ? { mac: n.mac } : {}),
+        ...(n.vlan ? { vlan: n.vlan } : {}),
+      },
+    }))
+}
+
+/**
+ * @param {AlignedVmNic | NetIface | Partial<NetIface>} n
+ * @returns {NetIface}
+ */
+function asNetIface(n) {
+  const raw = 'label' in n ? n.vm : n
+  if (!raw || raw.mode === VM_ATTACH_MODE.NAT) {
+    throw new Error('formatNet: expected mode: bridge host attach')
+  }
+  if (!('bridge' in raw) || !raw.bridge) {
+    throw new Error('formatNet: bridge name required')
+  }
+  return {
+    mode: VM_ATTACH_MODE.BRIDGE,
+    bridge: raw.bridge,
+    ...('mac' in raw && raw.mac ? { mac: raw.mac } : {}),
+    ...('vlan' in raw && raw.vlan ? { vlan: raw.vlan } : {}),
+  }
+}
 
 /**
  * @param {string | null | undefined} raw
@@ -51,27 +99,31 @@ export function summarizeVlans(ids) {
 }
 
 /**
- * Build one PVE netN value from a normalized iface.
- * @param {NetIface} [iface]
+ * Build one PVE netN value from ethernet.vm (or flat NetIface).
+ * @param {AlignedVmNic | NetIface | Partial<NetIface>} iface
  * @returns {string}
  */
-export function formatNet(iface = {}) {
-  const bridge = iface.bridge || 'vmbr0'
-  const mac = iface.mac ? normalizeMac(iface.mac) : null
-  let net = mac ? `virtio=${mac},bridge=${bridge}` : `virtio,bridge=${bridge}`
-  if (iface.trunks?.length) net += `,trunks=${iface.trunks.join(';')}`
-  else if (iface.vlan) net += `,tag=${iface.vlan}`
+export function formatNet(iface) {
+  const n = asNetIface(iface)
+  const mac = n.mac ? normalizeMac(n.mac) : null
+  let net = mac ? `virtio=${mac},bridge=${n.bridge}` : `virtio,bridge=${n.bridge}`
+  if (n.vlan?.mode === VM_VLAN_MODE.TRUNK && n.vlan.ids.length) {
+    net += `,trunks=${n.vlan.ids.join(';')}`
+  } else if (n.vlan?.mode === VM_VLAN_MODE.ACCESS && n.vlan.ids[0] != null) {
+    net += `,tag=${n.vlan.ids[0]}`
+  }
   return net
 }
 
 /**
- * Assign net0..netN on a PVE create/config form.
+ * Assign net0..netN on a PVE create/config form (array order = slot order).
+ * Empty / omitted list → no host NICs (caller deletes surplus netN).
  * @param {QemuConfig} form
- * @param {NetIface[] | null | undefined} nets
+ * @param {(AlignedVmNic | NetIface | Partial<NetIface>)[] | null | undefined} nets
  * @returns {number}
  */
 export function applyNetsToForm(form, nets) {
-  const list = nets?.length ? nets : [{ bridge: 'vmbr0' }]
+  const list = nets || []
   for (let i = 0; i < list.length; i++) {
     form[`net${i}`] = formatNet(list[i])
   }
@@ -79,29 +131,39 @@ export function applyNetsToForm(form, nets) {
 }
 
 /**
- * @param {NetIface} [iface]
- * @returns {string}
+ * Apply {@link VmNicsSpec} (sorted by label) to a PVE form.
+ * @param {QemuConfig} form
+ * @param {VmNicsSpec | null | undefined} nics
+ * @returns {number}
  */
-export function formatNetLabel(iface = {}) {
-  const bridge = iface.bridge || 'vmbr0'
-  /** @type {string} */
-  let base
-  if (iface.trunks?.length) {
-    base = `bridge ${bridge} trunk [${summarizeVlans(iface.trunks)}]`
-  } else if (iface.vlan) {
-    base = `bridge ${bridge} vlan ${iface.vlan}`
-  } else {
-    base = `bridge ${bridge} (untagged)`
-  }
-  return iface.mac ? `${base} mac ${normalizeMac(iface.mac) || iface.mac}` : base
+export function applyNicsSpecToForm(form, nics) {
+  return applyNetsToForm(form, nicsSpecToAligned(nics))
 }
 
 /**
- * @param {NetIface[] | null | undefined} nets
+ * @param {AlignedVmNic | NetIface | Partial<NetIface>} iface
+ * @returns {string}
+ */
+export function formatNetLabel(iface) {
+  const n = asNetIface(iface)
+  /** @type {string} */
+  let base
+  if (n.vlan?.mode === VM_VLAN_MODE.TRUNK && n.vlan.ids.length) {
+    base = `bridge ${n.bridge} trunk [${summarizeVlans(n.vlan.ids)}]`
+  } else if (n.vlan?.mode === VM_VLAN_MODE.ACCESS && n.vlan.ids[0] != null) {
+    base = `bridge ${n.bridge} vlan ${n.vlan.ids[0]}`
+  } else {
+    base = `bridge ${n.bridge} (untagged)`
+  }
+  return n.mac ? `${base} mac ${normalizeMac(n.mac) || n.mac}` : base
+}
+
+/**
+ * @param {(AlignedVmNic | NetIface | Partial<NetIface>)[] | null | undefined} nets
  * @returns {string}
  */
 export function formatNetsLabel(nets) {
-  if (!nets?.length) return formatNetLabel({})
+  if (!nets?.length) return 'no host NICs'
   if (nets.length === 1) return formatNetLabel(nets[0])
   return nets.map((n, i) => `net${i}: ${formatNetLabel(n)}`).join('; ')
 }

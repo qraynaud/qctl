@@ -1,6 +1,6 @@
 /**
  * Deep-merge provision YAML mappings (base ← overlay).
- * Named collections (ports/uplinks/vlans/proxmox.net) are maps so keys merge.
+ * Named collections (ports/interfaces) are maps so keys merge.
  * Arrays are replaced by the overlay.
  */
 

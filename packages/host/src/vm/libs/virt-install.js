@@ -4,11 +4,12 @@ import path from 'node:path'
 
 import { $ } from 'zx'
 
-import { virtInstallPasstNetworkArg } from '../../lib/ports.js'
 import { die } from '../../lib/util.js'
 import { virsh } from './libvirt/virsh.js'
+import { nicsSorted } from './nic-plan.js'
+import { injectInterfaceAliases, virtInstallNetworkArgv } from './virt-install-net.js'
 
-/** @import { VmSpecs } from '../driver-contract.js' */
+/** @import { VmNicsSpec, VmSpecs } from '../driver-contract.js' */
 /** @import { PortsMap } from '../types.js' */
 
 /**
@@ -20,9 +21,9 @@ import { virsh } from './libvirt/virsh.js'
  *   disks: Pick<VmSpecs, 'disks' | 'bootDrive'>,
  *   seed: { device: string, path: string, format?: string },
  *   ports: PortsMap,
- *   network: string,
  *   osinfo: string,
  *   serialTcpPort?: number,
+ *   nics?: VmNicsSpec | null,
  * }} opts
  * @returns {string[]}
  */
@@ -34,9 +35,9 @@ export function buildVirtInstallArgs({
   disks: plan,
   seed,
   ports,
-  network,
   osinfo,
   serialTcpPort,
+  nics,
 }) {
   const labels = Object.keys(plan?.disks || {})
   if (!labels.length) die('buildVirtInstallArgs: disks is empty')
@@ -82,11 +83,7 @@ export function buildVirtInstallArgs({
     args.push('--disk', `path=${seed.path},format=${seed.format},bus=virtio,serial=cidata`)
   }
 
-  if (network === 'default') {
-    args.push('--network', 'network=default,model=virtio')
-  } else {
-    args.push('--network', virtInstallPasstNetworkArg(ports))
-  }
+  args.push(...virtInstallNetworkArgv({ nics, ports }))
 
   if (serialTcpPort) {
     args.push(
@@ -107,9 +104,10 @@ export function buildVirtInstallArgs({
 /**
  * Define a domain from virt-install args without starting it (`--print-xml` + `virsh define`).
  * @param {string[]} args from {@link buildVirtInstallArgs}
+ * @param {{ nics?: VmNicsSpec | null }} [opts]  inject libvirt `<alias>` for plan labels
  * @returns {Promise<void>}
  */
-export async function defineDomainFromVirtInstallArgs(args) {
+export async function defineDomainFromVirtInstallArgs(args, opts = {}) {
   const connectIdx = args.indexOf('--connect')
   const nameIdx = args.indexOf('--name')
   if (connectIdx < 0 || nameIdx < 0) {
@@ -123,10 +121,12 @@ export async function defineDomainFromVirtInstallArgs(args) {
     console.error(String(r.stderr || r.stdout))
     die(`virt-install --print-xml failed (exit ${r.exitCode})`)
   }
-  const xml = String(r.stdout || '').trim()
+  let xml = String(r.stdout || '').trim()
   if (!xml.includes('<domain')) {
     die('virt-install --print-xml produced no domain XML')
   }
+  const labels = nicsSorted(opts.nics).map(([label]) => label)
+  if (labels.length) xml = injectInterfaceAliases(xml, labels)
   const tmp = path.join(os.tmpdir(), `rocky-${name}-define.xml`)
   fs.writeFileSync(tmp, xml, 'utf8')
   try {

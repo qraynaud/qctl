@@ -17,7 +17,13 @@ export type VmEnv = import('./driver-contract.js').VmEnv
 /** Seed ISO kind — same as {@link import('./driver-contract.js').VmSeedProfile}. */
 export type SeedProfile = import('./driver-contract.js').VmSeedProfile
 
-/** Parsed yargs argv for vm commands (known fields; yargs may add more). */
+/**
+ * Parsed yargs argv for vm commands (known fields; yargs may add more).
+ *
+ * Guest shape (memory/vcpus, NICs, osinfo) comes from provision / driver defaults —
+ * not CLI overrides. {@link import('../lib/options.js').resolveBootResources} fills
+ * memory/vcpus from `<target>.memory|cpu` before {@link import('./context.js').toVmSpecs}.
+ */
 export type VmArgv = {
   _: (string | number)[]
   $0: string
@@ -34,12 +40,19 @@ export type VmArgv = {
   seedProfile?: SeedProfile | string
   /** Resolved by `resolveDriver` (module.defaultVmName). */
   name: string
-  connect: string
-  /** Resolved by `resolveDriver` (resolveBootResources via module id). */
+  /** libvirt URI (workstation); ignored for proxmox. */
+  connect?: string
+  /**
+   * From provision `<target>.memory` via {@link import('../lib/options.js').resolveBootResources}.
+   * Not a CLI flag.
+   */
   memory: number
+  /**
+   * From provision `<target>.cpu` via {@link import('../lib/options.js').resolveBootResources}.
+   * Not a CLI flag.
+   */
   vcpus: number
-  network: import('./driver-contract.js').VmNetwork | string
-  osinfo: string
+  /** Keep unpacked cidata tree (debug; same as `vm seed --out`). */
   cidata?: string
   dryRun: boolean
   wipeOs?: boolean

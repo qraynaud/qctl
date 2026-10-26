@@ -6,12 +6,14 @@ import { chalk } from 'zx'
 
 import { die } from '../../../lib/util.js'
 import { INIT_TANK_BOOT_ID } from '../init-tank-boot.js'
+import { pveUnknown, pveUpid } from './api-schemas.js'
 import { applyNetsToForm } from './config.js'
+import { resolveAlignedNics } from './nic-reconcile.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue } from './vm-parse.js'
 
 /** @import { ProxmoxClient } from './client.js' */
-/** @import { AttachDiskSpec, QemuConfig } from './types.js' */
+/** @import { AlignedVmNic, AttachDiskSpec, QemuConfig } from './types.js' */
 
 /**
  * @param {QemuConfig} cfg
@@ -37,6 +39,7 @@ export async function stopVmIfRunning(client, vmid, reason) {
   if (st?.status === 'running' || st?.status === 'paused') {
     console.log(chalk.cyan(`vm: stopping vmid=${vmid} to ${reason}…`))
     const upid = await client.post(
+      pveUpid,
       `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
       {},
     )
@@ -64,7 +67,7 @@ export async function removeInitTankBootDisks(client, vmid, preferKey) {
   }
   if (!drop.length) return
   console.log(chalk.yellow(`vm: remove init-tank boot ${drop.join(',')}`))
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
     delete: [...new Set(drop)].join(','),
     force: '1',
   })
@@ -83,11 +86,23 @@ export async function removeInitTankBootDisks(client, vmid, preferKey) {
  *   osSize: string,
  *   forceTankIds: string[],
  *   diskSpecs: AttachDiskSpec[],
+ *   nics?: AlignedVmNic[],
  * }} opts
  * @returns {Promise<{ bootKey: string }>}
  */
 export async function attachInitTankBootOnAppliance(client, opts) {
-  const { vmid, name, memory, vcpus, importVolid, isoVolid, osSize, forceTankIds, diskSpecs } = opts
+  const {
+    vmid,
+    name,
+    memory,
+    vcpus,
+    importVolid,
+    isoVolid,
+    osSize,
+    forceTankIds,
+    diskSpecs,
+    nics,
+  } = opts
   const node = client.config.node
   const storage = client.config.storage
 
@@ -104,7 +119,7 @@ export async function attachInitTankBootOnAppliance(client, opts) {
       if (serial && wipe.has(serial)) tankKeys.push(key)
     }
     if (tankKeys.length) {
-      await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+      await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
         delete: tankKeys.join(','),
         force: '1',
       })
@@ -139,7 +154,7 @@ export async function attachInitTankBootOnAppliance(client, opts) {
     [bootKey]: `${storage}:0,import-from=${importVolid},size=${osSize},serial=${INIT_TANK_BOOT_ID}`,
     ide2: `${isoVolid},media=cdrom`,
   }
-  applyNetsToForm(form, client.config.nets)
+  applyNetsToForm(form, resolveAlignedNics(client, nics))
 
   let scsi = nextScsiSlot({ ...cfg, [bootKey]: '1' })
   const recreate = new Set(forceTankIds)
@@ -151,6 +166,6 @@ export async function attachInitTankBootOnAppliance(client, opts) {
     form[`scsi${scsi++}`] = `${storage}:${sizeToGiB(d.size)},serial=${d.id}`
   }
 
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
   return { bootKey }
 }

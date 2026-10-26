@@ -17,13 +17,33 @@ describe('deepMerge', () => {
 
   test('merges nested maps by key', () => {
     const out = deepMerge(
-      { networking: { ports: { ssh: { port: 22 } }, vlans: { vlan2: { id: 2 } } } },
-      { networking: { vlans: { vlan2: { ipv4: '10.0.0.1' }, vlan3: { id: 3 } } } },
+      {
+        networking: {
+          ports: { ssh: { port: 22 } },
+          interfaces: { vlan2: { type: 'dummy', ipv4: { addresses: '10.0.0.1/24' } } },
+        },
+      },
+      {
+        networking: {
+          interfaces: {
+            vlan2: { type: 'vlan', id: 2, parent: 'main' },
+            vlan3: { type: 'dummy' },
+          },
+        },
+      },
     )
     expect(out).toEqual({
       networking: {
         ports: { ssh: { port: 22 } },
-        vlans: { vlan2: { id: 2, ipv4: '10.0.0.1' }, vlan3: { id: 3 } },
+        interfaces: {
+          vlan2: {
+            type: 'vlan',
+            id: 2,
+            parent: 'main',
+            ipv4: { addresses: '10.0.0.1/24' },
+          },
+          vlan3: { type: 'dummy' },
+        },
       },
     })
   })

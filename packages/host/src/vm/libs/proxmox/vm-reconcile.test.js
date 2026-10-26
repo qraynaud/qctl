@@ -27,16 +27,22 @@ describe('reconcileRockyAppliance', () => {
       config: {
         node: 'pve',
         storage: 'local-lvm',
-        nets: [{ bridge: 'vmbr0' }],
-        bridge: 'vmbr0',
+        nets: [
+          {
+            label: 'main',
+            iface: 'eth0',
+            vm: { mode: 'bridge', bridge: 'vmbr0' },
+          },
+        ],
       },
       qemuStatus: async () => ({ status: 'stopped' }),
       qemuConfig: async () => cfg,
       /**
+       * @param {unknown} _schema
        * @param {string} path
        * @param {Record<string, string>} form
        */
-      put: async (path, form) => {
+      put: async (_schema, path, form) => {
         puts.push({ path, form })
       },
       waitTask: async () => {},
@@ -80,16 +86,22 @@ describe('reconcileRockyAppliance', () => {
       config: {
         node: 'pve',
         storage: 'local-lvm',
-        nets: [{ bridge: 'vmbr0' }],
-        bridge: 'vmbr0',
+        nets: [
+          {
+            label: 'main',
+            iface: 'eth0',
+            vm: { mode: 'bridge', bridge: 'vmbr0' },
+          },
+        ],
       },
       qemuStatus: async () => ({ status: 'stopped' }),
       qemuConfig: async () => cfg,
       /**
+       * @param {unknown} _schema
        * @param {string} path
        * @param {Record<string, string>} form
        */
-      put: async (path, form) => {
+      put: async (_schema, path, form) => {
         puts.push({ path, form })
       },
       waitTask: async () => {},

@@ -108,7 +108,9 @@ describe('writeProject', () => {
     expect(common).toMatch(/production:\s*true/)
     expect(common).toContain('networking:')
     expect(common).toContain('forward: 2222')
-    expect(common).toContain('eth0:')
+    expect(common).toContain('interfaces:')
+    expect(common).toContain('main:')
+    expect(common).toContain('iface: eth0')
 
     expect(resolveProfile({ root })).toMatchObject({
       key: 'lab',
@@ -170,7 +172,7 @@ describe('promptProject', () => {
       'data', // vdev role
       'single', // vdev type
       'done', // ports done (lab presets)
-      'done', // uplinks done (eth0)
+      'done', // ethernet interfaces done (main)
       'omit', // ssh host_keys omit
     ]
     /** @type {boolean[]} */
@@ -187,7 +189,9 @@ describe('promptProject', () => {
       false, // customize tank options
       false, // another tank
       true, // use lab port presets
-      false, // add VLANs
+      false, // add VLAN/dummy
+      false, // configure host attach (ethernet.vm)
+      false, // remap guest ifaces (workstation target)
       false, // customize users
       true, // use ~/.ssh fallback for authorized_keys
       false, // configure guest repo clone
@@ -229,8 +233,11 @@ describe('promptProject', () => {
     expect(answers.disks?.byProfile.lab?.os).toEqual({ kind: 'virtual', size: '20G' })
     expect(answers.networking?.shared).toBe(false)
     expect(answers.networking?.topology.ports.ssh).toEqual({ port: 22, forward: 2222 })
-    expect(answers.networking?.topology.uplinks.eth0).toEqual({ dhcp4: true })
-    expect(answers.networking?.topology.vlans).toEqual({})
+    expect(answers.networking?.topology.interfaces.main).toEqual({
+      type: 'ethernet',
+      iface: 'eth0',
+      ipv4: { dhcp: true },
+    })
     expect(answers.overlays?.workstation).toEqual({ cpu: 2, memory: 4096 })
     expect(answers.overlays?.proxmox).toBeUndefined()
     expect(answers.usersSsh).toMatchObject({

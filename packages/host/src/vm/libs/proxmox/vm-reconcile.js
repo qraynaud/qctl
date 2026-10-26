@@ -1,26 +1,19 @@
 import { chalk } from 'zx'
 
 import { assertProxmoxAttachModes, withAttachModes } from '../attach-mode.js'
-import { applyNetsToForm, mergeNetPreserveMac } from './config.js'
+import { pveUnknown, pveUpid } from './api-schemas.js'
 import { diskStateFromConfig } from './disk-holder.js'
 import { preserveQctlFlagTagsOnForm } from './flag-store.js'
+import { putNetsOnForm, resolveAlignedNics } from './nic-reconcile.js'
 import { rockyTpmstate } from './tpm.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue } from './vm-parse.js'
 
+/** @import { VmNicsSpec } from '../../driver-contract.js' */
 /** @import { ProxmoxClient } from './client.js' */
-/** @import { AttachDiskSpec, QemuConfig } from './types.js' */
+/** @import { AlignedVmNic, AttachDiskSpec, QemuConfig } from './types.js' */
 
 /** @typedef {QemuConfig[string]} QemuValue */
-
-/**
- * @param {QemuValue} existingNet0
- * @param {string} desiredNet0
- * @returns {string}
- */
-function net0WithPreservedMac(existingNet0, desiredNet0) {
-  return mergeNetPreserveMac(existingNet0, desiredNet0)
-}
 
 /**
  * @param {string} key
@@ -96,7 +89,7 @@ function allocScsi(taken, prefer) {
 
 /**
  * Align an existing appliance VM to the rocky hardware profile:
- * machine q35, serial console, net0 from provision, topology disks present;
+ * machine q35, serial console, NICs from plan, topology disks present;
  * remove leftover NICs/CDROMs/UI cruft. Does not recreate the OS disk.
  * Leaves the VM stopped.
  * @param {ProxmoxClient} client
@@ -106,6 +99,7 @@ function allocScsi(taken, prefer) {
  *   memory: number,
  *   vcpus: number,
  *   disks: AttachDiskSpec[],
+ *   nics?: AlignedVmNic[] | VmNicsSpec,
  * }} opts
  * @returns {Promise<{ vmid: number }>}
  */
@@ -114,6 +108,7 @@ export async function reconcileRockyAppliance(client, opts) {
   const node = client.config.node
   const storage = client.config.storage
   const expectedIds = new Set(disks.map((d) => d.id))
+  const nets = resolveAlignedNics(client, opts.nics)
 
   const classified = withAttachModes(
     disks.map((d) => ({
@@ -127,6 +122,7 @@ export async function reconcileRockyAppliance(client, opts) {
   if (st?.status === 'running' || st?.status === 'paused') {
     console.log(chalk.cyan(`vm: stopping ${name} for hardware reconcile…`))
     const upid = await client.post(
+      pveUpid,
       `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
       {},
     )
@@ -137,16 +133,6 @@ export async function reconcileRockyAppliance(client, opts) {
   const state = diskStateFromConfig(cfg, vmid)
   assertProxmoxAttachModes(classified, state.volids)
 
-  const nets = client.config.nets?.length
-    ? client.config.nets
-    : [
-        {
-          bridge: client.config.bridge || 'vmbr0',
-          vlan: client.config.vlan,
-          trunks: client.config.trunks,
-          mac: client.config.mac,
-        },
-      ]
   const netCount = nets.length
   /** @type {string[]} */
   const deleteKeys = []
@@ -168,11 +154,7 @@ export async function reconcileRockyAppliance(client, opts) {
     vga: 'serial0',
     boot: 'order=scsi0',
   }
-  applyNetsToForm(form, nets)
-  for (let i = 0; i < netCount; i++) {
-    const key = `net${i}`
-    form[key] = net0WithPreservedMac(cfg[key], String(form[key]))
-  }
+  putNetsOnForm(form, cfg, nets)
 
   const taken = takenScsiIndexes(cfg, deleteKeys)
   for (const k of deleteKeys) {
@@ -231,12 +213,12 @@ export async function reconcileRockyAppliance(client, opts) {
   }
 
   if (deleteKeys.length) {
-    await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+    await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
       delete: deleteKeys.join(','),
       force: '1',
     })
   }
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
   console.log(chalk.green(`vm: reconcile ${name} done (stopped)`))
   return { vmid }
 }

@@ -12,6 +12,7 @@ import {
   QCTL_SEED_TIER0_ISO_REL,
   seedConfigSchema,
   seedConfigToOsConfig,
+  vlanParentsFromInterfaces,
 } from '@qctl/shared'
 
 import { installFileAtomic } from './sync-from-iso.js'
@@ -69,7 +70,7 @@ export function materializeSeedSidecars(seed, paths = {}) {
   writeFileSync(adminKeysPath, keysBody, { encoding: 'utf8', mode: 0o644 })
 
   mkdirSync(dirname(vlanParentsPath), { recursive: true })
-  const lines = Object.entries(seed.vlanParents)
+  const lines = Object.entries(vlanParentsFromInterfaces(seed.networking.interfaces))
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
   writeFileSync(vlanParentsPath, lines.length ? `${lines.join('\n')}\n` : '', {

@@ -28,7 +28,6 @@ Matches prod appliance roles (lab uses tiny qcow2s; same counts and serials):
 |------|------|
 | [`user-data.yaml`](../seed/cloud-init/user-data.yaml) | Shared `#cloud-config` for appliance + init-tank (`profile` Nunjucks); Tier-0 incl. `tank_passphrase_<poolId>` |
 | [`meta-data.yaml`](../seed/cloud-init/meta-data.yaml) | NoCloud `instance-id` / `local-hostname` (default `rocky`) |
-| [`network-config.yaml`](../seed/cloud-init/network-config.yaml) | Fallback NoCloud net v2; `vm seed` renders from `provision.networking.uplinks` / `vlans` |
 
 `qctl vm seed` reads `provision/<env>.yaml` + `!env`.
 `--profile appliance` (default) vs `--profile init-tank`. Templates use YAML tags resolved at seed build (**cloud-init never sees them**):
@@ -83,17 +82,15 @@ Cache downloads under `~/.cache/qctl/images/`.
 ## Workstation: NoCloud seed
 
 1. Fill `provision/.env.<env>` (Tier-0) + topology in `provision/<env>.yaml`.
-2. Run `qctl vm seed` → writes under `~/.cache/qctl/repos/<hash>/seed/<env>/` (ISO labeled `cidata` / `CIDATA` with `user-data`, `meta-data`, `network-config`).
+2. Run `qctl vm seed` → writes under `~/.cache/qctl/repos/<hash>/seed/<env>/` (ISO labeled `cidata` / `CIDATA` with `user-data`, `meta-data`, plus seed config).
 3. Run `qctl vm up` → OS + **/vw** + **5 data** + **2 special** + seed
    (see [`../workstation/README.md`](../workstation/README.md) for host packages; `--dry-run` needs none).
 4. SSH as the VW Login **`rocky`** username with the injected admin key
    (`PermitRootLogin no`). Impersonate apps: `runuser -u apps -- …`.
 
-NoCloud applies seed-rendered `network-config` (uplinks only from provision; lab
-macvlan parents are `vlanN` dummy ifaces created by guest init stage `vlan-parents`
-from seed JSON / `vlan-parents.env` — not 802.1Q on eth0 and not cloud-init bootcmd;
-fallback template is DHCP on `eth0`). That is the path that must work on a laptop
-libvirt/QEMU VM.
+Guest addresses and ports come from provision `networking:` (see
+[docs/provision.md](../../../docs/provision.md)). Put host NIC attach on
+`interfaces.<label>.vm` (`mode: bridge` or `nat`).
 
 ## Proxmox: cloud-init drive / snippets
 
@@ -105,11 +102,9 @@ libvirt/QEMU VM.
    consistent with the rendered user-data.
 5. Attach **/vw** (small) and **tank** disks: **5 data + 2 special** (same serials/roles as workstation).
 
-**Networking:** Proxmox `ipconfig0` / cloud-init network fields usually **override**
-any NoCloud `network-config`. Prefer the Proxmox UI for lab/prod addressing on
-Proxmox VMs; keep [`network-config.yaml`](network-config.yaml) for workstation NoCloud and
-as documentation of the DHCP default. Do not assume the seed’s network file wins on
-Proxmox.
+**Networking:** same provision `networking.interfaces.*.vm` as workstation (usually
+`mode: bridge` + `bridge: vmbr0`). Keep Proxmox cloud-init IP settings aligned with
+provision L3 if you set both.
 
 ## Required secrets / tokens
 

@@ -23,11 +23,6 @@ export function builder(yargs) {
       array: true,
       describe: 'Limit guest quadlet ps to these apps',
     })
-    .option('network', {
-      choices: ['auto', 'default', 'user'],
-      default: 'user',
-      describe: 'How to reach the guest (user/auto: passt; default: DHCP)',
-    })
     .option('user', {
       type: 'string',
       default: 'rocky',

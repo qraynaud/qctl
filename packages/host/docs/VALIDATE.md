@@ -208,7 +208,7 @@ systemctl status rocky-first-boot.service   # inactive / condition not met
 
 - [ ] Same cloud-init intent (snippets or NoCloud) + OS + `/vw` + 5 data + 2 special
 - [ ] Re-run Gates 1–7 on Proxmox
-- [ ] Document deltas: network (`ipconfig0` vs seed `network-config`), disk serials/by-id, snippet paths
+- [ ] Document deltas: network addressing, disk serials/by-id, snippet paths
 
 See `[cloud-init/README.md](cloud-init/README.md)` Proxmox section. Use a proxmox-target provision profile (`qctl vm -p …`).
 

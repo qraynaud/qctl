@@ -1,8 +1,14 @@
 import * as paths from '../../lib/paths.js'
+import { VM_ATTACH_MODE } from '../../provision/schema/networking.js'
 import { resolveDisks } from '../../provision/schema/resolve-disks.js'
 import { toInitTankDiskPlan, toVmDiskPlan } from './disk-plan.js'
 import { buildVirtInstallArgs } from './virt-install.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+
+const ports = {
+  ssh: { port: 22, forward: 2222 },
+  cockpit: { port: 9090, forward: 9090 },
+}
 
 afterEach(() => {
   // @ts-expect-error restore
@@ -49,11 +55,7 @@ describe('buildVirtInstallArgs', () => {
       vcpus: 2,
       disks,
       seed: { device: 'cdrom', path: '/seed.iso' },
-      ports: {
-        ssh: { port: 22, forward: 2222 },
-        cockpit: { port: 9090, forward: 9090 },
-      },
-      network: 'default',
+      ports,
       osinfo: 'rocky10',
       serialTcpPort: 5555,
     })
@@ -61,7 +63,7 @@ describe('buildVirtInstallArgs', () => {
     expect(args).toContain('--name')
     expect(args).toContain('rocky')
     expect(args).toContain('--network')
-    expect(args).toContain('network=default,model=virtio')
+    expect(args.join(' ')).toMatch(/passt|user/)
     expect(args.join(' ')).toMatch(/tcp,host=127\.0\.0\.1:5555/)
     expect(args.join(' ')).toMatch(/device=cdrom/)
     expect(args.join(' ')).toMatch(/serial=vw/)
@@ -95,11 +97,7 @@ describe('buildVirtInstallArgs', () => {
       vcpus: 2,
       disks,
       seed: { device: 'cdrom', path: '/seed.iso' },
-      ports: {
-        ssh: { port: 22, forward: 2222 },
-        cockpit: { port: 9090, forward: 9090 },
-      },
-      network: 'default',
+      ports,
       osinfo: 'rocky10',
     })
     const joined = args.join(' ')
@@ -107,5 +105,36 @@ describe('buildVirtInstallArgs', () => {
     expect(joined).toContain('boot.order=1')
     expect(joined).not.toContain('path=/vms/rocky/os.qcow2')
     expect(joined).toMatch(/serial=vw/)
+  })
+
+  test('bridged nics → --network bridge=… in label order', () => {
+    spyOn(paths, 'getVms').mockReturnValue('/vms')
+    const resolved = resolveDisks(
+      { os: { id: 'os', size: '20G' }, data: {}, tanks: {} },
+      {
+        filesystems: ['xfs', 'ext4'],
+        defaultFs: 'xfs',
+        osDisk: { id: 'os', size: '20G' },
+      },
+    )
+    const disks = toVmDiskPlan('rocky', resolved, { baseOsImage: '/base.qcow2' })
+    const args = buildVirtInstallArgs({
+      connect: 'qemu:///system',
+      name: 'rocky',
+      memory: 2048,
+      vcpus: 2,
+      disks,
+      seed: { device: 'cdrom', path: '/seed.iso' },
+      ports,
+      osinfo: 'rocky10',
+      nics: {
+        zed: { iface: 'eth1', mode: VM_ATTACH_MODE.BRIDGE, bridge: 'br1' },
+        main: { iface: 'eth0', mode: VM_ATTACH_MODE.BRIDGE, bridge: 'br0' },
+      },
+    })
+    const joined = args.join(' ')
+    expect(joined).toContain('bridge=br0,model=virtio,target=eth0')
+    expect(joined).toContain('bridge=br1,model=virtio,target=eth1')
+    expect(joined.indexOf('bridge=br0')).toBeLessThan(joined.indexOf('bridge=br1'))
   })
 })

@@ -1,5 +1,6 @@
 import adminUser from './admin-user.js'
 import dataMounts from './data-mounts.js'
+import ensureDummies from './ensure-dummies.js'
 import hgClone from './hg-clone.js'
 import hostBaseline from './host-baseline.js'
 import networkUp from './network-up.js'
@@ -11,14 +12,13 @@ import startServices from './start-services.js'
 import tankCreate from './tank-create.js'
 import tankImport from './tank-import.js'
 import tier0Seal from './tier0-seal.js'
-import vlanParents from './vlan-parents.js'
 import zfsDrill from './zfs-drill.js'
 
 /** @import { Stage } from './types.js' */
 
 /** @type {ReadonlyArray<Stage>} */
 const ALL = [
-  vlanParents,
+  ensureDummies,
   networkUp,
   hostBaseline,
   dataMounts,

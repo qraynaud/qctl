@@ -26,4 +26,13 @@ describe('target schemas', () => {
     expect(p.cpu).toBe(2)
     expect(() => proxmoxSchema.parse({ node: 'pve1', extra: 1 })).toThrow()
   })
+
+  test('proxmoxSchema rejects legacy net (moved to interfaces.*.vm)', () => {
+    expect(() =>
+      proxmoxSchema.parse({
+        node: 'pve1',
+        net: { eth0: { bridge: 'vmbr0' } },
+      }),
+    ).toThrow()
+  })
 })

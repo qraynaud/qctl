@@ -1,11 +1,14 @@
 /**
  * Resolve SSH endpoint for `qctl sync` from the profile's env/target (+ overrides).
  * Delegates to {@link VmDriverModule.resolveEndpoint} — no host target branches.
+ * Reachability (`user` / `default`) is derived from provision `ethernet.vm` modes.
  */
 import { chalk } from 'zx'
 
+import { loadEnvProvisionSafe } from '../lib/load-config.js'
 import { toVmContext } from '../vm/context.js'
 import { asVmDriverId, getDriverModule, resolveNameForModule } from '../vm/drivers/registry.js'
+import { endpointNetworkFromNics, toVmNicsSpec } from '../vm/libs/nic-plan.js'
 
 // Builtin self-registration.
 import '../vm/drivers/proxmox.js'
@@ -22,6 +25,28 @@ import '../vm/drivers/workstation.js'
  * @property {string} [identity]
  * @property {string} label human-readable summary
  */
+
+/**
+ * @param {VmArgv & {
+ *   user?: string
+ *   host?: string
+ *   port?: number
+ *   remoteDir?: string
+ *   identity?: string
+ * }} argv
+ * @returns {Promise<'user' | 'default'>}
+ */
+async function networkFromProvision(argv) {
+  const profile = argv.profile
+  if (profile == null || String(profile).trim() === '') return 'user'
+  const loaded = await loadEnvProvisionSafe({
+    env: argv.env || 'dev',
+    target: String(argv.target || 'workstation'),
+    profile,
+  })
+  if (!loaded.ok) return 'user'
+  return endpointNetworkFromNics(toVmNicsSpec(loaded.provision.interfaces))
+}
 
 /**
  * @param {VmArgv & {
@@ -53,7 +78,7 @@ export async function resolveSyncEndpoint(argv) {
     port: argv.port,
     remoteDir: argv.remoteDir,
     identity: argv.identity,
-    network: argv.network,
+    network: await networkFromProvision(argv),
   })
 }
 

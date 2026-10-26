@@ -4,6 +4,7 @@ import { getImages } from '../../../lib/paths.js'
 import { die, errMessage } from '../../../lib/util.js'
 import { ensureCloudImage } from '../../../tooling/platform-tooling.js'
 import { IMAGE } from '../../commands/download.js'
+import { pveStorage, pveStorageContent, pveUnknown, pveUpid } from './api-schemas.js'
 
 /** @import { ProxmoxClient } from './client.js' */
 
@@ -31,7 +32,7 @@ export function sizeToGiB(size) {
  * @returns {Promise<void>}
  */
 export async function ensureImportContent(client, storage) {
-  const cur = await client.get(`/storage/${encodeURIComponent(storage)}`)
+  const cur = await client.get(pveStorage, `/storage/${encodeURIComponent(storage)}`)
   const parts = String(cur.content || '')
     .split(',')
     .map((s) => s.trim())
@@ -42,7 +43,7 @@ export async function ensureImportContent(client, storage) {
   }
   const content = [...new Set([...parts, 'import'])].join(',')
   console.log(chalk.cyan(`vm: enabling import content on storage ${storage}…`))
-  await client.put(`/storage/${encodeURIComponent(storage)}`, {
+  await client.put(pveUnknown, `/storage/${encodeURIComponent(storage)}`, {
     content,
     digest: cur.digest,
   })
@@ -64,18 +65,16 @@ export async function ensureCloudImageImport(client, { imageStorage, force = fal
   const node = client.config.node
   const list =
     (await client.get(
+      pveStorageContent,
       `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`,
       { content: 'import' },
     )) || []
-  const hit = list.find(
-    (/** @type {{ volid?: string }} */ e) =>
-      e.volid === volid || String(e.volid).endsWith(`/${IMAGE.file}`),
-  )
-  if (hit && !force) {
+  const hit = list.find((e) => e.volid === volid || String(e.volid).endsWith(`/${IMAGE.file}`))
+  if (hit?.volid && !force) {
     console.log(chalk.green(`vm: Proxmox image OK ${hit.volid}`))
     return hit.volid
   }
-  if (hit && force) {
+  if (hit?.volid && force) {
     console.log(chalk.yellow(`vm: removing ${hit.volid} (--force-download)`))
     await client.deleteVolume(hit.volid)
   }
@@ -95,6 +94,7 @@ export async function ensureCloudImageImport(client, { imageStorage, force = fal
     ),
   )
   const upid = await client.post(
+    pveUpid,
     `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/download-url`,
     {
       content: 'import',
@@ -124,14 +124,12 @@ export async function uploadSeedIso(client, isoPath, { imageStorage, filename } 
   const node = client.config.node
   const list =
     (await client.get(
+      pveStorageContent,
       `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`,
       { content: 'iso' },
     )) || []
-  const hit = list.find(
-    (/** @type {{ volid?: string }} */ e) =>
-      e.volid === volid || String(e.volid).endsWith(`/${name}`),
-  )
-  if (hit) {
+  const hit = list.find((e) => e.volid === volid || String(e.volid).endsWith(`/${name}`))
+  if (hit?.volid) {
     console.log(chalk.yellow(`vm: replacing ISO ${hit.volid}`))
     await client.deleteVolume(hit.volid)
   }
@@ -156,7 +154,7 @@ export async function detachAndDeleteSeedIso(client, vmid, isoVolid) {
     )
     if (cdKeys.length) {
       console.log(chalk.cyan(`vm: detaching seed CDROM (${cdKeys.join(',')})`))
-      await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+      await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
         delete: cdKeys.join(','),
       })
     }
@@ -193,7 +191,7 @@ export async function restoreProxmoxDisplay(client, vmid, { reboot = true } = {}
   console.log(
     chalk.cyan(`vm: restoring display to virtio (PVE Console/noVNC; serial0 kept for termproxy)`),
   )
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
     vga: 'virtio',
     serial0: 'socket',
   })
@@ -207,6 +205,7 @@ export async function restoreProxmoxDisplay(client, vmid, { reboot = true } = {}
   console.log(chalk.cyan('vm: rebooting guest so virtio display applies…'))
   try {
     const upid = await client.post(
+      pveUpid,
       `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/reboot`,
       {},
     )

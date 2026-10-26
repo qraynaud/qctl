@@ -6,7 +6,11 @@ import { portsFromArgv } from '../lib/options.js'
 import { resolveProfileArgv } from '../lib/profile-argv.js'
 import { which } from '../lib/util.js'
 import { adminIdentityFromProvision } from '../provision/schema/first-boot.js'
-import { appsIdentityFromProvision, parseProvisionOrThrow } from '../provision/schema/index.js'
+import {
+  appsIdentityFromProvision,
+  dummyInterfaceNames,
+  parseProvisionOrThrow,
+} from '../provision/schema/index.js'
 import { ensureGuestTooling } from '../tooling/guest-tooling.js'
 import { localContainerName, localTestContainerName } from './name.js'
 import { localPublishPodmanArgs } from './ports-publish.js'
@@ -34,6 +38,7 @@ import { die } from './util.js'
  * @property {string} platformBasename
  * @property {string} image
  * @property {PortsMap} ports
+ * @property {string[]} dummyIfaces type:dummy iface names from provision (sorted)
  * @property {string[]} publishArgs
  * @property {string[]} uidMapArgs
  */
@@ -103,6 +108,7 @@ export async function createLocalContext(argv, opts = {}) {
 
   const ports = portsFromArgv(argv)
   const image = process.env.QCTL_LOCAL_IMAGE?.trim() || 'quay.io/podman/stable:latest'
+  const dummyIfaces = dummyInterfaceNames(data.networking.interfaces)
 
   return {
     root,
@@ -122,6 +128,7 @@ export async function createLocalContext(argv, opts = {}) {
     platformBasename: basename(tooling.platformModulePath),
     image,
     ports,
+    dummyIfaces,
     // Disposable tests skip host publishes so concurrent runs do not fight for forwards.
     publishArgs: disposable ? [] : localPublishPodmanArgs(ports),
     uidMapArgs: localApplianceUidMapArgs(appsUid, appsGid, appsSubuid, appsSubgid),

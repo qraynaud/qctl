@@ -203,6 +203,23 @@ export async function recreatePodmanNetwork(ctx, paths, baseName) {
 }
 
 /**
+ * Host-macvlan companion env: all `VLAN{n}_(PARENT|IPV4|SUBNET|GATEWAY)` from render scope.
+ * `PARENT` is the guest **iface** (from label `vlan{n}` via vlan-parents.env / interfaces).
+ * @param {Record<string, string | undefined>} scope
+ * @returns {string}
+ */
+export function vlanHostEnvBody(scope) {
+  /** @type {string[]} */
+  const lines = []
+  for (const [key, value] of Object.entries(scope)) {
+    if (!/^VLAN\d+_(PARENT|IPV4|SUBNET|GATEWAY)$/.test(key)) continue
+    lines.push(`${key}=${value ?? ''}`)
+  }
+  lines.sort((a, b) => a.localeCompare(b))
+  return lines.length ? `${lines.join('\n')}\n` : ''
+}
+
+/**
  * Optional host-macvlan companions from networks/<n>/ (rootful only).
  * @param {QuadletContext} ctx
  * @param {EnginePaths} paths
@@ -221,14 +238,7 @@ export async function installNetworkHostMacvlan(ctx, paths, netFile, renv) {
   const libdir = join(ctx.seedDir, 'networks', stem)
   const sysUnitDir = paths.sysDest
   mkdirSync(libdir, { recursive: true })
-  const s = renv.scope
-  writeFileSync(
-    join(libdir, `${stem}-host.env`),
-    `VLAN2_PARENT=${s.VLAN2_PARENT || 'vlan2'}\n`
-      + `VLAN2_SUBNET=${s.VLAN2_SUBNET ?? ''}\n`
-      + `VLAN2_GATEWAY=${s.VLAN2_GATEWAY ?? ''}\n`
-      + `VLAN2_IPV4=${s.VLAN2_IPV4 ?? ''}\n`,
-  )
+  writeFileSync(join(libdir, `${stem}-host.env`), vlanHostEnvBody(renv.scope))
   chmodSync(join(libdir, `${stem}-host.env`), 0o644)
   // Script has no ${VAR} templates — install verbatim.
   const scriptDest = join(libdir, `${stem}-host-macvlan.sh`)

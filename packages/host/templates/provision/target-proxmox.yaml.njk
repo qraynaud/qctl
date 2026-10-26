@@ -8,7 +8,11 @@ proxmox:
   node: pve
   cpu: 2
   memory: 4096
-  net:
-    eth0:
-      bridge: vmbr0
-      trunks: [2]
+
+networking:
+  interfaces:
+    main:
+      vm:
+        mode: bridge
+        bridge: vmbr0
+        vlan: [2]

@@ -21,8 +21,6 @@ describe('toVmContext', () => {
         vcpus: 4,
         timeout: 30,
         connect: 'qemu:///system',
-        network: 'bridge=br0',
-        osinfo: 'rocky9',
       }),
     )
     expect(ctx).toEqual({
@@ -50,21 +48,17 @@ describe('toVmContext', () => {
 })
 
 describe('toVmSpecs', () => {
-  test('maps soft guest fields from argv', () => {
+  test('maps soft guest fields from argv (memory/vcpus only)', () => {
     expect(
       toVmSpecs(
         argv({
           memory: 8192,
           vcpus: 4,
-          network: 'user',
-          osinfo: 'rocky9',
         }),
       ),
     ).toEqual({
       memory: 8192,
       vcpus: 4,
-      network: 'user',
-      osinfo: 'rocky9',
     })
   })
 

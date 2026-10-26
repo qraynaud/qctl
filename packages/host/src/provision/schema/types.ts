@@ -17,7 +17,7 @@ import type {
 } from './disks.js'
 import type { filesItemSchema, filesSchema } from './files.js'
 import type { registriesSchema } from './first-boot.js'
-import type { networkingSchema, proxmoxNetEntrySchema, proxmoxNetMapSchema } from './networking.js'
+import type { ethernetVmSchema, networkingSchema } from './networking.js'
 import type { packagesSchema } from './packages.js'
 import type { provisionSchema } from './parse.js'
 import type { proxmoxSchema, workstationSchema } from './targets.js'
@@ -29,10 +29,13 @@ export type ProvisionFileInput = z.input<typeof provisionSchema>
 
 export type { PortEntry, PortsMap }
 export type Networking = z.infer<typeof networkingSchema>
-export type ProxmoxNetEntry = z.infer<typeof proxmoxNetEntrySchema>
-export type ProxmoxNetMap = z.infer<typeof proxmoxNetMapSchema>
-/** `alignProxmoxNets` row: provision net entry + uplink key. */
-export type AlignedProxmoxNet = ProxmoxNetEntry & { name: string }
+export type EthernetVm = z.infer<typeof ethernetVmSchema>
+/** `alignedVmNics` row: ethernet label + guest iface + optional host attach. */
+export type AlignedVmNic = {
+  label: string
+  iface: string
+  vm?: EthernetVm
+}
 export type WorkstationTarget = z.infer<typeof workstationSchema>
 export type ProxmoxTarget = z.infer<typeof proxmoxSchema>
 export type WorkstationInput = z.input<typeof workstationSchema>

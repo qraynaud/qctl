@@ -11,7 +11,7 @@ export const HOST_DEPS = `Host packages (CachyOS / Arch example):
   # If guests get link-local only (no 192.168.122.x), Docker/nft may be eating DHCP:
   #   sudo nft list ruleset | less
   #   sudo iptables -L FORWARD -n -v | head
-  # Workaround: qctl vm up --network user --wipe-os
+  # Workaround: qctl vm up --wipe-os
   #   then: ssh -p 2222 <admin>@127.0.0.1   # VW Login rocky username
 Prefer qemu:///system + default NAT network for SSH via DHCP leases.`
 

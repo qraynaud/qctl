@@ -13,7 +13,6 @@ import { die } from '../../../lib/util.js'
 import { gcQctlCache, touchPath } from '../../../tooling/cache-gc.js'
 import { parsePlatformRef } from '../../../tooling/platform-ref.js'
 import { ensurePlatformSeedKit } from '../../../tooling/platform-tooling.js'
-import { renderNetworkConfigV2 } from '../guest-net.js'
 import { injectProvisionFiles } from '../seed-template/inject.js'
 import { renderTemplate } from '../seed-template/njk.js'
 import { buildSeedConfig, stageSeedTree } from '../seed-template/seed-tree.js'
@@ -110,7 +109,6 @@ export async function runSeed(argv) {
     vars.provision.files || sec.files,
   )
   const meta = renderTemplate(path.join(cloud, 'meta-data.yaml'), vars, allowMissingFiles)
-  const network = renderNetworkConfigV2(sec.uplinks, sec.vlans)
 
   const userDataOut = `#cloud-config\n${YAML.stringify(userData, { lineWidth: 0 })}`
   const metaOut = YAML.stringify(meta, { lineWidth: 0 })
@@ -125,7 +123,6 @@ export async function runSeed(argv) {
   try {
     await fs.writeFile(path.join(stageDir, 'user-data'), userDataOut)
     await fs.writeFile(path.join(stageDir, 'meta-data'), metaOut)
-    await fs.writeFile(path.join(stageDir, 'network-config'), network)
     let platformModule
     try {
       platformModule = parsePlatformRef(sec.platform).moduleFile

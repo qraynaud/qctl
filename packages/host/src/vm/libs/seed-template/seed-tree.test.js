@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { SEED_PROFILE, seedConfigSchema } from '@qctl/shared'
 import { makeTempDir, removeTempDir } from '@qctl/shared/test-helpers'
 
-import { buildSeedConfig, stageSeedTree, vlanParentsFromVlans } from './seed-tree.js'
+import { buildSeedConfig, seedInterfacesFromProvision, stageSeedTree } from './seed-tree.js'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 /** @import { SeedVars } from './vars.js' */
@@ -48,17 +48,29 @@ const resolvedDisks = {
   encryptedTankIds: ['tank'],
 }
 
-describe('vlanParentsFromVlans', () => {
-  test('maps VLAN*_PARENT and VLAN*_IPV4', () => {
-    expect(vlanParentsFromVlans({ vlan2: { ipv4: '10.0.2.2' }, other: {} })).toEqual({
-      VLAN2_PARENT: 'vlan2',
-      VLAN2_IPV4: '10.0.2.2',
+describe('seedInterfacesFromProvision', () => {
+  test('strips ethernet.vm; keeps vlan/dummy', () => {
+    expect(
+      seedInterfacesFromProvision({
+        main: {
+          type: 'ethernet',
+          iface: 'eth0',
+          vm: { mode: 'bridge', bridge: 'vmbr0', vlan: { mode: 'access', ids: [10] } },
+          ipv4: { dhcp: true },
+        },
+        apps: { type: 'vlan', iface: 'eth0.2', id: 2, parent: 'main' },
+        vlan2: { type: 'dummy', iface: 'vlan2' },
+      }),
+    ).toEqual({
+      main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+      apps: { type: 'vlan', iface: 'eth0.2', id: 2, parent: 'main' },
+      vlan2: { type: 'dummy', iface: 'vlan2' },
     })
   })
 })
 
 describe('buildSeedConfig / stageSeedTree', () => {
-  test('builds validated config and stages config.json + tier0 bytes', async () => {
+  test('builds provision-shaped networking and stages config.json + tier0', async () => {
     const vars = {
       env: 'dev',
       profile: 'appliance',
@@ -79,7 +91,17 @@ describe('buildSeedConfig / stageSeedTree', () => {
           },
         },
         repo: { vcs: 'hg', url: 'ssh://hg@example/r', branch: 'default', dir: '/tank/rocky' },
-        networking: { ports: {}, vlans: { vlan2: {} } },
+        networking: {
+          ports: {},
+          interfaces: {
+            main: {
+              type: 'ethernet',
+              iface: 'eth0',
+              vm: { mode: 'bridge', bridge: 'vmbr0' },
+            },
+            vlan2: { type: 'dummy', iface: 'vlan2' },
+          },
+        },
         packages: { distro: ['curl'], pipx: ['hg'], http: [] },
       },
     }
@@ -87,7 +109,11 @@ describe('buildSeedConfig / stageSeedTree', () => {
     const config = buildSeedConfig(/** @type {SeedVars} */ (/** @type {unknown} */ (vars)))
     expect(config.profile).toBe(SEED_PROFILE.APPLIANCE)
     expect(config.packages.pipx).toEqual([{ package: 'hg', inject: [] }])
-    expect(config.vlanParents).toEqual({ VLAN2_PARENT: 'vlan2' })
+    expect(config.networking.interfaces).toEqual({
+      main: { type: 'ethernet', iface: 'eth0' },
+      vlan2: { type: 'dummy', iface: 'vlan2' },
+    })
+    expect(Object.hasOwn(config.networking.interfaces.main, 'vm')).toBe(false)
     expect(config.tier0Keys).toEqual(['tank_passphrase_tank', 'DEPLOY_KEY'])
     expect(config.users.admin).toEqual({ username: 'admin', uid: 1000, gid: 1000 })
     expect(config.initTank).toBeUndefined()
@@ -106,6 +132,7 @@ describe('buildSeedConfig / stageSeedTree', () => {
     expect(existsSync(join(dir, 'qctl-seed', 'config.json'))).toBe(true)
     const written = JSON.parse(readFileSync(join(dir, 'qctl-seed', 'config.json'), 'utf8'))
     expect(written.root).toBe('/tank/rocky')
+    expect(written.networking.interfaces.main).toEqual({ type: 'ethernet', iface: 'eth0' })
     expect(Object.hasOwn(written, 'secret')).toBe(false)
     expect(readFileSync(join(dir, 'qctl-seed', 'tier0', 'tank_passphrase_tank'), 'utf8')).toBe(
       'secret-pass',
@@ -136,12 +163,18 @@ describe('buildSeedConfig / stageSeedTree', () => {
               },
             },
             repo: { vcs: 'git' },
-            networking: { ports: {}, vlans: {} },
+            networking: {
+              ports: {},
+              interfaces: { main: { type: 'ethernet', iface: 'eth0' } },
+            },
             packages: {},
           },
         })
       ),
     )
+    expect(config.networking.interfaces).toEqual({
+      main: { type: 'ethernet', iface: 'eth0' },
+    })
     expect(config.profile).toBe(SEED_PROFILE.INIT_TANK)
     expect(config.initTank).toEqual({
       pools: ['tank', 'other'],

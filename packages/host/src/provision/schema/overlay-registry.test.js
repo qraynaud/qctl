@@ -16,7 +16,9 @@ describe('provision overlays from driver registry', () => {
     const data = provisionSchema.parse({
       networking: {
         ports: { ssh: { port: 22 } },
-        uplinks: { eth0: { dhcp4: true } },
+        interfaces: {
+          main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+        },
       },
       workstation: { cpu: 2, memory: 4096 },
       proxmox: { node: 'pve1' },
@@ -30,7 +32,9 @@ describe('provision overlays from driver registry', () => {
       provisionSchema.parse({
         networking: {
           ports: { ssh: { port: 22 } },
-          uplinks: { eth0: { dhcp4: true } },
+          interfaces: {
+            main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+          },
         },
         otherHypervisor: { cpu: 1 },
       }),

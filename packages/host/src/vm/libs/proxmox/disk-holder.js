@@ -10,7 +10,9 @@ import { chalk } from 'zx'
 
 import { die } from '../../../lib/util.js'
 import { INIT_TANK_BOOT_ID } from '../init-tank-boot.js'
+import { pveUnknown, pveUpid } from './api-schemas.js'
 import { applyNetsToForm } from './config.js'
+import { resolveAlignedNics } from './nic-reconcile.js'
 import { rockyTpmstate } from './tpm.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
 
@@ -127,6 +129,7 @@ async function stopVm(client, vmid, label) {
   if (st?.status === 'running' || st?.status === 'paused') {
     console.log(chalk.cyan(`vm: stopping ${label || vmid}…`))
     const upid = await client.post(
+      pveUpid,
       `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
       {},
     )
@@ -176,13 +179,13 @@ export async function demoteToHolder(client, { vmid, name }) {
 
   if (drop.length) {
     console.log(chalk.cyan(`vm: demote ${name} → holder ${hname} (drop ${drop.join(',')})`))
-    await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+    await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
       delete: drop.join(','),
       force: '1',
     })
   }
 
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
     name: hname,
     memory: '512',
     cores: '1',
@@ -197,11 +200,20 @@ export async function demoteToHolder(client, { vmid, name }) {
 /**
  * Promote holder <name>-disks → appliance <name>: rename, add OS import + NoCloud ISO, start.
  * @param {ProxmoxClient} client
- * @param {Pick<CreateRockyVmOpts, 'name' | 'memory' | 'vcpus' | 'importVolid' | 'isoVolid' | 'osSize' | 'expectedIds'>} opts
+ * @param {Pick<CreateRockyVmOpts, 'name' | 'memory' | 'vcpus' | 'importVolid' | 'isoVolid' | 'osSize' | 'expectedIds' | 'nics'>} opts
  * @returns {Promise<{ vmid: number, state: DiskState }>}
  */
 export async function promoteHolderToAppliance(client, opts) {
-  const { name, memory, vcpus, importVolid, isoVolid, osSize = '20G', expectedIds = [] } = opts
+  const {
+    name,
+    memory,
+    vcpus,
+    importVolid,
+    isoVolid,
+    osSize = '20G',
+    expectedIds = [],
+    nics,
+  } = opts
   const node = client.config.node
   const storage = client.config.storage
   const hname = holderVmName(name)
@@ -219,7 +231,7 @@ export async function promoteHolderToAppliance(client, opts) {
         `holder ${hname} has persistent disk on scsi0 (${serial}) — expected scsi0 free for OS; re-run init-tank`,
       )
     }
-    await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+    await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
       delete: 'scsi0',
       force: '1',
     })
@@ -243,11 +255,12 @@ export async function promoteHolderToAppliance(client, opts) {
     ide2: `${isoVolid},media=cdrom`,
   }
   if (!cfg.tpmstate0) form.tpmstate0 = rockyTpmstate(storage)
-  applyNetsToForm(form, client.config.nets)
-  await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
+  applyNetsToForm(form, resolveAlignedNics(client, nics))
+  await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, form)
 
   console.log(chalk.cyan(`vm: starting ${name}…`))
   const startUpid = await client.post(
+    pveUpid,
     `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/start`,
     {},
   )
@@ -281,13 +294,13 @@ export async function destroyHolder(client, name) {
   )
   if (keys.length) {
     console.log(chalk.yellow(`vm: wiping holder ${hname} disks…`))
-    await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${hvmid}/config`, {
+    await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${hvmid}/config`, {
       delete: keys.join(','),
       force: '1',
     })
   }
 
-  const upid = await client.del(`/nodes/${encodeURIComponent(node)}/qemu/${hvmid}`, {
+  const upid = await client.del(pveUpid, `/nodes/${encodeURIComponent(node)}/qemu/${hvmid}`, {
     purge: '1',
     'destroy-unreferenced-disks': '1',
   })

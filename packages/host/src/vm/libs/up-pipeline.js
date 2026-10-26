@@ -12,9 +12,11 @@ import {
   matchInitTankFatal,
 } from './console.js'
 import { composeScrubSeed, isInstalled, markInstalled } from './installed-lifecycle.js'
+import { endpointNetworkFromNics } from './nic-plan.js'
 import {
   buildCreateSpec,
   dryRunUp,
+  enrichSpecsWithNics,
   ensureDisksForCreate,
   prepareHostForUp,
   resolveBaseOsImage,
@@ -209,7 +211,9 @@ async function waitPoweroff(module, ctx, timeoutSec, signal) {
 async function printUpHints(module, ctx, specs) {
   try {
     if (!module.resolveEndpoint) return
-    const ep = await module.resolveEndpoint(ctx, { network: specs.network })
+    const ep = await module.resolveEndpoint(ctx, {
+      network: endpointNetworkFromNics(specs.nics),
+    })
     if (ep) console.log(chalk.dim(`  ssh: ${ep.label}`))
   } catch {
     /* proxmox without --host, etc. */
@@ -306,7 +310,8 @@ async function runPersistentUp(ctx, prep, module, specs, timeoutSec, followConso
   const installed = vm ? await isInstalled(await flags()) : false
 
   if (vm && installed) {
-    await module.reconcile(ctx, vm, specs)
+    const patch = await enrichSpecsWithNics(module, ctx, specs)
+    await module.reconcile(ctx, vm, patch)
     const power = await module.powerState(ctx)
     if (power.kind === 'running') {
       console.log(chalk.green(`vm: ${ctx.name} already running`))
@@ -468,10 +473,10 @@ async function runEphemeralUp(ctx, prep, module, specs, timeoutSec, followConsol
       const withoutBoot = {
         memory: spec.memory,
         vcpus: spec.vcpus,
-        network: spec.network,
         osinfo: spec.osinfo,
         disks,
         bootDrive: Object.keys(disks)[0],
+        ...(spec.nics ? { nics: spec.nics } : {}),
       }
       await module.reconcile(ctx, vm, withoutBoot)
       console.log(chalk.green('vm: init-tank done (appliance kept; disposable boot removed)'))

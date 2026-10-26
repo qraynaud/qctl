@@ -6,6 +6,8 @@ import { chalk, fs } from 'zx'
 import { die } from '../../../lib/util.js'
 import { proxmoxSchema } from '../../../provision/schema/targets.js'
 import { INIT_TANK_BOOT_ID } from '../../libs/init-tank-boot.js'
+import { pveUnknown, pveUpid } from '../../libs/proxmox/api-schemas.js'
+import { nicsSpecToAligned, reconcileRockyNics } from '../../libs/proxmox/config.js'
 import {
   destroyHolder,
   holderVmName,
@@ -142,6 +144,9 @@ export async function resolveEndpoint(ctx, opts = {}) {
 export async function reconcile(_ctx, vm, specs) {
   if (!specs) return
 
+  const alignedNics = specs.nics ? nicsSpecToAligned(specs.nics) : undefined
+  const nicsOpt = alignedNics?.length ? { nics: alignedNics } : {}
+
   if (specs.disks) {
     const labels = Object.keys(specs.disks)
     const wantDisposable = INIT_TANK_BOOT_ID in specs.disks
@@ -176,12 +181,14 @@ export async function reconcile(_ctx, vm, specs) {
         osSize: boot.size,
         forceTankIds: [],
         diskSpecs,
+        ...nicsOpt,
       })
       return
     }
 
     await removeInitTankBootDisks(vm.client, vm.vmid)
     await vm.client.put(
+      pveUnknown,
       `/nodes/${encodeURIComponent(vm.client.config.node)}/qemu/${vm.vmid}/config`,
       { boot: 'order=scsi0' },
     )
@@ -197,21 +204,32 @@ export async function reconcile(_ctx, vm, specs) {
         memory: specs.memory,
         vcpus: specs.vcpus,
         disks: diskSpecs,
+        ...nicsOpt,
       })
     }
     return
+  }
+
+  if (alignedNics?.length) {
+    await reconcileRockyNics(vm.client, {
+      vmid: vm.vmid,
+      name: vm.name,
+      nics: alignedNics,
+    })
   }
 
   if (specs.memory != null && specs.vcpus != null) {
     const st = await vm.client.qemuStatus(vm.vmid)
     if (st?.status === 'running' || st?.status === 'paused') {
       const upid = await vm.client.post(
+        pveUpid,
         `/nodes/${encodeURIComponent(vm.client.config.node)}/qemu/${vm.vmid}/status/stop`,
         {},
       )
       if (upid) await vm.client.waitTask(String(upid), { timeoutSec: 120 })
     }
     await vm.client.put(
+      pveUnknown,
       `/nodes/${encodeURIComponent(vm.client.config.node)}/qemu/${vm.vmid}/config`,
       {
         memory: String(specs.memory),
@@ -263,6 +281,9 @@ export async function create(ctx, specs, _signal) {
     die('proxmox create: memory and vcpus are required')
   }
 
+  const alignedNics = specs.nics ? nicsSpecToAligned(specs.nics) : undefined
+  const nicsOpt = alignedNics?.length ? { nics: alignedNics } : {}
+
   if (holderVmid != null && held && expectedIds.every((id) => held.volids?.[id])) {
     console.log(chalk.cyan(`vm: promote holder ${hname} → ${name}`))
     const { vmid } = await promoteHolderToAppliance(client, {
@@ -273,11 +294,13 @@ export async function create(ctx, specs, _signal) {
       isoVolid,
       osSize,
       expectedIds,
+      ...nicsOpt,
     })
     // promote currently starts the VM — stop so runner owns start()+serial.
     const st = await client.qemuStatus(vmid)
     if (st?.status === 'running' || st?.status === 'paused') {
       const upid = await client.post(
+        pveUpid,
         `/nodes/${encodeURIComponent(client.config.node)}/qemu/${vmid}/status/stop`,
         {},
       )
@@ -294,6 +317,7 @@ export async function create(ctx, specs, _signal) {
     isoVolid,
     osSize,
     disks: disksWithReuseVolids(diskSpecs, held),
+    ...nicsOpt,
   })
   return { client, vmid, name, isoVolid }
 }
@@ -337,6 +361,7 @@ export async function stop(_ctx, vm, opts = {}) {
   if (st?.status === 'stopped') return
   const action = opts.force ? 'stop' : 'shutdown'
   const upid = await vm.client.post(
+    pveUpid,
     `/nodes/${encodeURIComponent(vm.client.config.node)}/qemu/${vm.vmid}/status/${action}`,
     {},
   )

@@ -6,25 +6,23 @@ import { BUILTIN_ENVIRONMENTS, isEmptyCredential, isProductionEnv } from '@qctl/
 import { loadEnvProvisionSafe } from '../../../lib/load-config.js'
 import { tankPassphraseCredName } from '../../../provision/schema/first-boot.js'
 import { createCheckReport } from '../../libs/check-report.js'
+import {
+  pveNetworkList,
+  pveNextId,
+  pveNodeList,
+  pveNodeStorageList,
+  pveUnknown,
+  pveVersion,
+} from '../../libs/proxmox/api-schemas.js'
 import { createProxmoxClient } from '../../libs/proxmox/client.js'
 import { formatNetsLabel, tryLoadProxmoxConfig } from '../../libs/proxmox/config.js'
 
+/** @import { z } from 'zod' */
 /** @import { VmContext } from '../../driver-contract.js' */
 /** @import { ProxmoxConfig } from '../../libs/proxmox/types.js' */
 
-/**
- * @typedef {object} PveStorageEntry
- * @property {string} [storage]
- * @property {string | string[]} [content]
- * @property {number} [active]
- * @property {number} [enabled]
- */
-/**
- * @typedef {object} PveNetworkEntry
- * @property {string} [iface]
- * @property {string} [name]
- * @property {string} [type]
- */
+/** @typedef {z.infer<typeof pveNodeStorageList>[number]} PveStorageEntry */
+/** @typedef {z.infer<typeof pveNetworkList>[number]} PveNetworkEntry */
 
 /**
  * @param {PveStorageEntry | undefined} entry
@@ -39,6 +37,14 @@ function contentTypes(entry) {
       .map((s) => s.trim())
       .filter(Boolean)
   return []
+}
+
+/**
+ * @param {{ success: false, error: z.ZodError }} fail
+ * @returns {string}
+ */
+function softErr(fail) {
+  return fail.error.message
 }
 
 /**
@@ -115,32 +121,33 @@ export async function check(ctx) {
     report.fail('skipped API checks — fix Proxmox provision above')
   } else {
     const client = createProxmoxClient(/** @type {ProxmoxConfig} */ (config))
-    const ver = await client.softGet('/version')
-    if (!ver.ok) report.fail(ver.error)
-    else report.ok(`reachable (version ${ver.data?.version || '?'})`)
+    const ver = await client.softGet(pveVersion, '/version')
+    if (!ver.success) report.fail(softErr(ver))
+    else report.ok(`reachable (version ${ver.data.version || '?'})`)
 
-    const nodes = await client.softGet('/nodes')
-    if (!nodes.ok) {
-      report.fail(nodes.error)
+    const nodes = await client.softGet(pveNodeList, '/nodes')
+    if (!nodes.success) {
+      report.fail(softErr(nodes))
     } else {
       const list = nodes.data || []
-      const hit = list.find(
-        (/** @type {{ node?: string, status?: string }} */ n) => n.node === config.node,
-      )
+      const hit = list.find((n) => n.node === config.node)
       if (hit) {
         report.ok(`node ${config.node} (status=${hit.status || '?'})`)
         if (hit.status && hit.status !== 'online') {
           report.warn(`node ${config.node} status is ${hit.status}`)
         }
       } else {
-        const have = list.map((/** @type {{ node?: string }} */ n) => n.node).join(', ')
+        const have = list.map((n) => n.node).join(', ')
         report.fail(`node ${config.node} not in cluster (have: ${have || 'none'})`)
       }
     }
 
     report.section('Token privileges')
-    const audit = await client.softGet(`/nodes/${encodeURIComponent(client.config.node)}/status`)
-    if (!audit.ok && /403|Permission check failed/i.test(audit.error || '')) {
+    const audit = await client.softGet(
+      pveUnknown,
+      `/nodes/${encodeURIComponent(client.config.node)}/status`,
+    )
+    if (!audit.success && /403|Permission check failed/i.test(softErr(audit))) {
       report.fail(
         'token lacks Sys.Audit (and likely Datastore.*) — PVE lists storage as empty instead of 403',
       )
@@ -148,18 +155,19 @@ export async function check(ctx) {
         'fix: Datacenter → Permissions → API Tokens → rocky-deploy: uncheck Privilege Separation '
           + '(full privileges), or keep it and ACL-grant Administrator on /',
       )
-    } else if (!audit.ok) {
-      report.fail(`node status: ${audit.error}`)
+    } else if (!audit.success) {
+      report.fail(`node status: ${softErr(audit)}`)
     } else {
       report.ok('node status readable (Sys.Audit OK)')
     }
 
     report.section('Storage / network')
     const storages = await client.softGet(
+      pveNodeStorageList,
       `/nodes/${encodeURIComponent(client.config.node)}/storage`,
     )
-    if (!storages.ok) {
-      report.fail(storages.error)
+    if (!storages.success) {
+      report.fail(softErr(storages))
     } else {
       const list = storages.data || []
       if (list.length === 0) {
@@ -168,13 +176,11 @@ export async function check(ctx) {
             + `or no datastores under Datacenter → Storage`,
         )
       }
-      const byName = Object.fromEntries(
-        list.map((/** @type {PveStorageEntry} */ s) => [s.storage, s]),
-      )
+      const byName = Object.fromEntries(list.map((s) => [s.storage, s]))
 
       const diskSt = byName[config.storage]
       if (!diskSt) {
-        const have = list.map((/** @type {PveStorageEntry} */ s) => s.storage).join(', ')
+        const have = list.map((s) => s.storage).join(', ')
         report.fail(`storage ${config.storage} missing on ${config.node} (have: ${have || 'none'})`)
       } else {
         const types = contentTypes(diskSt)
@@ -210,18 +216,25 @@ export async function check(ctx) {
       }
     }
 
-    const nets = await client.softGet(`/nodes/${encodeURIComponent(client.config.node)}/network`)
-    if (!nets.ok) {
-      report.fail(`network list: ${nets.error}`)
+    const nets = await client.softGet(
+      pveNetworkList,
+      `/nodes/${encodeURIComponent(client.config.node)}/network`,
+    )
+    if (!nets.success) {
+      report.fail(`network list: ${softErr(nets)}`)
     } else {
-      /** @type {PveNetworkEntry[]} */
       const list = nets.data || []
       const bridges = list.filter(
         (n) => n.type === 'bridge' || String(n.iface || '').startsWith('vmbr'),
       )
       const eth = list.filter((n) => n.type === 'eth' || n.type === 'OVSPort').map((n) => n.iface)
-      const wanted = [...new Set((config.nets || []).map((n) => n.bridge))]
-      for (const bridge of wanted) {
+      /** @type {string[]} */
+      const wanted = []
+      for (const n of config.nets || []) {
+        if (n.vm?.mode === 'bridge') wanted.push(n.vm.bridge)
+      }
+      const wantedUnique = [...new Set(wanted)]
+      for (const bridge of wantedUnique) {
         const br = list.find((n) => n.iface === bridge || n.name === bridge)
         if (br) report.ok(`bridge ${bridge} present`)
         else {
@@ -230,14 +243,14 @@ export async function check(ctx) {
               + `nics: ${eth.join(', ') || 'none'})`,
           )
           report.fail(
-            `host: create Linux bridge ${bridge} (System → Network), or fix proxmox.net.*.bridge in profile-*.yaml / target-proxmox.yaml`,
+            `host: create Linux bridge ${bridge} (System → Network), or fix networking.interfaces.*.vm.bridge in profile-*.yaml / target-proxmox.yaml`,
           )
         }
       }
     }
 
-    const next = await client.softGet('/cluster/nextid')
-    if (!next.ok) report.fail(`nextid: ${next.error}`)
+    const next = await client.softGet(pveNextId, '/cluster/nextid')
+    if (!next.success) report.fail(`nextid: ${softErr(next)}`)
     else report.ok(`cluster nextid=${next.data}`)
   }
 

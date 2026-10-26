@@ -33,9 +33,7 @@ describe('vm shell command', () => {
     const shell = spyOn(sshMod, 'sshInteractiveShell').mockResolvedValue(0)
     spyOn(console, 'log').mockImplementation(() => {})
 
-    await mod.handler(
-      /** @type {VmArgv} */ (/** @type {never} */ ({ network: 'user', connect: 'qemu:///system' })),
-    )
+    await mod.handler(/** @type {VmArgv} */ ({ connect: 'qemu:///system' }))
 
     expect(shell).toHaveBeenCalledWith({
       host: '127.0.0.1',

@@ -22,7 +22,7 @@ bootcmd:
       {% else %}
       if [ ! -f /var/lib/qctl/first-boot.done ]; then systemctl mask sshd.service sshd.socket firewalld.service cockpit.socket qemu-guest-agent.service; fi
       {% endif %}
-  # VLAN dummy parents: guest init stage `vlan-parents` (seed config + boot unit).
+  # type:dummy ifaces: guest init stage `ensure-dummies` (seed config + boot unit).
   - [sh, -c, "nmcli networking on || true; nmcli device connect eth0 || true; dhclient -1 eth0 || true"]
   - [sh, -c, "for i in $(seq 1 90); do ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'rocky bootcmd: no egress yet' >&2; exit 0"]
 

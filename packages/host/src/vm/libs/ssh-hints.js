@@ -34,7 +34,7 @@ export async function localSshHints({ connect, name, ports, network }) {
         lines.push(
           `(no DHCP lease yet — wait for boot, then: virsh -c ${connect} domifaddr ${name} --source lease)`,
         )
-        lines.push('hint: if stuck on link-local only, retry with --network user (passt hostfwd)')
+        lines.push('hint: if stuck on link-local only, set ethernet.vm mode: nat (passt hostfwd)')
       }
     }
     lines.push(`console: virsh -c ${connect} console ${name}`)

@@ -13,13 +13,7 @@ export const describe = 'Show SSH host/port for the VM'
  * @returns {Argv}
  */
 export function builder(yargs) {
-  return sharedLibvirt(yargs)
-    .option('network', {
-      choices: ['auto', 'default', 'user'],
-      default: 'user',
-      describe: 'Network mode used when the VM was created',
-    })
-    .strict()
+  return sharedLibvirt(yargs).strict()
 }
 
 /**

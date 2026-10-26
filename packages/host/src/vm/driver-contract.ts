@@ -23,8 +23,6 @@ export type VmEnv = string
 /** Seed template kind — host `runSeed` only; never passed to the module. */
 export type VmSeedProfile = 'appliance' | 'init-tank'
 
-export type VmNetwork = 'auto' | 'default' | 'user'
-
 /**
  * Resolved VM run context (built from CLI argv at the edge).
  * Driver identity is **not** here — callers hold {@link VmDriverModule} from the
@@ -125,6 +123,33 @@ export type VmDiskSpec = VmDiskBase &
 export type VmDisksSpec = Record<string, VmDiskSpec>
 
 /**
+ * One host NIC — provision `networking.interfaces.<label>.vm` (+ guest iface).
+ * Keyed by provision **label** on {@link VmNicsSpec}; drivers sort labels for order.
+ * Every entry with `vm` in provision becomes one hypervisor NIC (explicit mode).
+ */
+export type VmNicSpec = {
+  /** Guest netdev name (seed / guest apply). */
+  iface: string
+  mac?: string
+} & (
+  | {
+      mode: 'bridge'
+      bridge: string
+      vlan?: { mode: 'access' | 'trunk'; ids: number[] }
+    }
+  | { mode: 'nat' }
+)
+
+/** Bridged NIC plan entry (`mode: 'bridge'`). */
+export type VmNicBridgeSpec = Extract<VmNicSpec, { mode: 'bridge' }>
+
+/**
+ * Desired hypervisor NICs keyed by provision label (sorted for attach order).
+ * Omit on {@link VmSpecs} → driver leaves NICs alone (patch semantics).
+ */
+export type VmNicsSpec = Record<string, VmNicSpec>
+
+/**
  * Full desired guest shape for {@link VmDriverModule.create}.
  * {@link VmDriverModule.reconcile} takes {@link Partial}<{@link VmSpecs}>
  * (patch: only listed fields change; nothing read from {@link VmContext}).
@@ -135,7 +160,11 @@ export type VmSpecs = {
   disks: VmDisksSpec
   /** Host-built seed ISO path (drivers never see seed profile). */
   seedIsoPath: string
-  network?: VmNetwork | string
+  /**
+   * Hypervisor NICs from `ethernet.vm` (one per label with `vm`).
+   * Same plan shape for create + reconcile — driver applies remove/update/create.
+   */
+  nics?: VmNicsSpec
   osinfo?: string
   /** Label of the disk to boot from (must be a key of {@link disks}). */
   bootDrive?: string

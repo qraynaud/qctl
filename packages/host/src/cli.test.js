@@ -214,10 +214,12 @@ describe('host CLI', () => {
   test('vm init-tank --help has boot flags and pool ids', async () => {
     const { stdout, code } = await runHost(['vm', 'init-tank', '--help'])
     expect(code).toBe(0)
-    expect(stdout).toContain('--memory')
     expect(stdout).toContain('--timeout')
+    expect(stdout).toContain('--force-download')
     expect(stdout).toMatch(/poolId|disks\.tanks/i)
     expect(stdout).not.toContain('--all')
+    expect(stdout).not.toContain('--memory')
+    expect(stdout).not.toContain('--network')
   })
 
   test('vm destroy --help uses keep-persistent (not keep-data)', async () => {
@@ -313,7 +315,8 @@ describe('host CLI', () => {
     expect(existsSync(join(keep, 'qctl-seed', 'config.json'))).toBe(true)
     expect(existsSync(join(keep, 'qctl-seed', 'tier0', 'tank_passphrase_tank'))).toBe(true)
     expect(readFileSync(join(keep, 'meta-data'), 'utf8')).toContain('rocky-dev')
-    expect(existsSync(join(keep, 'network-config'))).toBe(true)
+    expect(existsSync(join(keep, 'network-config'))).toBe(false)
+    expect(existsSync(join(keep, 'qctl-seed', 'config.json'))).toBe(true)
   })
 
   test('new app --help', async () => {

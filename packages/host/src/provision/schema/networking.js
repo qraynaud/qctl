@@ -1,24 +1,103 @@
+/**
+ * Provision `networking:` — ports + labeled interfaces (guest L3 + ethernet.vm host attach).
+ */
 import { z } from 'zod'
 
 import { portsSchema } from '@qctl/shared'
 
 import { BRIDGE_RE, IFACE_RE } from './zod-utils.js'
 
-/** @import { AlignedProxmoxNet, ProxmoxNetMap } from './types.js' */
-
 export { portsSchema }
 
-const vlanId = z.number().int().min(1).max(4094)
-const ifaceName = z.string().trim().min(1).regex(IFACE_RE, 'must be a Linux interface name')
-const mapKey = z.string().trim().min(1)
+export const INTERFACE_TYPE = Object.freeze({
+  ETHERNET: 'ethernet',
+  VLAN: 'vlan',
+  DUMMY: 'dummy',
+})
 
-/** One trunk entry → VLAN id list: `12` or `"10-20"` (inclusive range). */
-const trunkEntrySchema = z
+/** @typedef {typeof INTERFACE_TYPE[keyof typeof INTERFACE_TYPE]} InterfaceType */
+
+export const VM_VLAN_MODE = Object.freeze({
+  ACCESS: 'access',
+  TRUNK: 'trunk',
+})
+
+/** @typedef {typeof VM_VLAN_MODE[keyof typeof VM_VLAN_MODE]} VmVlanMode */
+
+/**
+ * Host attach mode on `ethernet.vm` (one hypervisor NIC per ethernet with `vm`).
+ * Hypervisor-agnostic: drivers map these to backend specifics (e.g. libvirt passt,
+ * PVE bridge=). Omit `vm` → no hypervisor NIC.
+ */
+export const VM_ATTACH_MODE = Object.freeze({
+  /** L2 attach to a named host bridge. */
+  BRIDGE: 'bridge',
+  /** Hypervisor userspace / NAT connectivity (no host bridge). */
+  NAT: 'nat',
+})
+
+/** @typedef {typeof VM_ATTACH_MODE[keyof typeof VM_ATTACH_MODE]} VmAttachMode */
+
+const vlanId = z.number().int().min(1).max(4094)
+const labelKey = z.string().min(1)
+
+/** Linux netdev name (`eth0`, `vlan2`, `foo_bar`) — not `z.hostname()` (rejects `_`). */
+const ifaceName = z.stringFormat('linux-iface', IFACE_RE)
+const bridgeName = z.stringFormat('linux-bridge', BRIDGE_RE)
+
+/** Colon-delimited IEEE MAC; normalize to uppercase for hypervisors. */
+const macAddress = z.mac().overwrite((mac) => mac.toUpperCase())
+
+const ipv4Addr = z.ipv4()
+const ipv4Cidr = z.cidrv4()
+const ipv6Addr = z.ipv6()
+const ipv6Cidr = z.cidrv6()
+/** DNS / nameserver entry: address or hostname. */
+const nameserver = z.union([z.ipv4(), z.ipv6(), z.hostname()])
+
+/**
+ * Scalar or list → non-empty string[].
+ * @param {z.ZodType<string>} item
+ */
+function stringOrList(item) {
+  return z.union([item, z.array(item).min(1)]).transform((v) => (Array.isArray(v) ? v : [v]))
+}
+
+const ipv4FamilySchema = z
+  .strictObject({
+    dhcp: z.boolean().default(false),
+    addresses: stringOrList(ipv4Cidr).optional(),
+    gateway: ipv4Addr.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.dhcp && (v.addresses?.length || v.gateway)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'ipv4.dhcp: true cannot be combined with addresses or gateway',
+        path: ['dhcp'],
+      })
+    }
+  })
+
+const ipv6FamilySchema = z.strictObject({
+  'accept-ra': z.boolean().default(false),
+  addresses: stringOrList(ipv6Cidr).optional(),
+  gateway: ipv6Addr.optional(),
+})
+
+/** Shared L3 on every interface type. */
+const l3Fields = {
+  ipv4: ipv4FamilySchema.optional(),
+  ipv6: ipv6FamilySchema.optional(),
+  nameservers: stringOrList(nameserver).optional(),
+}
+
+/** `"10-20"` → inclusive id list (no dedupe/sort here). */
+const vlanRangeSchema = z
   .string()
-  .trim()
   .regex(/^\d+-\d+$/)
   .transform(
-    /** @returns {[unknown, unknown]} intermediate strings before coerce.number */ (s) => {
+    /** @returns {[unknown, unknown]} */ (s) => {
       const [from, to] = s.split('-')
       return [from, to]
     },
@@ -27,149 +106,301 @@ const trunkEntrySchema = z
     z
       .tuple([z.coerce.number().int().min(1).max(4094), z.coerce.number().int().min(1).max(4094)])
       .refine(([from, to]) => from <= to, {
-        message: 'bad trunk range (want from-to, 1–4094)',
+        message: 'bad vlan range (want from-to, 1–4094)',
       }),
   )
   .transform(([from, to]) => Array.from({ length: to - from + 1 }, (_, i) => from + i))
-  .or(vlanId.transform((id) => [id]))
+
+/** One list entry → id list: `12` or `"10-20"`. */
+const vlanIdOrRangeSchema = vlanRangeSchema.or(vlanId.transform((val) => [val]))
 
 /**
- * Trunks field: scalar or list of ids/ranges → sorted unique VLAN ids.
+ * Range or array → id list. Scalar `id` stays a separate arm so it can mean access
+ * while `[id]` still means trunk.
  */
-export const trunksSchema = z
-  .array(trunkEntrySchema)
-  .min(1)
-  .or(trunkEntrySchema)
-  .transform((parts) => [...new Set(parts.flat())].sort((a, b) => a - b))
-  .optional()
+const vlanIdListSchema = z.union([
+  vlanRangeSchema,
+  z
+    .array(vlanIdOrRangeSchema)
+    .min(1)
+    .transform((parts) => parts.flat()),
+])
 
-/** Default hypervisor NIC when proxmox.net is omitted (keyed like uplinks). */
-export const DEFAULT_PROXMOX_NET = Object.freeze({
-  bridge: 'vmbr0',
+/**
+ * `vm.vlan`: scalar id → access; range string or list → trunk.
+ * @typedef {{ mode: VmVlanMode, ids: number[] }} VmVlan
+ */
+export const vmVlanSchema = z.union([
+  vlanId.transform(/** @returns {VmVlan} */ (id) => ({ mode: VM_VLAN_MODE.ACCESS, ids: [id] })),
+  vlanIdListSchema.transform(
+    /** @returns {VmVlan} */ (ids) => ({
+      mode: VM_VLAN_MODE.TRUNK,
+      ids: [...new Set(ids)].sort((a, b) => a - b),
+    }),
+  ),
+])
+
+const ethernetVmMac = { mac: macAddress.optional() }
+
+/**
+ * Userspace / NAT attach — no host bridge.
+ * Drivers map this (workstation → passt; Proxmox omits / unsupported).
+ */
+export const ethernetVmNatSchema = z.strictObject({
+  mode: z.literal(VM_ATTACH_MODE.NAT),
+  ...ethernetVmMac,
 })
 
-export const uplinkSchema = z.strictObject({
-  dhcp4: z.boolean().default(true),
+/** Bridge attach to a named host bridge. */
+export const ethernetVmBridgeSchema = z.strictObject({
+  mode: z.literal(VM_ATTACH_MODE.BRIDGE),
+  bridge: bridgeName,
+  vlan: vmVlanSchema.optional(),
+  ...ethernetVmMac,
 })
 
-export const uplinksSchema = z
-  .record(ifaceName, uplinkSchema)
-  .refine((uplinks) => Object.values(uplinks).length >= 1, {
-    message: 'uplinks must be a non-empty map',
-  })
-  .prefault({ eth0: {} })
+/**
+ * Host attach for `type: ethernet`. Omit `vm` → no hypervisor NIC (guest L3 only /
+ * dummies). Discriminated on required `mode`: `bridge` | `nat`.
+ */
+export const ethernetVmSchema = z.discriminatedUnion('mode', [
+  ethernetVmNatSchema,
+  ethernetVmBridgeSchema,
+])
 
-/** Optional host address on this VLAN (Scale macvlan2 / host↔macvlan peers). */
-const ipv4Addr = z
-  .string()
-  .trim()
-  .regex(
-    /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
-    'must be an IPv4 address',
-  )
-
-const vlanEntrySchema = z.strictObject({
-  id: vlanId,
-  link: ifaceName.optional(),
-  ipv4: ipv4Addr.optional(),
+/**
+ * Raw entry before label→iface default and type strip (deep-merge may leave stale keys).
+ */
+const interfaceEntryInSchema = z.strictObject({
+  type: z
+    .enum([INTERFACE_TYPE.ETHERNET, INTERFACE_TYPE.VLAN, INTERFACE_TYPE.DUMMY])
+    .default(INTERFACE_TYPE.ETHERNET),
+  iface: ifaceName.optional(),
+  id: vlanId.optional(),
+  parent: labelKey.optional(),
+  vm: ethernetVmSchema.optional(),
+  ...l3Fields,
 })
 
-/** Colon-delimited IEEE MAC; store uppercase for Proxmox. */
-const proxmoxMac = z.mac().transform((mac) => mac.toUpperCase())
+/**
+ * @typedef {object} InterfaceEthernet
+ * @property {'ethernet'} type
+ * @property {string} iface
+ * @property {z.infer<typeof ipv4FamilySchema>} [ipv4]
+ * @property {z.infer<typeof ipv6FamilySchema>} [ipv6]
+ * @property {string[]} [nameservers]
+ * @property {z.infer<typeof ethernetVmSchema>} [vm]
+ */
 
-export const proxmoxNetEntrySchema = z
-  .strictObject({
-    bridge: z.string().trim().regex(BRIDGE_RE, 'must be a Linux bridge name'),
-    tag: vlanId.optional(),
-    vlan: vlanId.optional(),
-    trunks: trunksSchema,
-    mac: proxmoxMac.optional(),
-  })
-  .refine((raw) => !(raw.tag ?? raw.vlan) || !raw.trunks?.length, {
-    message: 'set tag/vlan OR trunks, not both',
-    path: ['trunks'],
-  })
-  .transform((raw) => {
-    const vlan = raw.tag ?? raw.vlan
+/**
+ * @typedef {object} InterfaceVlan
+ * @property {'vlan'} type
+ * @property {string} iface
+ * @property {number} id
+ * @property {string} parent
+ * @property {z.infer<typeof ipv4FamilySchema>} [ipv4]
+ * @property {z.infer<typeof ipv6FamilySchema>} [ipv6]
+ * @property {string[]} [nameservers]
+ */
+
+/**
+ * @typedef {object} InterfaceDummy
+ * @property {'dummy'} type
+ * @property {string} iface
+ * @property {z.infer<typeof ipv4FamilySchema>} [ipv4]
+ * @property {z.infer<typeof ipv6FamilySchema>} [ipv6]
+ * @property {string[]} [nameservers]
+ */
+
+/** @typedef {InterfaceEthernet | InterfaceVlan | InterfaceDummy} InterfaceEntry */
+
+/**
+ * Normalize one map entry: iface default, keep only fields valid for `type`.
+ * @param {string} label
+ * @param {z.infer<typeof interfaceEntryInSchema>} raw
+ * @returns {InterfaceEntry | { error: string, path?: (string|number)[] }}
+ */
+export function normalizeInterfaceEntry(label, raw) {
+  const type = raw.type ?? INTERFACE_TYPE.ETHERNET
+  const iface = raw.iface ?? (IFACE_RE.test(label) ? label : undefined)
+  if (!iface) {
     return {
-      bridge: raw.bridge,
-      ...(vlan ? { vlan } : {}),
-      ...(raw.trunks ? { trunks: raw.trunks } : {}),
-      ...(raw.mac ? { mac: raw.mac } : {}),
+      error: 'iface is required when the label is not a valid Linux interface name',
+      path: ['iface'],
     }
-  })
+  }
+
+  /** @type {{ ipv4?: typeof raw.ipv4, ipv6?: typeof raw.ipv6, nameservers?: string[] }} */
+  const l3 = {}
+  if (raw.ipv4) l3.ipv4 = raw.ipv4
+  if (raw.ipv6) l3.ipv6 = raw.ipv6
+  if (raw.nameservers) l3.nameservers = raw.nameservers
+
+  if (type === INTERFACE_TYPE.ETHERNET) {
+    return {
+      type: INTERFACE_TYPE.ETHERNET,
+      iface,
+      ...l3,
+      ...(raw.vm ? { vm: raw.vm } : {}),
+    }
+  }
+
+  if (type === INTERFACE_TYPE.VLAN) {
+    if (raw.id == null) {
+      return { error: 'id is required for type: vlan', path: ['id'] }
+    }
+    if (!raw.parent) {
+      return { error: 'parent is required for type: vlan', path: ['parent'] }
+    }
+    return {
+      type: INTERFACE_TYPE.VLAN,
+      iface,
+      id: raw.id,
+      parent: raw.parent,
+      ...l3,
+    }
+  }
+
+  // dummy — strip id/parent/vm left by type flips after deep-merge
+  return {
+    type: INTERFACE_TYPE.DUMMY,
+    iface,
+    ...l3,
+  }
+}
 
 /**
- * proxmox.net: map keyed by uplink name.
- * Omit → undefined (caller fills defaults from uplinks via {@link alignProxmoxNets}).
+ * @param {Record<string, InterfaceEntry>} interfaces
+ * @returns {[string, InterfaceEthernet][]}
  */
-export const proxmoxNetMapSchema = z
-  .record(mapKey, proxmoxNetEntrySchema)
-  .refine((net) => Object.values(net).length >= 1, {
-    message: 'proxmox.net must be a non-empty map',
-  })
+export function ethernetEntries(interfaces) {
+  return Object.entries(interfaces)
+    .filter(([, e]) => e.type === INTERFACE_TYPE.ETHERNET)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, e]) => [label, /** @type {InterfaceEthernet} */ (e)])
+}
 
-export const networkingSchema = z
-  .strictObject({
-    ports: portsSchema,
-    uplinks: uplinksSchema,
-    vlans: z.record(ifaceName, vlanEntrySchema).prefault({}),
-  })
-  .transform((n) => {
-    const uplinkKeys = Object.keys(n.uplinks)
-    const defaultLink = uplinkKeys.length === 1 ? uplinkKeys[0] : undefined
-    /** @type {Record<string, { id: number, link?: string, ipv4?: string }>} */
-    const vlans = {}
-    for (const [name, v] of Object.entries(n.vlans)) {
-      const link = v.link ?? defaultLink
-      vlans[name] = {
-        id: v.id,
-        ...(link ? { link } : {}),
-        ...(v.ipv4 ? { ipv4: v.ipv4 } : {}),
-      }
-    }
-    return { ports: n.ports, uplinks: n.uplinks, vlans }
-  })
-  .superRefine((n, ctx) => {
-    const uplinkNames = new Set(Object.keys(n.uplinks))
-    for (const [name, v] of Object.entries(n.vlans)) {
-      if (!v.link) {
+/**
+ * @param {Record<string, InterfaceEntry>} interfaces
+ * @returns {[string, InterfaceVlan][]}
+ */
+export function vlanEntries(interfaces) {
+  return Object.entries(interfaces)
+    .filter(([, e]) => e.type === INTERFACE_TYPE.VLAN)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, e]) => [label, /** @type {InterfaceVlan} */ (e)])
+}
+
+/**
+ * Dummy iface names (kernel names), sorted.
+ * @param {Record<string, InterfaceEntry>} interfaces
+ * @returns {string[]}
+ */
+export function dummyInterfaceNames(interfaces) {
+  return Object.values(interfaces)
+    .filter((e) => e.type === INTERFACE_TYPE.DUMMY)
+    .map((e) => e.iface)
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Resolve vlan `parent` label → parent ethernet iface name.
+ * @param {Record<string, InterfaceEntry>} interfaces
+ * @param {string} parentLabel
+ * @returns {string | undefined}
+ */
+export function resolveParentIface(interfaces, parentLabel) {
+  const e = interfaces[parentLabel]
+  if (!e || e.type !== INTERFACE_TYPE.ETHERNET) return undefined
+  return e.iface
+}
+
+/**
+ * @typedef {object} AlignedVmNic
+ * @property {string} label
+ * @property {string} iface
+ * @property {z.infer<typeof ethernetVmSchema>} [vm]
+ */
+
+/**
+ * Ethernet NICs for hypervisor drivers — sorted by label.
+ * @param {Record<string, InterfaceEntry>} interfaces
+ * @returns {AlignedVmNic[]}
+ */
+export function alignedVmNics(interfaces) {
+  return ethernetEntries(interfaces).map(([label, e]) => ({
+    label,
+    iface: e.iface,
+    ...(e.vm ? { vm: e.vm } : {}),
+  }))
+}
+
+export const interfacesSchema = z
+  .record(labelKey, interfaceEntryInSchema)
+  .transform((map, ctx) => {
+    /** @type {Record<string, InterfaceEntry>} */
+    const out = {}
+    for (const [label, raw] of Object.entries(map)) {
+      const normalized = normalizeInterfaceEntry(label, raw)
+      if ('error' in normalized) {
         ctx.addIssue({
           code: 'custom',
-          message: 'link is required when more than one uplink is defined',
-          path: ['vlans', name, 'link'],
+          message: normalized.error,
+          path: [label, ...(normalized.path ?? [])],
         })
         continue
       }
-      if (uplinkNames.has(name)) {
+      out[label] = normalized
+    }
+    return out
+  })
+  .superRefine((interfaces, ctx) => {
+    const labels = Object.keys(interfaces)
+    if (!labels.some((l) => interfaces[l].type === INTERFACE_TYPE.ETHERNET)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'interfaces must include at least one type: ethernet',
+        path: [],
+      })
+    }
+
+    /** @type {Map<string, string>} */
+    const ifaceOwners = new Map()
+    for (const [label, e] of Object.entries(interfaces)) {
+      const prev = ifaceOwners.get(e.iface)
+      if (prev) {
         ctx.addIssue({
           code: 'custom',
-          message:
-            `${JSON.stringify(name)} collides with an uplink `
-            + `(macvlan parent must be a VLAN iface, not the uplink)`,
-          path: ['vlans', name],
+          message: `iface ${JSON.stringify(e.iface)} already used by label ${JSON.stringify(prev)}`,
+          path: [label, 'iface'],
         })
+      } else {
+        ifaceOwners.set(e.iface, label)
       }
-      if (!uplinkNames.has(v.link)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `link ${JSON.stringify(v.link)} must match an uplinks key`,
-          path: ['vlans', name, 'link'],
-        })
+
+      if (e.type === INTERFACE_TYPE.VLAN) {
+        const parent = interfaces[e.parent]
+        if (!parent) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `parent ${JSON.stringify(e.parent)} must match an interfaces label`,
+            path: [label, 'parent'],
+          })
+        } else if (parent.type !== INTERFACE_TYPE.ETHERNET) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `parent ${JSON.stringify(e.parent)} must be type: ethernet`,
+            path: [label, 'parent'],
+          })
+        }
       }
     }
   })
-
-/**
- * Align proxmox.net map entries to uplink order; default missing NICs.
- * @param {Record<string, { dhcp4: boolean }>} uplinks
- * @param {ProxmoxNetMap | null | undefined} netMap
- * @returns {AlignedProxmoxNet[]}
- */
-export function alignProxmoxNets(uplinks, netMap) {
-  return Object.keys(uplinks).map((name) => {
-    const hit = netMap?.[name]
-    if (hit) return { ...hit, name }
-    return { name, ...DEFAULT_PROXMOX_NET }
+  .prefault({
+    main: { type: INTERFACE_TYPE.ETHERNET, iface: 'eth0' },
   })
-}
+
+export const networkingSchema = z.strictObject({
+  ports: portsSchema,
+  interfaces: interfacesSchema,
+})

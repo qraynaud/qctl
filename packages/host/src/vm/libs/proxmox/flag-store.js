@@ -2,6 +2,7 @@
  * Proxmox {@link VmFlagStore}: flags as scoped QEMU tag tokens `qctl.<name>=<wire>`.
  */
 import { INSTALLED, VmFlagNotFoundError, jsonCodec } from '../flags.js'
+import { pveUnknown } from './api-schemas.js'
 
 /** @import { VmFlagDef, VmFlagStore } from '../flag-store.js' */
 /** @import { ProxmoxClient } from './client.js' */
@@ -146,10 +147,10 @@ export function createFlagStore(client, vmid) {
     const prevFmt = formatProxmoxTags(prev)
     if (next === prevFmt) return
     if (!next) {
-      await client.put(path(), { delete: 'tags' })
+      await client.put(pveUnknown, path(), { delete: 'tags' })
       return
     }
-    await client.put(path(), { tags: next })
+    await client.put(pveUnknown, path(), { tags: next })
   }
 
   return {

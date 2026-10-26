@@ -1,6 +1,6 @@
 /**
  * Zod schemas for provision YAML (common → target-* → env-* → profile-*).
- * Named collections (ports, uplinks, vlans, proxmox.net) stay maps keyed by name.
+ * Named collections (ports, interfaces) stay maps keyed by name/label.
  * Disks helpers: import from `./disks.js` / `./resolve-disks.js` / `@qctl/shared` directly.
  */
 export { collectDisksWarnings } from './disks.js'
@@ -8,5 +8,5 @@ export {
   appsIdentityFromProvision,
   firstBootCredentialsFromProvision,
 } from './first-boot.js'
-export { alignProxmoxNets, portsSchema } from './networking.js'
+export { alignedVmNics, dummyInterfaceNames, portsSchema } from './networking.js'
 export { parseProvisionOrThrow, provisionSchema } from './parse.js'

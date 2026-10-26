@@ -18,27 +18,30 @@ import {
   adminIdentityFromProvision,
   appsIdentityFromProvision,
 } from '../../../provision/schema/first-boot.js'
-import { vlanParentEnvLines } from '../guest-net.js'
 import { disksJsonPayload } from './disks-payload.js'
 
 /** @import { SeedConfig } from '@qctl/shared' */
+/** @import { Networking } from '../../../provision/schema/types.js' */
 /** @import { SeedVars } from './vars.js' */
 
 /** Default until provision owns timezone (guest host-baseline applies it). */
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
 /**
- * `VLAN2_PARENT=vlan2` lines → map for seed config.
- * @param {Record<string, { ipv4?: string | null }>} vlans
- * @returns {Record<string, string>}
+ * Provision interfaces → seed wire (drop host-only `ethernet.vm`).
+ * @param {Networking['interfaces']} interfaces
+ * @returns {z.infer<typeof seedConfigSchema>['networking']['interfaces']}
  */
-export function vlanParentsFromVlans(vlans) {
-  /** @type {Record<string, string>} */
+export function seedInterfacesFromProvision(interfaces) {
+  /** @type {z.infer<typeof seedConfigSchema>['networking']['interfaces']} */
   const out = {}
-  for (const line of vlanParentEnvLines(vlans || {})) {
-    const i = line.indexOf('=')
-    if (i <= 0) continue
-    out[line.slice(0, i)] = line.slice(i + 1)
+  for (const [label, e] of Object.entries(interfaces || {})) {
+    if (e.type === 'ethernet') {
+      const { vm: _vm, ...rest } = e
+      out[label] = rest
+    } else {
+      out[label] = e
+    }
   }
   return out
 }
@@ -82,9 +85,11 @@ export function buildSeedConfig(vars) {
       },
     },
     disks: disksJsonPayload(vars.resolved_disks),
-    ports: vars.provision.networking?.ports ?? {},
+    networking: {
+      ports: vars.provision.networking?.ports ?? {},
+      interfaces: seedInterfacesFromProvision(vars.provision.networking?.interfaces || {}),
+    },
     packages: vars.provision.packages,
-    vlanParents: vlanParentsFromVlans(vars.provision.networking?.vlans || {}),
     profile,
     timezone: DEFAULT_TIMEZONE,
     adminSshAuthorizedKeys: vars.admin_ssh_authorized_keys,

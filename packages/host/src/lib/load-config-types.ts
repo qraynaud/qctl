@@ -4,7 +4,7 @@
 import type { NormalizedPackages } from '@qctl/shared'
 
 import type {
-  AlignedProxmoxNet,
+  AlignedVmNic,
   Networking,
   PortsMap,
   ProvisionFile,
@@ -29,11 +29,11 @@ export type LoadedProvision = {
   guest: LoadedProvisionGuest
   workstation: WorkstationTarget | null
   proxmox: ProxmoxTarget | null
-  nets: AlignedProxmoxNet[]
+  /** Ethernet NICs for hypervisor drivers (sorted by label). */
+  nets: AlignedVmNic[]
   networking: Networking | null
   ports: PortsMap
-  uplinks: Networking['uplinks']
-  vlans: Networking['vlans']
+  interfaces: Networking['interfaces']
   packages: NormalizedPackages
   files: ProvisionFile['files']
 }

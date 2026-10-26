@@ -46,11 +46,6 @@ export function builder(yargs) {
       default: 60,
       describe: 'Seconds to wait for SSH before guest quadlet down (apps/--all only)',
     })
-    .option('network', {
-      choices: ['auto', 'default', 'user'],
-      default: 'user',
-      describe: 'How to reach the guest for apps/--all (user/auto: passt; default: DHCP)',
-    })
     .option('user', {
       type: 'string',
       default: 'rocky',

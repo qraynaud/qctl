@@ -23,6 +23,7 @@ import {
   setDomainSerialTcp,
   virsh,
 } from '../../libs/libvirt/index.js'
+import { hasNatNic } from '../../libs/nic-plan.js'
 import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { ensureSeed } from '../../libs/seed/iso.js'
 import { buildVirtInstallArgs, defineDomainFromVirtInstallArgs } from '../../libs/virt-install.js'
@@ -129,7 +130,7 @@ export async function resolveEndpoint(ctx, opts = {}) {
     if (!ip) {
       throw new Error(
         `no DHCP lease for ${name} yet (network=default).\n`
-          + `  Wait for boot, or use --network user / --host.`,
+          + `  Wait for boot, or pass --host / use a nat ethernet.vm for passt.`,
       )
     }
     const port = opts.port != null ? Number(opts.port) : 22
@@ -180,16 +181,14 @@ export async function reconcile(ctx, vm, specs) {
     await convergeWorkstationDisks(vm, specs, specs.seedIsoPath)
   }
 
-  if (specs.network != null) {
-    const network = specs.network === 'auto' ? 'user' : specs.network || 'user'
-    if (network === 'user') {
-      const ports = portsFromArgv({
-        env: ctx.env,
-        target: 'workstation',
-        profile: ctx.profile,
-      })
-      await reconcilePasstPortForwards(vm.connect, vm.name, ports)
-    }
+  // Bridge NICs are create-time (virt-install); day-2 refreshes passt when any NAT NIC.
+  if (specs.nics && (hasNatNic(specs.nics) || !Object.keys(specs.nics).length)) {
+    const ports = portsFromArgv({
+      env: ctx.env,
+      target: 'workstation',
+      profile: ctx.profile,
+    })
+    await reconcilePasstPortForwards(vm.connect, vm.name, ports)
   }
 
   if (specs.memory != null && specs.vcpus != null) {
@@ -279,7 +278,6 @@ export async function create(ctx, specs, _signal) {
     target: 'workstation',
     profile: ctx.profile,
   })
-  const network = specs.network === 'auto' ? 'user' : specs.network || 'user'
   const osinfo = specs.osinfo || 'rocky10'
   const args = buildVirtInstallArgs({
     connect,
@@ -289,11 +287,11 @@ export async function create(ctx, specs, _signal) {
     disks: { disks: specs.disks, bootDrive: specs.bootDrive },
     seed,
     ports,
-    network,
     osinfo,
+    nics: specs.nics,
   })
   console.log(chalk.cyan(`vm: defining domain ${name} (virt-install --print-xml)…`))
-  await defineDomainFromVirtInstallArgs(args)
+  await defineDomainFromVirtInstallArgs(args, { nics: specs.nics })
   console.log(chalk.green(`vm: domain ${name} defined`))
   return { connect, name }
 }
