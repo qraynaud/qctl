@@ -19,7 +19,7 @@ import { chalk, path } from 'zx'
 import { loadHostGuestCredentials, loadProvision } from '@qctl/shared'
 
 import {
-  alignProxmoxNets,
+  alignedVmNics,
   collectDisksWarnings,
   firstBootCredentialsFromProvision,
   parseProvisionOrThrow,
@@ -180,8 +180,8 @@ async function loadEnvProvisionUncached({ env: e, target: t, profile: p }) {
   })) {
     console.warn(chalk.yellow(`vm: ${w}`))
   }
-  const { ports, uplinks, vlans } = data.networking
-  const nets = alignProxmoxNets(uplinks, data.proxmox?.net)
+  const { ports, interfaces } = data.networking
+  const nets = alignedVmNics(interfaces)
 
   /** @type {string[]} */
   let sshList = collectSshAuthorizedKeys(data.ssh?.authorized_keys)
@@ -216,8 +216,7 @@ async function loadEnvProvisionUncached({ env: e, target: t, profile: p }) {
     nets,
     networking: data.networking || null,
     ports,
-    uplinks,
-    vlans,
+    interfaces,
     packages: data.packages,
     files: data.files,
   }

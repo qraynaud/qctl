@@ -37,4 +37,11 @@ export type {
   SeedRepo,
   SeedSubidRange,
 } from './seed/config-types.ts'
+export type {
+  SeedInterfaceDummy,
+  SeedInterfaceEntry,
+  SeedInterfaceEthernet,
+  SeedInterfaceVlan,
+  SeedInterfaces,
+} from './seed/interfaces-types.ts'
 export type { YamlMapping, YamlValue } from './yaml.js'

@@ -105,7 +105,6 @@ describe('newProfile', () => {
             cpu: 4,
             memory: 8192,
             apiToken: { kind: 'secret', name: 'PROXMOX_API_TOKEN', encoding: 'utf8' },
-            net: { eth0: { bridge: 'vmbr0' } },
           },
         },
       },

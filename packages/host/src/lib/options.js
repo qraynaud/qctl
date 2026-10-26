@@ -94,7 +94,7 @@ export const DEFAULT_CPU = 2
 export const DEFAULT_MEMORY_MIB = 4096
 
 /**
- * Fill argv.memory / argv.vcpus from provision `<target>.memory|cpu` when CLI omits them.
+ * Fill argv.memory / argv.vcpus from provision `<target>.memory|cpu` (always; no CLI override).
  * Overlay key is `argv.target` (driver module id), not a hardcoded workstation|proxmox branch.
  * Mutates argv (same pattern as resolveVmName). Soft-loads config (never exits).
  * @param {VmArgv} argv
@@ -104,58 +104,32 @@ export function resolveBootResources(argv) {
   /** @type {BootResourceSection | null} */
   let section = null
   const targetKey = String(argv.target || 'workstation')
-  if (argv.memory == null || argv.vcpus == null) {
-    const doc = loadProvisionUnresolved({
-      env: argv.env || 'dev',
-      target: targetKey,
-      profile: argv.profile,
-    })
-    if (doc?.data && typeof doc.data === 'object' && !Array.isArray(doc.data)) {
-      const block = /** @type {Record<string, YamlValue>} */ (doc.data)[targetKey]
-      section =
-        block && typeof block === 'object' && !Array.isArray(block)
-          ? /** @type {BootResourceSection} */ (block)
-          : null
-    }
+  const doc = loadProvisionUnresolved({
+    env: argv.env || 'dev',
+    target: targetKey,
+    profile: argv.profile,
+  })
+  if (doc?.data && typeof doc.data === 'object' && !Array.isArray(doc.data)) {
+    const block = /** @type {Record<string, YamlValue>} */ (doc.data)[targetKey]
+    section =
+      block && typeof block === 'object' && !Array.isArray(block)
+        ? /** @type {BootResourceSection} */ (block)
+        : null
   }
-  if (argv.memory == null) {
-    argv.memory = section?.memory != null ? Number(section.memory) : DEFAULT_MEMORY_MIB
-  }
-  if (argv.vcpus == null) {
-    argv.vcpus = section?.cpu != null ? Number(section.cpu) : DEFAULT_CPU
-  }
+  argv.memory = section?.memory != null ? Number(section.memory) : DEFAULT_MEMORY_MIB
+  argv.vcpus = section?.cpu != null ? Number(section.cpu) : DEFAULT_CPU
   return argv
 }
 
 /**
- * Disk / CPU / network flags for `vm up` and `vm init-tank`.
- * Disk sizes and passt hostfwd come from provision (not CLI).
+ * Identity + debug flags for `vm up` / `vm init-tank`.
+ * Guest RAM/CPU/NICs/osinfo come from provision (or driver defaults) — not CLI.
  *
  * @param {Argv} y
  * @returns {Argv}
  */
 export const sharedBoot = (y) =>
-  sharedLibvirt(y)
-    .option('memory', {
-      type: 'number',
-      describe: 'RAM MiB (default: provision workstation/proxmox.memory, else 4096)',
-    })
-    .option('vcpus', {
-      type: 'number',
-      describe: 'vCPU count (default: provision workstation/proxmox.cpu, else 2)',
-    })
-    .option('network', {
-      choices: ['auto', 'default', 'user'],
-      default: 'user',
-      describe:
-        'user/auto: passt + hostfwd from provision ports; default: libvirt NAT virbr0 (workstation)',
-    })
-    .option('osinfo', {
-      type: 'string',
-      default: 'rocky10',
-      describe: 'osinfo short-id (workstation)',
-    })
-    .option('cidata', {
-      type: 'string',
-      describe: 'Keep unpacked cidata tree at this path (debug; same as `vm seed --out`)',
-    })
+  sharedLibvirt(y).option('cidata', {
+    type: 'string',
+    describe: 'Keep unpacked cidata tree at this path (debug; same as `vm seed --out`)',
+  })

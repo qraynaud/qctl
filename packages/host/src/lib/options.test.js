@@ -61,7 +61,7 @@ describe('host lib options', () => {
     expect(help).not.toMatch(/--target\b/)
   })
 
-  test('resolveBootResources keeps explicit memory and vcpus', () => {
+  test('resolveBootResources ignores leftover argv memory/vcpus (provision wins)', () => {
     const argv = resolveBootResources(
       /** @type {VmArgv} */ (
         /** @type {never} */ ({
@@ -72,8 +72,9 @@ describe('host lib options', () => {
         })
       ),
     )
-    expect(argv.memory).toBe(2048)
-    expect(argv.vcpus).toBe(4)
+    // No provision → defaults (CLI values discarded).
+    expect(argv.memory).toBe(4096)
+    expect(argv.vcpus).toBe(2)
   })
 
   test('resolveBootResources reads doc.data[argv.target]', () => {

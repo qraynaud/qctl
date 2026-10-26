@@ -4,7 +4,7 @@
  * Appliance first boot (`rocky-first-boot.service` → `qctl _internal_init`).
  * @type {ReadonlyArray<PlatformStage>} */
 export const DEFAULT_STAGES = [
-  'vlan-parents',
+  'ensure-dummies',
   'network-up',
   'host-baseline',
   'data-mounts',

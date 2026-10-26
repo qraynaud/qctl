@@ -60,13 +60,18 @@ const sampleSeedDefaults = {
   repo: { vcs: /** @type {const} */ ('hg'), url: 'ssh://hg@example/repo', branch: 'default' },
   users: { apps, admin },
   disks,
-  ports: {},
   packages: {
     distro: ['curl'],
     pipx: /** @type {never[]} */ ([]),
     http: /** @type {never[]} */ ([]),
   },
-  vlanParents: { VLAN2_PARENT: 'vlan2' },
+  networking: {
+    ports: {},
+    interfaces: {
+      main: { type: /** @type {const} */ ('ethernet'), iface: 'eth0' },
+      vlan2: { type: /** @type {const} */ ('dummy'), iface: 'vlan2' },
+    },
+  },
   profile: SEED_PROFILE.APPLIANCE,
   timezone: 'Europe/Paris',
   adminSshAuthorizedKeys: 'ssh-ed25519 AAAA example\n',
@@ -96,7 +101,8 @@ describe('seedConfigSchema', () => {
     const out = seedConfigSchema.parse(sampleSeed())
     expect(out.profile).toBe('appliance')
     expect(out.root).toBe('/tank/rocky')
-    expect(out.ports.ssh.forward).toBe(2222)
+    expect(out.networking.ports.ssh.forward).toBe(2222)
+    expect(out.networking.interfaces.vlan2).toMatchObject({ type: 'dummy', iface: 'vlan2' })
     expect(out.tier0Keys).toEqual(['ADMIN_USERNAME', 'tank_passphrase_tank'])
     expect(out.initTank).toBeUndefined()
   })

@@ -16,11 +16,6 @@ export function builder(yargs) {
   // re-export every passt --*-port flag (those belong on vm up / ssh-info).
   return sharedDryRun(
     sharedLibvirt(yargs)
-      .option('network', {
-        choices: ['auto', 'default', 'user'],
-        default: 'user',
-        describe: 'How to reach the guest (user/auto: passt forward; default: DHCP lease)',
-      })
       .option('user', {
         type: 'string',
         default: 'rocky',

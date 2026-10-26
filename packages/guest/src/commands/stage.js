@@ -97,7 +97,15 @@ export async function handler(argv) {
     profile: /** @type {'default' | 'init-tank'} */ (argv.profile ?? 'default'),
     dryRun: Boolean(argv.dryRun),
     secrets,
-    ...(seedConfig ? { seedConfig, ports: seedConfig.ports } : {}),
+    ...(seedConfig
+      ? {
+          seedConfig,
+          ...(seedConfig.networking?.ports ? { ports: seedConfig.networking.ports } : {}),
+          ...(seedConfig.networking?.interfaces
+            ? { interfaces: seedConfig.networking.interfaces }
+            : {}),
+        }
+      : {}),
     ...(osConfig ? { osConfig } : {}),
   })
   try {

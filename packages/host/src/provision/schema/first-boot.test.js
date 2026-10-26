@@ -18,7 +18,9 @@ describe('adminIdentityFromProvision', () => {
     const data = provisionSchema.parse({
       networking: {
         ports: { ssh: { port: 22 } },
-        uplinks: { eth0: { dhcp4: true } },
+        interfaces: {
+          main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+        },
       },
       users: { admin: { username: 'rocky', uid: 1200, gid: 1200 } },
     })
@@ -40,7 +42,9 @@ describe('firstBootCredentialsFromProvision', () => {
     const data = provisionSchema.parse({
       networking: {
         ports: { ssh: { port: 22 } },
-        uplinks: { eth0: { dhcp4: true } },
+        interfaces: {
+          main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+        },
       },
       disks: {
         data: { vw: { mount: '/vw' } },

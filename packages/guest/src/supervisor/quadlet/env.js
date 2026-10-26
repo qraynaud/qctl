@@ -10,12 +10,19 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
-import { loadEnvGraphForDir, resolvedNonSensitive, sensitiveKeys } from '@qctl/shared'
+import {
+  isVlanParentEnvKey,
+  loadEnvGraphForDir,
+  resolvedNonSensitive,
+  sensitiveKeys,
+  vlanParentsFromInterfaces,
+} from '@qctl/shared'
 
 import { listUnitDirs } from './apps/index.js'
 import { evalEnvText, listAssignedKeys } from './env/shellenv.js'
 import { die } from './errors.js'
 
+/** @import { SeedInterfaces } from '@qctl/shared' */
 /** @import { Scope } from './env/shellenv.js' */
 
 /**
@@ -114,11 +121,31 @@ export function detectQctlEnvFor(root, opts = {}) {
  * @property {string} seedDir
  * @property {string} [qctlEnv]
  * @property {{ env?: string }} [osConfig]
+ * @property {SeedInterfaces} [interfaces]
+ *   Optional seed `networking.interfaces` — overlays vlan-parents.env
+ *   (`VLAN{n}_PARENT=<iface>` from label `vlan{n}`).
  */
 
 /**
- * Fresh render env: process env + seed-baked derived keys. No graph values yet.
+ * Promote `VLAN{n}_PARENT` / `VLAN{n}_IPV4` into substKeys.
+ * @param {RenderEnv} renv
+ * @param {Record<string, string>} map
+ */
+function applyVlanParentMap(renv, map) {
+  for (const [key, value] of Object.entries(map)) {
+    if (!isVlanParentEnvKey(key)) continue
+    renv.scope[key] = value
+    if (!renv.substKeys.includes(key)) renv.substKeys.push(key)
+  }
+}
+
+/**
+ * Fresh render env: process env + seed-baked VLAN* keys. No graph values yet.
  * Template path builtin `${__DIRNAME}` is applied in {@link substitute}, not here.
+ *
+ * VLAN contract: label `vlan{n}` → `VLAN{n}_PARENT=<iface>` (+ optional `_IPV4`).
+ * Sourced from `seedDir/vlan-parents.env`, then optional `ctx.interfaces` overlay.
+ *
  * @param {EnvLoadCtx} ctx
  * @param {string} qctlEnv
  * @returns {RenderEnv}
@@ -135,8 +162,15 @@ function seedRenderEnv(ctx, qctlEnv) {
   }
 
   sourceSeedEnv(renv.scope, join(ctx.seedDir, 'vlan-parents.env'))
-  for (const k of Object.keys(renv.scope)) {
-    if (/^VLAN.*(_PARENT|_IPV4)$/.test(k) && !renv.substKeys.includes(k)) renv.substKeys.push(k)
+  /** @type {Record<string, string>} */
+  const fromFile = {}
+  for (const [key, value] of Object.entries(renv.scope)) {
+    if (isVlanParentEnvKey(key) && value != null) fromFile[key] = value
+  }
+  applyVlanParentMap(renv, fromFile)
+
+  if (ctx.interfaces) {
+    applyVlanParentMap(renv, vlanParentsFromInterfaces(ctx.interfaces))
   }
   return renv
 }

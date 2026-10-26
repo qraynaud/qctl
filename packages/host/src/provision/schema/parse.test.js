@@ -4,7 +4,9 @@ import { describe, expect, test } from 'bun:test'
 const net = {
   networking: {
     ports: { ssh: { port: 22, forward: 2222 } },
-    uplinks: { eth0: { dhcp4: true } },
+    interfaces: {
+      main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+    },
   },
 }
 

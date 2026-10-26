@@ -12,11 +12,25 @@ import {
   networkUnitParent,
   networksSrc,
   sharedNetworkFile,
+  vlanHostEnvBody,
 } from './networks.js'
 import { cleanupQuadletFixture, makeQuadletInstance } from './test/fixture.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('network helpers', () => {
+  test('vlanHostEnvBody: VLAN{n}_* from scope; PARENT is iface', () => {
+    expect(
+      vlanHostEnvBody({
+        VLAN2_PARENT: 'lab2',
+        VLAN2_IPV4: '10.0.2.2',
+        VLAN2_SUBNET: '10.0.2.0/24',
+        PATH: '/bin',
+        VLAN_FOO_PARENT: 'nope',
+      }),
+    ).toBe('VLAN2_IPV4=10.0.2.2\nVLAN2_PARENT=lab2\nVLAN2_SUBNET=10.0.2.0/24\n')
+    expect(vlanHostEnvBody({})).toBe('')
+  })
+
   test('engine classification, [Network] keys, parent, names', () => {
     const fx = makeQuadletInstance()
     try {

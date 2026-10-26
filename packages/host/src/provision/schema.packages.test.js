@@ -6,8 +6,9 @@ import { describe, expect, test } from 'bun:test'
 const baseNet = {
   networking: {
     ports: { ssh: { port: 22 } },
-    uplinks: { eth0: { dhcp4: true } },
-    vlans: {},
+    interfaces: {
+      main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+    },
   },
 }
 

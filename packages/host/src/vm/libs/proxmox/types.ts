@@ -1,21 +1,17 @@
 /**
  * Proxmox API / VM lifecycle types.
  * Provision-shaped fields are derived from Zod schemas (see provision/schema/types).
+ * PVE response shapes come from {@link ./api-schemas.js}.
  */
-import type {
-  AlignedProxmoxNet,
-  ProxmoxNetEntry,
-  ProxmoxTarget,
-} from '../../../provision/schema/types.js'
+import type { z } from 'zod'
 
-export type { AlignedProxmoxNet, ProxmoxNetEntry, ProxmoxTarget }
+import type { AlignedVmNic, EthernetVm, ProxmoxTarget } from '../../../provision/schema/types.js'
 
-/** Provision net entry (aligned rows may include uplink `name`). */
-export type ProxmoxNet = ProxmoxNetEntry & { name?: string }
+export type { AlignedVmNic, EthernetVm, ProxmoxTarget }
 
 /**
  * Runtime client config from {@link loadProxmoxConfig}.
- * API credentials are load-time required strings; NIC / vmid shapes follow provision schemas.
+ * API credentials are load-time required strings; NIC shapes follow `ethernet.vm`.
  */
 export type ProxmoxConfig = {
   apiUrl: string
@@ -24,28 +20,29 @@ export type ProxmoxConfig = {
   storage: string
   imageStorage?: string
   vmid?: NonNullable<ProxmoxTarget['vmid']>
-  nets: AlignedProxmoxNet[]
+  nets: AlignedVmNic[]
   /** Present on loadProxmoxConfig / tryLoad results (diagnostics). */
   provisionDir?: string
   env?: string
   provisionPath?: string
-  bridge?: ProxmoxNetEntry['bridge']
-  vlan?: NonNullable<ProxmoxNetEntry['vlan']>
-  trunks?: NonNullable<ProxmoxNetEntry['trunks']>
-  mac?: NonNullable<ProxmoxNetEntry['mac']>
 }
 
-export type RequestOpts = {
-  query?: Record<string, string | number | boolean | null | undefined>
-  body?: unknown
-  form?: Record<string, string | number | boolean | null | undefined>
-  soft?: boolean
-}
+/** Query / form field map (shared so call sites need not index a generic). */
+export type ProxmoxRequestFields = Record<string, string | number | boolean | null | undefined>
 
-export type SoftResult = { ok: true; data: unknown } | { ok: false; error: string }
+/**
+ * JSON request options — callers must supply `TBody` and `TSoft` (no defaults).
+ * `TSoft` selects the return: soft → Zod `safeParse` result, otherwise bare `z.infer<S>`.
+ */
+export type RequestOpts<TBody, TSoft extends boolean> = {
+  query?: ProxmoxRequestFields
+  body?: TBody
+  form?: ProxmoxRequestFields
+  soft?: TSoft
+}
 
 /** QEMU config / create form — disk keys are dynamic (`scsiN`, …). */
-export type QemuConfig = Record<string, string | number | boolean | undefined | null>
+export type QemuConfig = z.infer<typeof import('./api-schemas.js').pveQemuConfig>
 
 /** serial → volid for persistent (non-OS) disks on a VM/holder. */
 export type DiskState = {
@@ -73,6 +70,10 @@ export type CreateRockyVmOpts = {
   osSize?: string
   /** Non-OS disks in attach order. */
   disks: AttachDiskSpec[]
+  /**
+   * Desired NICs (sorted by label → netN). Omit → `client.config.nets`.
+   */
+  nics?: AlignedVmNic[]
   vmid?: number | null
   /** Required persistent serials when promoting a holder. */
   expectedIds?: string[]
@@ -84,12 +85,6 @@ export type DestroyRockyVmOpts = {
   keep?: 'none' | 'vw' | 'persistent'
   /** When keep=vw, wipe these tank member serials (leave data volumes). */
   tankIds?: string[]
-}
-
-export type QemuListEntry = {
-  vmid: number | string
-  name?: string
-  status?: string
 }
 
 /** Runtime client from `createProxmoxClient` — use JSDoc `ReturnType` in .js consumers. */

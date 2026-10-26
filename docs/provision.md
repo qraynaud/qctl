@@ -210,18 +210,24 @@ networking:
       forward: 9090
     # App ports follow the same shape; qctl local skips publishing ssh + cockpit
 
-  # Uplinks (optional; default one eth0 with dhcp4: true)
-  uplinks:
-    eth0:
-      dhcp4: true            # optional; default true
-
-  # Guest VLAN ifaces (optional). Name must not collide with an uplink.
-  # link required when more than one uplink exists; else defaults to the sole uplink.
-  vlans:
+  # Interfaces (map keys = labels). Guest device name is iface (defaults to the
+  # label when that label is a valid Linux name). ipv4.dhcp defaults to false.
+  interfaces:
+    main:
+      type: ethernet
+      iface: eth0
+      ipv4: { dhcp: true }
+      # Optional host NIC for this ethernet:
+      # vm:
+      #   mode: bridge         # or nat
+      #   bridge: br0          # required for bridge
+      #   vlan: 10             # access; or [2, 10] / "2-10" for trunk
     vlan2:
-      id: 2                  # 1–4094
-      link: eth0             # parent uplink name
-      ipv4: 10.42.2.2        # optional host address on this VLAN (macvlan peers)
+      type: dummy              # lab L3-only; use type: vlan + parent in prod
+      # type: vlan
+      # id: 2
+      # parent: main           # ethernet label
+      ipv4: { addresses: [10.42.2.2/24] }
 
 # --- Extra packages after platform baseline (optional) ---
 packages:
@@ -267,12 +273,12 @@ workstation:
 ### `provision/profile-lab.yaml`
 
 ```yaml
-# Overrides for profile "lab" only.
+# Profile-only address overrides.
 
 networking:
-  vlans:
+  interfaces:
     vlan2:
-      ipv4: 10.42.2.2
+      ipv4: { addresses: [10.42.2.2/24] }
 ```
 
 ### `provision/target-proxmox.yaml`
@@ -287,16 +293,15 @@ proxmox:
   vmid: 120                          # optional
   cpu: 2
   memory: 4096
-  # One NIC entry per networking.uplinks key (required if net: is present).
-  # tag/vlan OR trunks — not both. trunks: ids or "10-20" ranges.
-  net:
-    eth0:
-      bridge: vmbr0
-      # tag: 2                 # access VLAN
-      trunks: [2]              # or trunks: ["2-10", 20]
-      # mac: aa:bb:cc:dd:ee:ff
-      # vlan: 2                # alias of tag
 
+# Bridge the guest onto the host network (same interfaces.*.vm shape on workstation).
+networking:
+  interfaces:
+    main:
+      vm:
+        mode: bridge
+        bridge: vmbr0
+        vlan: [2]
 ```
 
 ### How merges behave
@@ -337,8 +342,8 @@ repo:
 ```
 
 Add `disks:` (see full sample) before `qctl vm init-tank` or an appliance up that
-needs persistent volumes. Defaults: admin/apps users, `eth0` uplink, key-only
-admin SSH (`ssh.authorized_keys` or `~/.ssh` pubkey). Set `users.admin.password`
+needs persistent volumes. Defaults: admin/apps users, key-only admin SSH
+(`ssh.authorized_keys` or `~/.ssh` pubkey). Set `users.admin.password`
 (or `passwd` after SSH) for Cockpit password login.
 
 ## Lifecycle (disks)

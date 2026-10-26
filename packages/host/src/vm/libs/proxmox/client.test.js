@@ -1,3 +1,4 @@
+import { pveUnknown } from './api-schemas.js'
 import { createProxmoxClient } from './client.js'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
@@ -9,7 +10,6 @@ const cfg = {
   storage: 'local-lvm',
   imageStorage: 'local',
   nets: [],
-  bridge: 'vmbr0',
   provisionDir: '/tmp',
   env: 'dev',
   provisionPath: '/tmp/.env',
@@ -68,7 +68,7 @@ describe('createProxmoxClient', () => {
     expect(await client.findVmidByName('missing')).toBeNull()
   })
 
-  test('softGet returns error object on HTTP failure', async () => {
+  test('softGet returns safeParse failure on HTTP error', async () => {
     spyOn(globalThis, 'fetch').mockResolvedValue(
       /** @type {Response} */ (
         /** @type {never} */ ({
@@ -79,8 +79,9 @@ describe('createProxmoxClient', () => {
       ),
     )
     const client = createProxmoxClient(cfg)
-    const soft = await client.softGet('/nodes/pve/status')
-    expect(soft.ok).toBe(false)
-    expect(soft.error).toMatch(/403/)
+    const soft = await client.softGet(pveUnknown, '/nodes/pve/status')
+    expect(soft.success).toBe(false)
+    if (soft.success) return
+    expect(soft.error.message).toMatch(/403/)
   })
 })

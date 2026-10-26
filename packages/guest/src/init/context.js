@@ -14,6 +14,7 @@ import { hydrateSystemdCredentials, seedConfigToOsConfig } from '@qctl/shared'
  *   PlatformStageContext,
  *   PortsMap,
  *   SeedConfig,
+ *   SeedInterfaces,
  * } from '@qctl/shared'
  */
 
@@ -60,6 +61,7 @@ import { hydrateSystemdCredentials, seedConfigToOsConfig } from '@qctl/shared'
  *   osConfig: OsConfig,
  *   seedConfig?: SeedConfig,
  *   ports?: PortsMap,
+ *   interfaces?: SeedInterfaces,
  *   secrets: Record<string, string>,
  *   paths: StagePaths,
  *   flags: StageFlags,
@@ -189,8 +191,13 @@ export function createContext(overrides = {}) {
     ...(overrides.seedConfig ? { seedConfig: overrides.seedConfig } : {}),
     ...(overrides.ports
       ? { ports: overrides.ports }
-      : overrides.seedConfig?.ports
-        ? { ports: overrides.seedConfig.ports }
+      : overrides.seedConfig?.networking?.ports
+        ? { ports: overrides.seedConfig.networking.ports }
+        : {}),
+    ...(overrides.interfaces
+      ? { interfaces: overrides.interfaces }
+      : overrides.seedConfig?.networking?.interfaces
+        ? { interfaces: overrides.seedConfig.networking.interfaces }
         : {}),
     secrets,
     paths,

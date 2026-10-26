@@ -2,6 +2,7 @@ import { chalk } from 'zx'
 
 import { die } from '../../../lib/util.js'
 import { assertProxmoxAttachModes, withAttachModes } from '../attach-mode.js'
+import { pveStorageContent, pveUnknown, pveUpid } from './api-schemas.js'
 import { applyNetsToForm } from './config.js'
 import {
   assertNameFreeForCreate,
@@ -9,6 +10,7 @@ import {
   destroyHolder,
   emptyDiskState,
 } from './disk-holder.js'
+import { resolveAlignedNics } from './nic-reconcile.js'
 import { rockyTpmstate } from './tpm.js'
 import { sizeToGiB } from './vm-images.js'
 import { diskSerialFromValue, volidFromDiskValue } from './vm-parse.js'
@@ -40,6 +42,7 @@ export async function createRockyVm(client, opts) {
     isoVolid,
     osSize = '20G',
     disks,
+    nics,
     vmid: fixedVmid = null,
   } = opts
   const { node, storage, vmid: cfgVmid } = client.config
@@ -86,7 +89,7 @@ export async function createRockyVm(client, opts) {
     scsi0: `${storage}:0,import-from=${importVolid},size=${osSize}`,
     ide2: `${isoVolid},media=cdrom`,
   }
-  applyNetsToForm(form, client.config.nets)
+  applyNetsToForm(form, resolveAlignedNics(client, nics))
 
   let scsi = 1
   for (const d of disks) {
@@ -107,7 +110,7 @@ export async function createRockyVm(client, opts) {
         + `(OS + ${disks.length} persistent disk(s) + NoCloud ISO)`,
     ),
   )
-  const createUpid = await client.post(`/nodes/${encodeURIComponent(node)}/qemu`, form)
+  const createUpid = await client.post(pveUpid, `/nodes/${encodeURIComponent(node)}/qemu`, form)
   if (createUpid) await client.waitTask(String(createUpid), { timeoutSec: 1800 })
   console.log(chalk.green(`vm: Proxmox VM ${name} (vmid=${vmid}) defined`))
   return { vmid }
@@ -134,6 +137,7 @@ export async function createAndStartRockyVm(client, opts) {
 export async function startProxmoxVm(client, vmid, name) {
   console.log(chalk.cyan(`vm: starting ${name}…`))
   const startUpid = await client.post(
+    pveUpid,
     `/nodes/${encodeURIComponent(client.config.node)}/qemu/${vmid}/status/start`,
     {},
   )
@@ -167,6 +171,7 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none', tankId
   if (st?.status === 'running' || st?.status === 'paused') {
     console.log(chalk.cyan(`vm: stopping ${name || vmid}…`))
     const upid = await client.post(
+      pveUpid,
       `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
       {},
     )
@@ -190,7 +195,7 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none', tankId
         }
       }
       if (tankKeys.length) {
-        await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+        await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
           delete: tankKeys.join(','),
           force: '1',
         })
@@ -226,13 +231,13 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none', tankId
     toDestroy.push(key)
   }
   if (toDestroy.length) {
-    await client.put(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+    await client.put(pveUnknown, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
       delete: toDestroy.join(','),
       force: '1',
     })
   }
 
-  const delUpid = await client.del(`/nodes/${encodeURIComponent(node)}/qemu/${vmid}`, {
+  const delUpid = await client.del(pveUpid, `/nodes/${encodeURIComponent(node)}/qemu/${vmid}`, {
     purge: '1',
     'destroy-unreferenced-disks': '1',
   })
@@ -241,11 +246,12 @@ export async function destroyRockyVm(client, { vmid, name, keep = 'none', tankId
   try {
     const list =
       (await client.get(
+        pveStorageContent,
         `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(client.config.storage)}/content`,
         { content: 'images' },
       )) || []
     for (const e of list) {
-      if (String(e.volid).includes(`vm-${vmid}-`)) {
+      if (e.volid?.includes(`vm-${vmid}-`)) {
         console.log(chalk.yellow(`vm: remove leftover ${e.volid}`))
         await client.deleteVolume(e.volid)
       }

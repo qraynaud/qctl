@@ -121,7 +121,7 @@ describe('runInit', () => {
     expect(code).toBe(0)
     expect(h.out.filter((l) => l.startsWith('== ')).length).toBeGreaterThan(5)
     expect(h.out[0]).toContain('profile=default')
-    expect(h.ran[0]).toBe('vlan-parents')
+    expect(h.ran[0]).toBe('ensure-dummies')
     expect(h.ran.at(-1)).toBe('ready-stamp')
   })
 
@@ -186,7 +186,7 @@ describe('runInit', () => {
         },
       ),
     ).toBe(1)
-    expect(ran).toEqual(['vlan-parents', 'network-up', 'host-baseline'])
+    expect(ran).toEqual(['ensure-dummies', 'network-up', 'host-baseline'])
     expect(err.join('\n')).toMatch(/host-baseline/)
   })
 

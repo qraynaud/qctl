@@ -1,6 +1,7 @@
 /**
  * Custom init — hypervisor target overlays (workstation / proxmox).
  * One prompt pass per unique target → `provision/target-*.yaml`.
+ * Host NIC attach lives on `networking.interfaces.*.vm` (not proxmox.*).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -17,7 +18,8 @@ import {
   formatYamlValue,
   promptCredentialBinding,
 } from '../../lib/binding.js'
-import { BRIDGE_RE } from '../../provision/schema/zod-utils.js'
+import { IFACE_RE } from '../../provision/schema/zod-utils.js'
+import { ethernetLabels } from './networking.js'
 import { wizardScoped, wizardStep } from './ui.js'
 
 /** @import { BindingPrompts, CredentialBinding } from '../../lib/binding.js' */
@@ -32,21 +34,11 @@ import { wizardScoped, wizardStep } from './ui.js'
 /** @import { NetworkingTopology } from './networking.js' */
 
 const API_TOKEN_MARKER = '__API_TOKEN__'
-const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/
 
 /**
  * @typedef {object} WorkstationOverlayAnswers
  * @property {number} cpu
  * @property {number} memory
- */
-
-/**
- * Proxmox NIC for one uplink key (writer shape before schema transform).
- * @typedef {object} ProxmoxNetAnswers
- * @property {string} bridge
- * @property {number} [tag] Access VLAN (xor trunks)
- * @property {Array<number | string>} [trunks] VLAN ids and/or "from-to" ranges
- * @property {string} [mac]
  */
 
 /**
@@ -59,13 +51,18 @@ const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/
  * @property {number} cpu
  * @property {number} memory
  * @property {CredentialBinding} apiToken
- * @property {Record<string, ProxmoxNetAnswers>} net keyed by uplink name
+ */
+
+/**
+ * Guest iface remaps for a target file (`networking.interfaces.<label>.iface`).
+ * @typedef {Record<string, string>} IfaceRemaps label → iface
  */
 
 /**
  * @typedef {object} OverlaysWizardAnswers
  * @property {WorkstationOverlayAnswers} [workstation]
  * @property {ProxmoxOverlayAnswers} [proxmox]
+ * @property {Record<string, IfaceRemaps>} [ifaceRemapsByTarget] target → label → iface
  */
 
 /**
@@ -76,22 +73,15 @@ export function defaultWorkstationOverlay() {
 }
 
 /**
- * @param {string[]} uplinkKeys
  * @returns {ProxmoxOverlayAnswers}
  */
-export function defaultProxmoxOverlay(uplinkKeys = ['eth0']) {
-  /** @type {Record<string, ProxmoxNetAnswers>} */
-  const net = {}
-  for (const name of uplinkKeys) {
-    net[name] = { bridge: 'vmbr0' }
-  }
+export function defaultProxmoxOverlay() {
   return {
     apiUrl: 'https://pve.example:8006',
     node: 'pve',
     cpu: 2,
     memory: 4096,
     apiToken: { kind: 'secret', name: 'PROXMOX_API_TOKEN', encoding: 'utf8' },
-    net,
   }
 }
 
@@ -114,24 +104,12 @@ export function workstationToPlain(ws) {
  * @returns {{ proxmox: ProxmoxInput }}
  */
 export function proxmoxToPlain(pve) {
-  /** @type {NonNullable<ProxmoxInput['net']>} */
-  const net = {}
-  for (const [name, entry] of Object.entries(pve.net)) {
-    /** @type {NonNullable<ProxmoxInput['net']>[string]} */
-    const row = { bridge: entry.bridge }
-    if (entry.tag != null) row.tag = entry.tag
-    if (entry.trunks?.length) row.trunks = entry.trunks
-    if (entry.mac) row.mac = entry.mac.toUpperCase()
-    net[name] = row
-  }
-
   /** @type {ProxmoxInput} */
   const proxmox = {
     api_url: pve.apiUrl,
     node: pve.node,
     cpu: pve.cpu,
     memory: pve.memory,
-    net,
   }
   if (pve.storage) proxmox.storage = pve.storage
   if (pve.imageStorage) proxmox.image_storage = pve.imageStorage
@@ -145,6 +123,20 @@ export function proxmoxToPlain(pve) {
   // omit → no api_token key
 
   return { proxmox }
+}
+
+/**
+ * @param {IfaceRemaps} remaps
+ * @returns {NonNullable<ProvisionFileInput['networking']>}
+ */
+export function ifaceRemapsToPlain(remaps) {
+  /** @type {NonNullable<NonNullable<ProvisionFileInput['networking']>['interfaces']>} */
+  const interfaces = {}
+  for (const [label, iface] of Object.entries(remaps)) {
+    if (!iface) continue
+    interfaces[label] = { iface }
+  }
+  return { interfaces }
 }
 
 /**
@@ -173,28 +165,6 @@ function validateMemory(raw) {
  * @param {string | undefined} raw
  * @returns {string | undefined}
  */
-function validateBridge(raw) {
-  const t = String(raw ?? '').trim()
-  if (!t) return 'Bridge name required'
-  if (!BRIDGE_RE.test(t)) return 'Must be a Linux bridge name (e.g. vmbr0)'
-  return undefined
-}
-
-/**
- * @param {string | undefined} raw
- * @returns {string | undefined}
- */
-function validateOptionalMac(raw) {
-  const t = String(raw ?? '').trim()
-  if (!t) return undefined
-  if (!MAC_RE.test(t)) return 'MAC must look like aa:bb:cc:dd:ee:ff'
-  return undefined
-}
-
-/**
- * @param {string | undefined} raw
- * @returns {string | undefined}
- */
 function validateOptionalVmid(raw) {
   const t = String(raw ?? '').trim()
   if (!t) return undefined
@@ -204,94 +174,19 @@ function validateOptionalVmid(raw) {
 }
 
 /**
- * Parse trunks prompt: `2,10-12,20` → `[2, "10-12", 20]` (schema expands ranges).
- * @param {string} raw
- * @returns {Array<number | string> | string} Parsed list, or error message
+ * @param {string | undefined} raw
+ * @returns {string | undefined}
  */
-export function parseTrunksInput(raw) {
-  const parts = String(raw ?? '')
-    .split(/[,\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  if (parts.length === 0) return 'At least one VLAN id or range required'
-  /** @type {Array<number | string>} */
-  const out = []
-  for (const p of parts) {
-    if (/^\d+-\d+$/.test(p)) {
-      const [a, b] = p.split('-').map(Number)
-      if (a < 1 || b > 4094 || a > b) return `Bad trunk range ${p}`
-      out.push(p)
-      continue
-    }
-    const n = Number(p)
-    if (!Number.isInteger(n) || n < 1 || n > 4094) return `Bad VLAN id ${p}`
-    out.push(n)
-  }
-  return out
+function validateOptionalIface(raw) {
+  const t = String(raw ?? '').trim()
+  if (!t) return undefined
+  if (!IFACE_RE.test(t)) return 'Must be a Linux interface name (e.g. eth0, enp0s1)'
+  return undefined
 }
 
 /**
- * Expand trunks for carriage checks (mirrors schema loosely).
- * @param {Array<number | string>} trunks
- * @returns {number[]}
+ * @typedef {{ target?: string }} WizardScopeLike
  */
-export function expandTrunkIds(trunks) {
-  /** @type {number[]} */
-  const ids = []
-  for (const t of trunks) {
-    if (typeof t === 'number') {
-      ids.push(t)
-      continue
-    }
-    const m = /^(\d+)-(\d+)$/.exec(String(t))
-    if (m) {
-      const from = Number(m[1])
-      const to = Number(m[2])
-      for (let i = from; i <= to; i++) ids.push(i)
-    } else {
-      const n = Number(t)
-      if (Number.isInteger(n)) ids.push(n)
-    }
-  }
-  return [...new Set(ids)].sort((a, b) => a - b)
-}
-
-/**
- * VLAN ids that must be carried on a given uplink's proxmox.net entry.
- * @param {NetworkingTopology | null | undefined} topology
- * @param {string} uplink
- * @returns {number[]}
- */
-export function vlanIdsForUplink(topology, uplink) {
-  if (!topology) return []
-  /** @type {number[]} */
-  const ids = []
-  const uplinkKeys = Object.keys(topology.uplinks)
-  const sole = uplinkKeys.length === 1 ? uplinkKeys[0] : undefined
-  for (const v of Object.values(topology.vlans)) {
-    const link = v.link ?? sole
-    if (link === uplink) ids.push(v.id)
-  }
-  return [...new Set(ids)].sort((a, b) => a - b)
-}
-
-/**
- * @param {ProxmoxNetAnswers} net
- * @param {number[]} requiredIds
- * @returns {string | undefined} Error message
- */
-export function validateNetCarriesVlans(net, requiredIds) {
-  if (requiredIds.length === 0) return undefined
-  /** @type {Set<number>} */
-  const carried = new Set()
-  if (net.tag != null) carried.add(net.tag)
-  if (net.trunks?.length) {
-    for (const id of expandTrunkIds(net.trunks)) carried.add(id)
-  }
-  const missing = requiredIds.filter((id) => !carried.has(id))
-  if (missing.length === 0) return undefined
-  return `Must carry VLAN id(s) ${missing.join(', ')} via tag or trunks`
-}
 
 /**
  * @param {BindingPrompts} p
@@ -320,127 +215,11 @@ async function promptWorkstation(p, scope) {
 }
 
 /**
- * @typedef {{ target?: string }} WizardScopeLike
- */
-
-/**
  * @param {BindingPrompts} p
- * @param {string} uplink
- * @param {number[]} requiredVlanIds
- * @param {WizardScopeLike} scope
- * @returns {Promise<ProxmoxNetAnswers | symbol>}
- */
-async function promptProxmoxNet(p, uplink, requiredVlanIds, scope) {
-  const bridgeRaw = await p.text({
-    message: wizardScoped(scope, `Bridge for uplink ${uplink}`),
-    initialValue: 'vmbr0',
-    validate: validateBridge,
-  })
-  if (p.isCancel(bridgeRaw)) return /** @type {symbol} */ (bridgeRaw)
-
-  /** @type {'none' | 'tag' | 'trunks'} */
-  let modeInitial = 'none'
-  if (requiredVlanIds.length === 1) modeInitial = 'tag'
-  else if (requiredVlanIds.length > 1) modeInitial = 'trunks'
-
-  const mode = await p.select({
-    message: wizardScoped(scope, `VLAN mode on ${uplink}`),
-    options: [
-      { value: 'none', label: 'None (untagged)' },
-      { value: 'tag', label: 'Access (tag / vlan)' },
-      { value: 'trunks', label: 'Trunks (ids / ranges)' },
-    ],
-    initialValue: modeInitial,
-  })
-  if (p.isCancel(mode)) return /** @type {symbol} */ (mode)
-
-  /** @type {ProxmoxNetAnswers} */
-  const net = { bridge: String(bridgeRaw).trim() }
-
-  if (mode === 'tag') {
-    const suggest = requiredVlanIds[0] != null ? String(requiredVlanIds[0]) : ''
-    const tagRaw = await p.text({
-      message: wizardScoped(scope, `Access VLAN tag for ${uplink}`),
-      initialValue: suggest,
-      validate: (v) => {
-        const n = Number(String(v ?? '').trim())
-        if (!Number.isInteger(n) || n < 1 || n > 4094) return 'VLAN tag 1–4094'
-        return undefined
-      },
-    })
-    if (p.isCancel(tagRaw)) return /** @type {symbol} */ (tagRaw)
-    net.tag = Number(String(tagRaw).trim())
-  } else if (mode === 'trunks') {
-    const suggest = requiredVlanIds.length ? requiredVlanIds.join(',') : ''
-    const trunksRaw = await p.text({
-      message: wizardScoped(scope, `Trunks for ${uplink} (e.g. 2,10-12)`),
-      initialValue: suggest,
-      validate: (v) => {
-        const parsed = parseTrunksInput(String(v ?? ''))
-        return typeof parsed === 'string' ? parsed : undefined
-      },
-    })
-    if (p.isCancel(trunksRaw)) return /** @type {symbol} */ (trunksRaw)
-    const parsed = parseTrunksInput(String(trunksRaw))
-    if (typeof parsed === 'string') throw new Error(parsed)
-    net.trunks = parsed
-  }
-
-  const carryErr = validateNetCarriesVlans(net, requiredVlanIds)
-  if (carryErr) {
-    // Re-prompt trunks/tag by failing into a corrective trunks ask when needed.
-    const fix = await p.text({
-      message: wizardScoped(scope, `${carryErr}. Trunks or single tag covering those ids`),
-      initialValue: requiredVlanIds.join(','),
-      validate: (v) => {
-        const t = String(v ?? '').trim()
-        if (/^\d+$/.test(t)) {
-          const n = Number(t)
-          if (n < 1 || n > 4094) return 'VLAN 1–4094'
-          const trial = { ...net, tag: n, trunks: undefined }
-          return validateNetCarriesVlans(trial, requiredVlanIds)
-        }
-        const parsed = parseTrunksInput(t)
-        if (typeof parsed === 'string') return parsed
-        const trial = { ...net, tag: undefined, trunks: parsed }
-        return validateNetCarriesVlans(trial, requiredVlanIds)
-      },
-    })
-    if (p.isCancel(fix)) return /** @type {symbol} */ (fix)
-    const t = String(fix).trim()
-    if (/^\d+$/.test(t)) {
-      delete net.trunks
-      net.tag = Number(t)
-    } else {
-      delete net.tag
-      const parsed = parseTrunksInput(t)
-      if (typeof parsed === 'string') throw new Error(parsed)
-      net.trunks = parsed
-    }
-  }
-
-  const macRaw = await p.text({
-    message: wizardScoped(scope, `MAC for ${uplink} (empty = omit)`),
-    placeholder: 'aa:bb:cc:dd:ee:ff',
-    validate: validateOptionalMac,
-  })
-  if (p.isCancel(macRaw)) return /** @type {symbol} */ (macRaw)
-  const mac = String(macRaw).trim()
-  if (mac) net.mac = mac
-
-  return net
-}
-
-/**
- * @param {BindingPrompts} p
- * @param {{
- *   uplinkKeys: string[]
- *   topology?: NetworkingTopology | null
- * }} ctx
  * @param {WizardScopeLike} scope
  * @returns {Promise<ProxmoxOverlayAnswers | symbol>}
  */
-async function promptProxmox(p, ctx, scope) {
+async function promptProxmox(p, scope) {
   const apiUrl = await p.text({
     message: wizardScoped(scope, 'Proxmox API URL'),
     initialValue: 'https://pve.example:8006',
@@ -499,15 +278,6 @@ async function promptProxmox(p, ctx, scope) {
   })
   if (typeof apiToken === 'symbol') return apiToken
 
-  /** @type {Record<string, ProxmoxNetAnswers>} */
-  const net = {}
-  for (const uplink of ctx.uplinkKeys) {
-    const required = vlanIdsForUplink(ctx.topology, uplink)
-    const entry = await promptProxmoxNet(p, uplink, required, scope)
-    if (typeof entry === 'symbol') return entry
-    net[uplink] = entry
-  }
-
   /** @type {ProxmoxOverlayAnswers} */
   const out = {
     apiUrl: String(apiUrl).trim(),
@@ -515,7 +285,6 @@ async function promptProxmox(p, ctx, scope) {
     cpu: Number(String(cpuRaw).trim()),
     memory: Number(String(memRaw).trim()),
     apiToken,
-    net,
   }
   const st = String(storage).trim()
   if (st) out.storage = st
@@ -524,6 +293,41 @@ async function promptProxmox(p, ctx, scope) {
   const vmidT = String(vmidRaw).trim()
   if (vmidT) out.vmid = Number(vmidT)
   return out
+}
+
+/**
+ * Optional per-target guest iface remaps (written under networking.interfaces).
+ * @param {BindingPrompts} p
+ * @param {string} target
+ * @param {string[]} etherLabels
+ * @returns {Promise<IfaceRemaps | symbol | null>} null = skip
+ */
+async function promptIfaceRemaps(p, target, etherLabels) {
+  if (etherLabels.length === 0) return null
+
+  const want = await p.confirm({
+    message: wizardScoped(
+      { target },
+      'Remap guest iface names in target YAML? (host attach stays on ethernet.vm)',
+    ),
+    initialValue: false,
+  })
+  if (p.isCancel(want)) return /** @type {symbol} */ (want)
+  if (!want) return null
+
+  /** @type {IfaceRemaps} */
+  const remaps = {}
+  for (const label of etherLabels) {
+    const raw = await p.text({
+      message: wizardScoped({ target }, `Guest iface for ${label} (empty = keep)`),
+      placeholder: 'enp0s1',
+      validate: validateOptionalIface,
+    })
+    if (p.isCancel(raw)) return /** @type {symbol} */ (raw)
+    const t = String(raw).trim()
+    if (t) remaps[label] = t
+  }
+  return Object.keys(remaps).length ? remaps : null
 }
 
 /**
@@ -538,7 +342,7 @@ export async function promptOverlays(opts) {
   const p = asBindingPrompts(opts.prompts ?? clack)
   const { profiles } = opts
   const topology = opts.networking?.topology ?? null
-  const uplinkKeys = topology ? Object.keys(topology.uplinks) : ['eth0']
+  const etherLabels = topology ? ethernetLabels(topology) : []
 
   /** @type {Set<string>} */
   const targets = new Set()
@@ -558,9 +362,20 @@ export async function promptOverlays(opts) {
   }
 
   if (targets.has('proxmox')) {
-    const pve = await promptProxmox(p, { uplinkKeys, topology }, { target: 'proxmox' })
+    const pve = await promptProxmox(p, { target: 'proxmox' })
     if (typeof pve === 'symbol') return pve
     answers.proxmox = pve
+  }
+
+  /** @type {Record<string, IfaceRemaps>} */
+  const ifaceRemapsByTarget = {}
+  for (const target of [...targets].sort((a, b) => a.localeCompare(b))) {
+    const remaps = await promptIfaceRemaps(p, target, etherLabels)
+    if (typeof remaps === 'symbol') return remaps
+    if (remaps) ifaceRemapsByTarget[target] = remaps
+  }
+  if (Object.keys(ifaceRemapsByTarget).length) {
+    answers.ifaceRemapsByTarget = ifaceRemapsByTarget
   }
 
   return answers
@@ -570,7 +385,7 @@ export async function promptOverlays(opts) {
 
 /**
  * @param {string} path
- * @param {{ workstation?: WorkstationInput, proxmox?: ProxmoxInput }} block
+ * @param {TargetYamlDoc} block
  * @param {CredentialBinding} [apiToken]
  */
 function writeTargetYamlFile(path, block, apiToken) {
@@ -623,6 +438,18 @@ function applyApiTokenSecrets(root, apiToken, envs) {
 }
 
 /**
+ * Merge iface remaps into an existing target YAML write block.
+ * @param {string} path
+ * @param {IfaceRemaps} remaps
+ * @param {TargetYamlDoc} [block]
+ * @param {CredentialBinding} [apiToken]
+ */
+function writeTargetWithRemaps(path, remaps, block = {}, apiToken) {
+  const networking = ifaceRemapsToPlain(remaps)
+  writeTargetYamlFile(path, { ...block, networking }, apiToken)
+}
+
+/**
  * Write target overlays into `provision/target-*.yaml` (+ api_token secrets).
  * @param {string} root
  * @param {OverlaysWizardAnswers} answers
@@ -632,6 +459,7 @@ function applyApiTokenSecrets(root, apiToken, envs) {
  */
 export function applyOverlaysAnswers(root, answers, ctx) {
   const provisionDir = join(root, 'provision')
+  const remapsByTarget = answers.ifaceRemapsByTarget ?? {}
 
   if (answers.workstation) {
     const path = join(provisionDir, provisionTargetFile('workstation'))
@@ -642,7 +470,22 @@ export function applyOverlaysAnswers(root, answers, ctx) {
         'utf8',
       )
     }
-    writeTargetYamlFile(path, workstationToPlain(answers.workstation))
+    const remaps = remapsByTarget.workstation
+    if (remaps) {
+      writeTargetWithRemaps(path, remaps, workstationToPlain(answers.workstation))
+    } else {
+      writeTargetYamlFile(path, workstationToPlain(answers.workstation))
+    }
+  } else if (remapsByTarget.workstation) {
+    const path = join(provisionDir, provisionTargetFile('workstation'))
+    if (!existsSync(path)) {
+      writeFileSync(
+        path,
+        `# Defaults for profiles with target: workstation (VM on this machine).\n`,
+        'utf8',
+      )
+    }
+    writeTargetWithRemaps(path, remapsByTarget.workstation)
   }
 
   if (answers.proxmox) {
@@ -650,7 +493,13 @@ export function applyOverlaysAnswers(root, answers, ctx) {
     if (!existsSync(path)) {
       writeFileSync(path, `# Defaults for profiles with target: proxmox.\n`, 'utf8')
     }
-    writeTargetYamlFile(path, proxmoxToPlain(answers.proxmox), answers.proxmox.apiToken)
+    const remaps = remapsByTarget.proxmox
+    const block = proxmoxToPlain(answers.proxmox)
+    if (remaps) {
+      writeTargetWithRemaps(path, remaps, block, answers.proxmox.apiToken)
+    } else {
+      writeTargetYamlFile(path, block, answers.proxmox.apiToken)
+    }
 
     /** @type {Set<string>} */
     const envs = new Set()
@@ -658,5 +507,11 @@ export function applyOverlaysAnswers(root, answers, ctx) {
       if (spec.target === 'proxmox') envs.add(spec.env)
     }
     applyApiTokenSecrets(root, answers.proxmox.apiToken, [...envs])
+  } else if (remapsByTarget.proxmox) {
+    const path = join(provisionDir, provisionTargetFile('proxmox'))
+    if (!existsSync(path)) {
+      writeFileSync(path, `# Defaults for profiles with target: proxmox.\n`, 'utf8')
+    }
+    writeTargetWithRemaps(path, remapsByTarget.proxmox)
   }
 }

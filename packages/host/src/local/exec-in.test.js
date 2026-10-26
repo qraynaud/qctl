@@ -28,6 +28,7 @@ describe('applianceExecEnv', () => {
         ssh: { port: 22, forward: 2222 },
         cockpit: { port: 9090, forward: 9090 },
       },
+      dummyIfaces: [],
       publishArgs: [],
       uidMapArgs: [],
     })

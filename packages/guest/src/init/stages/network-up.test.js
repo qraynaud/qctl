@@ -23,23 +23,28 @@ describe('network-up stage', () => {
     expect(networkUp.plan(ctx)).toEqual(['bring up eth0'])
   })
 
-  test('run calls ensureUp', async () => {
-    let called = false
+  test('run calls ensureUp with seed interfaces', async () => {
+    /** @type {unknown} */
+    let seen
+    const interfaces = {
+      main: { type: /** @type {const} */ ('ethernet'), iface: 'eth0', ipv4: { dhcp: true } },
+    }
     const ctx = createTestContext({
       log: () => {},
+      interfaces,
       platform: {
         id: 'fake',
         packages: stubPackages,
         installPackages: async () => {},
         networking: {
-          ensureUp: async () => {
-            called = true
+          ensureUp: async (netCtx) => {
+            seen = netCtx.interfaces
           },
         },
       },
     })
     await networkUp.run(ctx)
-    expect(called).toBe(true)
+    expect(seen).toEqual(interfaces)
   })
 
   test('run fails when networking.ensureUp is missing', async () => {

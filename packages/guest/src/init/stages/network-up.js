@@ -1,6 +1,6 @@
 /**
- * Re-check egress; bring up eth0 if needed.
- * Lab VLAN dummy parents: {@link ./vlan-parents.js} (seed config + boot unit).
+ * Apply seed `networking.interfaces` via platform NetworkManager, then egress wait.
+ * Dummy ifaces: {@link ./ensure-dummies.js} (seed type:dummy + boot unit).
  * OS-specific work lives on `platform.networking` (guest loads the staged module).
  */
 import { StageError } from '../errors.js'
@@ -13,12 +13,17 @@ import { StageError } from '../errors.js'
  * @returns {PlatformNetworkCtx}
  */
 function networkCtx(ctx) {
-  return { log: ctx.log, exec: ctx.exec, ports: ctx.ports }
+  return {
+    log: ctx.log,
+    exec: ctx.exec,
+    ports: ctx.ports,
+    interfaces: ctx.interfaces ?? ctx.seedConfig?.networking?.interfaces,
+  }
 }
 
 export default {
   name: 'network-up',
-  describe: 'Re-check egress; bring up eth0 if needed',
+  describe: 'Apply seed interfaces (NM) + re-check egress',
   /**
    * @param {StageContext} ctx
    */

@@ -71,10 +71,11 @@ describe('createFlagStore (VmFlagStore)', () => {
       config: { node: 'pve' },
       qemuConfig: async () => cfg,
       /**
+       * @param {unknown} _schema
        * @param {string} _path
        * @param {Record<string, unknown>} form
        */
-      put: async (_path, form) => {
+      put: async (_schema, _path, form) => {
         puts.push(form)
         if (form.delete === 'tags') {
           cfg = {}
@@ -112,10 +113,11 @@ describe('createFlagStore (VmFlagStore)', () => {
       config: { node: 'pve' },
       qemuConfig: async () => cfg,
       /**
+       * @param {unknown} _schema
        * @param {string} _path
        * @param {Record<string, unknown>} form
        */
-      put: async (_path, form) => {
+      put: async (_schema, _path, form) => {
         if (form.delete === 'tags') cfg = {}
         else if (typeof form.tags === 'string') cfg = { tags: form.tags }
       },

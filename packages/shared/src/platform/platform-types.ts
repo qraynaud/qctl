@@ -6,6 +6,7 @@
  */
 
 import type { PortsMap } from '../networking/ports-types.ts'
+import type { SeedInterfaces } from '../seed/interfaces-types.ts'
 
 export type PlatformCapabilityRecipe = {
   /** Other capability keys in the same map */
@@ -51,6 +52,11 @@ export type PlatformNetworkCtx = {
   exec: (argv: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
   /** Ports from ISO seed config (`qctl-seed/config.json`). */
   ports?: PortsMap
+  /**
+   * Guest interfaces from seed `networking.interfaces` (no `ethernet.vm`).
+   * Applied by platform `ensureUp` via NetworkManager — not cloud-init netplan.
+   */
+  interfaces?: SeedInterfaces
   /** Test override for route_localnet sysctl drop-in path. */
   routeLocalnetConf?: string
 }

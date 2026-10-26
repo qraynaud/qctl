@@ -6,8 +6,28 @@ import { log, logDim } from './util.js'
 /** @import { LocalContext } from './context.js' */
 
 /**
- * Bootstrap apps user, nested podman, volumes, dummy vlan2, and `/etc/qctl/config.json`
- * (same day-2 identity contract as VM guest load-seed).
+ * Shell fragment: ensure each type:dummy iface exists and is up.
+ * @param {string[]} names
+ * @returns {string}
+ */
+export function dummyIfacesShell(names) {
+  if (names.length === 0) return '# no type:dummy interfaces in provision'
+  return names
+    .map((name) => {
+      const q = JSON.stringify(name)
+      return [
+        `if ! ip link show ${q} >/dev/null 2>&1; then`,
+        `  ip link add ${q} type dummy`,
+        'fi',
+        `ip link set ${q} up`,
+      ].join('\n')
+    })
+    .join('\n')
+}
+
+/**
+ * Bootstrap apps user, nested podman, volumes, provision `type:dummy` ifaces,
+ * and `/etc/qctl/config.json` (same day-2 identity contract as VM guest load-seed).
  * `/etc/subuid`+`/etc/subgid` match provision `users.apps` exactly.
  * @param {LocalContext} ctx
  * @returns {Promise<void>}
@@ -42,6 +62,7 @@ export async function provisionAppliance(ctx) {
     profile: SEED_PROFILE.APPLIANCE,
   })
   const osJson = JSON.stringify(os, null, 2)
+  const dummies = dummyIfacesShell(ctx.dummyIfaces ?? [])
 
   const script = `
 set -euo pipefail
@@ -81,10 +102,7 @@ systemctl enable --now podman.socket
 runuser -u "$APPS_USER" -- bash -lc 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user enable --now podman.socket; podman system migrate >/dev/null 2>&1 || true'
 mkdir -p /tank/rocky/volumes
 chown -R "$APPS_USER:$APPS_USER" /tank/rocky/volumes
-if ! ip link show vlan2 >/dev/null 2>&1; then
-  ip link add vlan2 type dummy
-fi
-ip link set vlan2 up
+${dummies}
 chown -R "$APPS_USER:$APPS_USER" /tank/rocky/volumes
 `
   await execInAppliance(ctx, script)

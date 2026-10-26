@@ -29,8 +29,9 @@ export function toVmContext(argv) {
 }
 
 /**
- * Argv-derived guest fields (memory/vcpus/network/osinfo) for soft reconcile
- * or as the base merged into full {@link VmSpecs} by host prep.
+ * Argv-derived guest fields (memory/vcpus from provision via resolveBootResources)
+ * for soft reconcile or as the base merged into full {@link VmSpecs} by host prep.
+ * NICs / osinfo come from provision or driver defaults — not argv.
  *
  * @param {VmArgv} argv
  * @returns {Partial<VmSpecs>}
@@ -42,7 +43,5 @@ export function toVmSpecs(argv) {
   return {
     memory: Number(argv.memory),
     vcpus: Number(argv.vcpus),
-    network: argv.network,
-    osinfo: argv.osinfo,
   }
 }

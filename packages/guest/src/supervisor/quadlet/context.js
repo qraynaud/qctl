@@ -20,7 +20,7 @@ import { createSystem } from './system.js'
  *   Ambient process env for spawn/varlock (PATH, CREDENTIALS_DIRECTORY, …) —
  *   not used for identity discovery.
  * @property {string} seedDir
- *   seed-baked env dir (vlan-parents.env, …)
+ *   seed-baked env dir (`vlan-parents.env` → VLAN{n}_PARENT=iface, …)
  * @property {OsConfig} [osConfig]
  * @property {string} [qctlEnv]            optional CLI override for varlock graphs
  * @property {(msg: string) => void} log   `quadlet: …`

@@ -127,15 +127,50 @@ describe('render env', () => {
     }
   })
 
-  test('seed-baked env: VLAN*_PARENT substitutable', async () => {
+  test('seed-baked env: VLAN{n}_PARENT=iface (+ IPV4) substitutable', async () => {
     const fx = makeQuadletInstance()
     try {
-      writeFile(fx.sysDir, 'seed/vlan-parents.env', 'VLAN2_PARENT=bond0\n')
+      writeFile(
+        fx.sysDir,
+        'seed/vlan-parents.env',
+        'VLAN2_PARENT=lab2\nVLAN2_IPV4=10.42.2.2\nVLAN_FOO_PARENT=nope\n',
+      )
       const renv = await loadRenderEnv(
         ctxOf(fx.root, join(fx.sysDir, 'seed')),
         join(fx.root, 'applications/proxy'),
       )
-      expect(substitute('${VLAN2_PARENT}', renv, 'x')).toBe('bond0\n')
+      expect(substitute('${VLAN2_PARENT}', renv, 'x')).toBe('lab2\n')
+      expect(substitute('${VLAN2_IPV4}', renv, 'x')).toBe('10.42.2.2\n')
+      expect(renv.substKeys).toContain('VLAN2_PARENT')
+      expect(renv.substKeys).not.toContain('VLAN_FOO_PARENT')
+      expect(() => substitute('${VLAN_FOO_PARENT}', renv, 'x')).toThrow(/unresolved/)
+    } finally {
+      removeTempDir(fx.root)
+      removeTempDir(fx.sysDir)
+    }
+  })
+
+  test('interfaces overlay: label vlan2 → VLAN2_PARENT=<iface>', async () => {
+    const fx = makeQuadletInstance()
+    try {
+      writeFile(fx.sysDir, 'seed/vlan-parents.env', 'VLAN2_PARENT=stale\n')
+      const renv = await loadRenderEnv(
+        {
+          ...ctxOf(fx.root, join(fx.sysDir, 'seed')),
+          interfaces: {
+            main: { type: 'ethernet', iface: 'eth0' },
+            vlan2: {
+              type: 'dummy',
+              iface: 'lab2',
+              ipv4: { dhcp: false, addresses: ['10.0.2.2/24'] },
+            },
+          },
+        },
+        join(fx.root, 'applications/proxy'),
+      )
+      expect(renv.scope.VLAN2_PARENT).toBe('lab2')
+      expect(renv.scope.VLAN2_IPV4).toBe('10.0.2.2')
+      expect(substitute('parent=${VLAN2_PARENT}', renv, 'x')).toBe('parent=lab2\n')
     } finally {
       removeTempDir(fx.root)
       removeTempDir(fx.sysDir)

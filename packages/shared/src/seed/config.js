@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { disksJsonSchema } from '../disks/disks-json.js'
 import { portsSchema } from '../networking/ports.js'
 import { packagesManifestSchema } from '../packages/manifest.js'
+import { seedInterfacesSchema } from './interfaces.js'
 
 /** @import { OsConfig, SeedConfig } from './config-types.js' */
 
@@ -95,10 +96,15 @@ export const seedConfigSchema = z.strictObject({
     admin: seedAdminUserSchema,
   }),
   disks: disksJsonSchema,
-  ports: portsSchema,
   packages: packagesManifestSchema,
-  /** Env-style VLAN parent map (e.g. `VLAN2_PARENT` → iface), for day-2 quadlet. */
-  vlanParents: z.record(nonEmpty, nonEmpty),
+  /**
+   * Guest networking — same layout as provision `networking:` (ports + interfaces).
+   * Interfaces omit host-only `ethernet.vm`.
+   */
+  networking: z.strictObject({
+    ports: portsSchema,
+    interfaces: seedInterfacesSchema,
+  }),
   profile: seedProfileSchema,
   /** Present when `profile` is `init-tank`; omitted for appliance. */
   initTank: seedInitTankSchema.optional(),

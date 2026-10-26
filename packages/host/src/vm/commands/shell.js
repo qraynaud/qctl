@@ -17,11 +17,6 @@ export const describe = 'Open an SSH shell into the VM'
  */
 export function builder(yargs) {
   return sharedLibvirt(yargs)
-    .option('network', {
-      choices: ['auto', 'default', 'user'],
-      default: 'user',
-      describe: 'How to reach the guest (user/auto: passt forward; default: DHCP lease)',
-    })
     .option('user', {
       type: 'string',
       default: 'rocky',

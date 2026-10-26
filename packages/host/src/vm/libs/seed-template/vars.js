@@ -3,12 +3,11 @@
  */
 import { chalk } from 'zx'
 
-import { isEmptyCredential } from '@qctl/shared'
+import { isEmptyCredential, vlanParentEnvLines } from '@qctl/shared'
 
 import { loadEnvProvision } from '../../../lib/load-config.js'
 import { die } from '../../../lib/util.js'
 import { tankPassphraseCredName } from '../../../provision/schema/first-boot.js'
-import { vlanParentEnvLines } from '../guest-net.js'
 import { resolveProvisionDisks } from '../resolve-provision-disks.js'
 import { withTrailingNewline } from './util.js'
 
@@ -113,8 +112,7 @@ export async function buildVars({
     networking: {
       ...sec.data.networking,
       ports: sec.ports,
-      uplinks: sec.uplinks,
-      vlans: sec.vlans,
+      interfaces: sec.interfaces,
     },
     repo: {
       ...(repo && typeof repo === 'object' ? repo : {}),
@@ -124,7 +122,7 @@ export async function buildVars({
     packages,
   }
 
-  const parentLines = vlanParentEnvLines(sec.vlans)
+  const parentLines = vlanParentEnvLines(sec.interfaces)
   const guestKeys = Object.keys(guestForSeed).sort()
   const seedProfile = profile === 'init-tank' ? 'init-tank' : 'appliance'
   const pools =
@@ -157,12 +155,9 @@ export async function buildVars({
   console.log(chalk.dim(`  provision.networking.ports: ${Object.keys(sec.ports).join(', ')}`))
   console.log(
     chalk.dim(
-      `  provision.networking.uplinks: ${Object.keys(sec.uplinks).join(', ')}`
-        + (Object.keys(sec.vlans).length
-          ? `; vlans: ${Object.entries(sec.vlans)
-              .map(([name, v]) => `${name}(id=${v.id}@${v.link}${v.ipv4 ? `;ipv4=${v.ipv4}` : ''})`)
-              .join(', ')}`
-          : ''),
+      `  provision.networking.interfaces: ${Object.entries(sec.interfaces)
+        .map(([label, e]) => `${label}:${e.type}/${e.iface}`)
+        .join(', ')}`,
     ),
   )
   if (guestKeys.length) {

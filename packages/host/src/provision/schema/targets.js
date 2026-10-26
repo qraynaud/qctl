@@ -1,6 +1,5 @@
 import { z } from 'zod'
 
-import { proxmoxNetMapSchema } from './networking.js'
 import { optionalTrimmedText } from './zod-utils.js'
 
 /** vCPU count (maps to CLI --vcpus / virt-install --vcpus / PVE cores). */
@@ -15,7 +14,7 @@ export const workstationSchema = z.strictObject({
   memory: memorySchema.optional(),
 })
 
-/** Proxmox target. */
+/** Proxmox target (NIC attach lives on networking.interfaces.*.vm). */
 export const proxmoxSchema = workstationSchema.extend({
   api_url: optionalTrimmedText,
   api_token: optionalTrimmedText,
@@ -23,5 +22,4 @@ export const proxmoxSchema = workstationSchema.extend({
   storage: optionalTrimmedText,
   image_storage: optionalTrimmedText,
   vmid: z.number().int().min(100).optional(),
-  net: proxmoxNetMapSchema.optional(),
 })

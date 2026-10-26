@@ -1,14 +1,31 @@
 import { fs } from 'zx'
 
+import { loadEnvProvisionSafe } from '../../../lib/load-config.js'
 import { portsFromArgv } from '../../../lib/options.js'
 import { requireBins } from '../../../lib/util.js'
 import { vmPaths } from '../../libs/disks.js'
 import { virsh } from '../../libs/libvirt/index.js'
+import { endpointNetworkFromNics, toVmNicsSpec } from '../../libs/nic-plan.js'
 import { resolveProvisionDisks } from '../../libs/resolve-provision-disks.js'
 import { localSshHints } from '../../libs/ssh-hints.js'
 import { connectOf, powerState } from './ops.js'
 
 /** @import { VmContext, VmStatusSnapshot } from '../../driver-contract.js' */
+
+/**
+ * @param {VmContext} ctx
+ * @returns {Promise<'user' | 'default'>}
+ */
+async function networkFromCtx(ctx) {
+  if (ctx.profile == null || String(ctx.profile).trim() === '') return 'user'
+  const loaded = await loadEnvProvisionSafe({
+    env: ctx.env || 'dev',
+    target: 'workstation',
+    profile: ctx.profile,
+  })
+  if (!loaded.ok) return 'user'
+  return endpointNetworkFromNics(toVmNicsSpec(loaded.provision.interfaces))
+}
 
 /**
  * Gather workstation status + shell hints (no printing).
@@ -19,7 +36,7 @@ export async function getStatus(ctx) {
   const connect = connectOf(ctx)
   const name = String(ctx.name).trim()
   const power = await powerState(ctx)
-  const network = 'user'
+  const network = await networkFromCtx(ctx)
   const ports = portsFromArgv({
     env: ctx.env,
     target: 'workstation',

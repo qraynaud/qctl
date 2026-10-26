@@ -36,15 +36,17 @@ describe('vm-lifecycle', () => {
         ide2: 'local:iso/seed.iso,media=cdrom',
       }),
       /**
+       * @param {unknown} _schema
        * @param {string} path
        */
-      put: async (path) => {
+      put: async (_schema, path) => {
         calls.push(`put:${path}`)
       },
       /**
+       * @param {unknown} _schema
        * @param {string} path
        */
-      del: async (path) => {
+      del: async (_schema, path) => {
         calls.push(`del:${path}`)
         return null
       },

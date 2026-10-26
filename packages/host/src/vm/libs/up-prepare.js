@@ -4,6 +4,7 @@
  */
 import { chalk } from 'zx'
 
+import { loadEnvProvision } from '../../lib/load-config.js'
 import { requireBins } from '../../lib/util.js'
 import { downloadImage } from '../commands/download.js'
 import { clientFrom } from '../drivers/proxmox/shared.js'
@@ -14,6 +15,7 @@ import { ensureDisks } from './disks.js'
 import { ensureInitTankBootDisk } from './init-tank-boot.js'
 import { resolveInitTankPools } from './init-tank-pools.js'
 import { ensureDefaultNetwork } from './libvirt/index.js'
+import { toVmNicsSpec } from './nic-plan.js'
 import { ensureCloudImageImport } from './proxmox/vm-images.js'
 import { resolveProvisionDisks } from './resolve-provision-disks.js'
 import { runSeed } from './seed/run.js'
@@ -172,7 +174,7 @@ export async function ensureDisksForCreate(module, ctx, prep, baseOsImage) {
  * Build full {@link VmSpecs} from soft argv specs + host prep (seed + disks).
  * @param {VmDriverRegistration} module
  * @param {VmContext} ctx
- * @param {Partial<VmSpecs>} soft  memory/vcpus/network/osinfo from argv
+ * @param {Partial<VmSpecs>} soft  memory/vcpus from argv (+ optional osinfo)
  * @param {HostCreatePrep} prep
  * @param {string} baseOsImage
  * @param {{ bootDiskPath?: string }} [diskExtras]
@@ -217,13 +219,46 @@ export async function buildCreateSpec(module, ctx, soft, prep, baseOsImage, disk
   if (!plan.disks || !Object.keys(plan.disks).length) {
     throw new Error('buildCreateSpec: disks plan is empty')
   }
+  if (ctx.profile == null || String(ctx.profile).trim() === '') {
+    throw new Error('buildCreateSpec: profile is required for NIC plan')
+  }
+  const provision = await loadEnvProvision({
+    env: ctx.env || 'dev',
+    target,
+    profile: ctx.profile,
+  })
+  const nics = toVmNicsSpec(provision.interfaces)
   return {
     memory: soft.memory,
     vcpus: soft.vcpus,
-    network: soft.network,
     osinfo: soft.osinfo,
     disks: plan.disks,
     bootDrive: plan.bootDrive,
     seedIsoPath,
+    ...(Object.keys(nics).length ? { nics } : {}),
+  }
+}
+
+/**
+ * Merge provision NIC plan onto a soft reconcile patch (installed `vm up`).
+ * @param {VmDriverRegistration} module
+ * @param {VmContext} ctx
+ * @param {Partial<VmSpecs>} soft
+ * @returns {Promise<Partial<VmSpecs>>}
+ */
+export async function enrichSpecsWithNics(module, ctx, soft) {
+  if (soft.nics) return soft
+  if (ctx.profile == null || String(ctx.profile).trim() === '') return soft
+  try {
+    const provision = await loadEnvProvision({
+      env: ctx.env || 'dev',
+      target: String(/** @type {VmDriverId} */ (module.id)),
+      profile: ctx.profile,
+    })
+    const nics = toVmNicsSpec(provision.interfaces)
+    if (!Object.keys(nics).length) return soft
+    return { ...soft, nics }
+  } catch {
+    return soft
   }
 }

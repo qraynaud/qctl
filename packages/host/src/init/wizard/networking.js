@@ -1,7 +1,7 @@
 /**
- * Custom init — networking (ports, uplinks, vlans + per-target ipv4 overlays).
+ * Custom init — networking (ports + labeled interfaces + optional ethernet.vm).
  * Shared across envs → common.yaml; otherwise each env-*.yaml.
- * VLAN host ipv4 → profile-*.yaml overlays (per target when targets differ).
+ * Per-profile L3 (addresses) → profile-*.yaml overlays.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ import YAML from 'yaml'
 import { provisionEnvFile, provisionProfileFile } from '@qctl/shared'
 
 import { asBindingPrompts } from '../../lib/binding.js'
-import { IFACE_RE } from '../../provision/schema/zod-utils.js'
+import { BRIDGE_RE, IFACE_RE } from '../../provision/schema/zod-utils.js'
 import { wizardScoped, wizardStep } from './ui.js'
 
 /** @import { BindingPrompts } from '../../lib/binding.js' */
@@ -28,39 +28,54 @@ import { wizardScoped, wizardStep } from './ui.js'
  */
 
 /**
- * @typedef {object} UplinkAnswers
- * @property {boolean} dhcp4
+ * @typedef {object} EthernetVmAnswers
+ * @property {'bridge' | 'nat'} mode
+ * @property {string} [bridge] required when mode is bridge
+ * @property {number | number[] | string} [vlan] access id or trunk list/range
+ * @property {string} [mac]
  */
 
 /**
- * VLAN structure (no host ipv4).
+ * @typedef {object} EthernetAnswers
+ * @property {'ethernet'} type
+ * @property {string} [iface]
+ * @property {{ dhcp?: boolean }} [ipv4]
+ * @property {EthernetVmAnswers} [vm]
+ */
+
+/**
  * @typedef {object} VlanAnswers
+ * @property {'vlan'} type
  * @property {number} id
- * @property {string} [link]
+ * @property {string} parent ethernet label
+ * @property {string} [iface]
  */
 
 /**
- * Writer-shaped networking fragment (full base or ipv4-only overlay).
- * @typedef {{
- *   ports?: Record<string, PortAnswers>
- *   uplinks?: Record<string, UplinkAnswers>
- *   vlans?: Record<string, { id?: number, link?: string, ipv4?: string }>
- * }} NetworkingPlain
+ * @typedef {object} DummyAnswers
+ * @property {'dummy'} type
+ * @property {string} [iface]
+ */
+
+/** @typedef {EthernetAnswers | VlanAnswers | DummyAnswers} InterfaceAnswers */
+
+/**
+ * Writer-shaped networking fragment (schema input).
+ * @typedef {NonNullable<ProvisionFileInput['networking']>} NetworkingPlain
  */
 
 /**
  * @typedef {object} NetworkingTopology
  * @property {Record<string, PortAnswers>} ports
- * @property {Record<string, UplinkAnswers>} uplinks
- * @property {Record<string, VlanAnswers>} vlans
+ * @property {Record<string, InterfaceAnswers>} interfaces
  */
 
 /**
  * @typedef {object} NetworkingWizardAnswers
  * @property {boolean} shared Write base networking to common.yaml
- * @property {NetworkingTopology} topology ports / uplinks / vlans (no ipv4)
- * @property {Record<string, Record<string, string>>} ipv4ByProfile
- *   profile → vlanName → ipv4
+ * @property {NetworkingTopology} topology ports + interfaces (structure; L3 overlays separate)
+ * @property {Record<string, Record<string, string>>} l3ByProfile
+ *   profile → label → ipv4 CIDR (or bare IP → /24)
  */
 
 /** Lab-style named ports (matches provision env-dev scaffold). */
@@ -71,11 +86,12 @@ export const LAB_PORT_PRESETS = Object.freeze({
   https: Object.freeze({ port: 443, forward: 8443, dnat: 8443 }),
 })
 
-const IPV4_RE = /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/
+const IPV4_CIDR_RE =
+  /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?:\/(?:3[0-2]|[12]?\d))?$/
 
 /**
  * @param {string | undefined} raw
- * @returns {string | undefined} Error, or undefined if ok
+ * @returns {string | undefined}
  */
 function validatePortNum(raw) {
   const t = String(raw ?? '').trim()
@@ -110,10 +126,10 @@ function validateIfaceName(raw) {
  * @param {string | undefined} raw
  * @returns {string | undefined}
  */
-function validateOptionalIpv4(raw) {
+function validateOptionalIpv4Cidr(raw) {
   const t = String(raw ?? '').trim()
   if (!t) return undefined
-  if (!IPV4_RE.test(t)) return 'Must be an IPv4 address (or empty to omit)'
+  if (!IPV4_CIDR_RE.test(t)) return 'Must be IPv4 or IPv4/CIDR (or empty to omit)'
   return undefined
 }
 
@@ -130,13 +146,48 @@ function validateVlanId(raw) {
 }
 
 /**
+ * @param {string | undefined} raw
+ * @returns {string | undefined}
+ */
+function validateBridge(raw) {
+  const t = String(raw ?? '').trim()
+  if (!t) return 'Bridge name required'
+  if (!BRIDGE_RE.test(t)) return 'Must be a Linux bridge name (e.g. vmbr0)'
+  return undefined
+}
+
+/**
+ * Bare IPv4 → /24; already CIDR → as-is.
+ * @param {string} raw
+ * @returns {string}
+ */
+export function normalizeIpv4Cidr(raw) {
+  const t = String(raw).trim()
+  return t.includes('/') ? t : `${t}/24`
+}
+
+/**
+ * Ethernet labels in topology (hypervisor / parent candidates).
+ * @param {NetworkingTopology | null | undefined} topology
+ * @returns {string[]}
+ */
+export function ethernetLabels(topology) {
+  if (!topology) return []
+  return Object.entries(topology.interfaces)
+    .filter(([, e]) => e.type === 'ethernet')
+    .map(([label]) => label)
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/**
  * @returns {NetworkingTopology}
  */
 export function defaultNetworkingTopology() {
   return {
     ports: structuredClone(/** @type {Record<string, PortAnswers>} */ ({ ...LAB_PORT_PRESETS })),
-    uplinks: { eth0: { dhcp4: true } },
-    vlans: {},
+    interfaces: {
+      main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+    },
   }
 }
 
@@ -148,12 +199,12 @@ export function defaultNetworkingAnswers(shared = false) {
   return {
     shared,
     topology: defaultNetworkingTopology(),
-    ipv4ByProfile: {},
+    l3ByProfile: {},
   }
 }
 
 /**
- * Schema-shaped plain object for YAML (no ipv4 on vlans).
+ * Schema-shaped plain object for YAML (no profile L3 addresses).
  * @param {NetworkingTopology} topology
  * @returns {NetworkingPlain}
  */
@@ -167,34 +218,56 @@ export function topologyToPlain(topology) {
       ...(entry.dnat != null ? { dnat: entry.dnat } : {}),
     }
   }
-  /** @type {Record<string, { dhcp4: boolean }>} */
-  const uplinks = {}
-  for (const [name, u] of Object.entries(topology.uplinks)) {
-    uplinks[name] = { dhcp4: u.dhcp4 }
-  }
-  /** @type {Record<string, { id: number, link?: string }>} */
-  const vlans = {}
-  for (const [name, v] of Object.entries(topology.vlans)) {
-    vlans[name] = {
-      id: v.id,
-      ...(v.link ? { link: v.link } : {}),
+
+  /** @type {NonNullable<NetworkingPlain['interfaces']>} */
+  const interfaces = {}
+  for (const [label, e] of Object.entries(topology.interfaces)) {
+    if (e.type === 'ethernet') {
+      /** @type {NonNullable<NetworkingPlain['interfaces']>[string] & { type: 'ethernet' }} */
+      const row = { type: 'ethernet' }
+      if (e.iface) row.iface = e.iface
+      if (e.ipv4?.dhcp) row.ipv4 = { dhcp: true }
+      if (e.vm?.mode === 'nat') {
+        row.vm = { mode: 'nat', ...(e.vm.mac ? { mac: e.vm.mac } : {}) }
+      } else if (e.vm?.mode === 'bridge' && e.vm.bridge) {
+        row.vm = {
+          mode: 'bridge',
+          bridge: e.vm.bridge,
+          ...(e.vm.vlan != null ? { vlan: e.vm.vlan } : {}),
+          ...(e.vm.mac ? { mac: e.vm.mac } : {}),
+        }
+      }
+      interfaces[label] = row
+    } else if (e.type === 'vlan') {
+      interfaces[label] = {
+        type: 'vlan',
+        id: e.id,
+        parent: e.parent,
+        ...(e.iface ? { iface: e.iface } : {}),
+      }
+    } else {
+      interfaces[label] = {
+        type: 'dummy',
+        ...(e.iface ? { iface: e.iface } : {}),
+      }
     }
   }
-  return { ports, uplinks, vlans }
+  return { ports, interfaces }
 }
 
 /**
- * @param {Record<string, string>} ipv4ByVlan
+ * Profile overlay: label → ipv4 addresses only.
+ * @param {Record<string, string>} cidrByLabel
  * @returns {NetworkingPlain}
  */
-export function ipv4OverlayToPlain(ipv4ByVlan) {
-  /** @type {NonNullable<NetworkingPlain['vlans']>} */
-  const vlans = {}
-  for (const [name, ipv4] of Object.entries(ipv4ByVlan)) {
-    if (!ipv4) continue
-    vlans[name] = { ipv4 }
+export function l3OverlayToPlain(cidrByLabel) {
+  /** @type {NonNullable<NetworkingPlain['interfaces']>} */
+  const interfaces = {}
+  for (const [label, cidr] of Object.entries(cidrByLabel)) {
+    if (!cidr) continue
+    interfaces[label] = { ipv4: { addresses: [normalizeIpv4Cidr(cidr)] } }
   }
-  return { vlans }
+  return { interfaces }
 }
 
 /**
@@ -310,10 +383,7 @@ async function promptPorts(p) {
     const key = String(which)
 
     if (action === 'remove') {
-      if (keys.length <= 1) {
-        // Keep ≥1; re-prompt.
-        continue
-      }
+      if (keys.length <= 1) continue
       delete ports[key]
       continue
     }
@@ -328,20 +398,63 @@ async function promptPorts(p) {
 
 /**
  * @param {BindingPrompts} p
- * @returns {Promise<Record<string, UplinkAnswers> | symbol>}
+ * @param {string} label
+ * @param {EthernetAnswers} [initial]
+ * @returns {Promise<EthernetAnswers | symbol>}
  */
-async function promptUplinks(p) {
-  /** @type {Record<string, UplinkAnswers>} */
-  const uplinks = { eth0: { dhcp4: true } }
+async function promptEthernetEntry(p, label, initial) {
+  const needIface = !IFACE_RE.test(label)
+  /** @type {string | undefined} */
+  let iface = initial?.iface
+  if (needIface || initial?.iface) {
+    const ifaceRaw = await p.text({
+      message: `Guest iface for label ${label}${needIface ? '' : ' (empty = use label)'}`,
+      initialValue: initial?.iface || (needIface ? '' : label),
+      placeholder: needIface ? 'eth0' : label,
+      validate: (v) => {
+        const t = String(v ?? '').trim()
+        if (!t && needIface) return 'iface required when label is not a Linux name'
+        if (t) return validateIfaceName(t)
+        return undefined
+      },
+    })
+    if (p.isCancel(ifaceRaw)) return /** @type {symbol} */ (ifaceRaw)
+    const t = String(ifaceRaw).trim()
+    iface = t || undefined
+  }
+
+  const dhcp = await p.confirm({
+    message: `IPv4 DHCP on ${label}? (default is static/off — opt in)`,
+    initialValue: initial?.ipv4?.dhcp === true,
+  })
+  if (p.isCancel(dhcp)) return /** @type {symbol} */ (dhcp)
+
+  return {
+    type: 'ethernet',
+    ...(iface ? { iface } : {}),
+    ...(dhcp ? { ipv4: { dhcp: true } } : {}),
+  }
+}
+
+/**
+ * @param {BindingPrompts} p
+ * @returns {Promise<Record<string, InterfaceAnswers> | symbol>}
+ */
+async function promptEthernetInterfaces(p) {
+  /** @type {Record<string, InterfaceAnswers>} */
+  const interfaces = {
+    main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+  }
 
   for (;;) {
+    const etherKeys = Object.keys(interfaces).filter((l) => interfaces[l]?.type === 'ethernet')
     const picked = await p.select({
-      message: 'Uplinks',
+      message: 'Ethernet interfaces',
       options: [
         { value: 'done', label: 'Done' },
-        { value: 'add', label: 'Add uplink' },
-        { value: 'edit', label: 'Edit dhcp4' },
-        { value: 'remove', label: 'Remove uplink' },
+        { value: 'add', label: 'Add ethernet' },
+        { value: 'edit', label: 'Edit ethernet' },
+        { value: 'remove', label: 'Remove ethernet' },
       ],
       initialValue: 'done',
     })
@@ -349,148 +462,210 @@ async function promptUplinks(p) {
     const action = /** @type {'done' | 'add' | 'edit' | 'remove'} */ (picked)
 
     if (action === 'done') {
-      if (Object.keys(uplinks).length < 1) continue
+      if (etherKeys.length < 1) continue
       break
     }
 
     if (action === 'add') {
-      const name = await p.text({
-        message: 'Uplink interface name',
-        placeholder: 'eth1',
+      const labelRaw = await p.text({
+        message: 'Label (e.g. main, lab)',
+        placeholder: 'lab',
         validate: (v) => {
-          const err = validateIfaceName(v)
-          if (err) return err
-          const t = String(v).trim()
-          if (uplinks[t]) return `Uplink ${t} already defined`
+          const t = String(v ?? '').trim()
+          if (!t) return 'Label required'
+          if (interfaces[t]) return `Label ${t} already defined`
           return undefined
         },
       })
-      if (p.isCancel(name)) return /** @type {symbol} */ (name)
-      const dhcp4 = await p.confirm({
-        message: `DHCP on ${String(name).trim()}?`,
-        initialValue: true,
-      })
-      if (p.isCancel(dhcp4)) return /** @type {symbol} */ (dhcp4)
-      uplinks[String(name).trim()] = { dhcp4: Boolean(dhcp4) }
+      if (p.isCancel(labelRaw)) return /** @type {symbol} */ (labelRaw)
+      const label = String(labelRaw).trim()
+      const entry = await promptEthernetEntry(p, label)
+      if (typeof entry === 'symbol') return entry
+      interfaces[label] = entry
       continue
     }
 
-    const keys = Object.keys(uplinks)
     const which = await p.select({
-      message: action === 'edit' ? 'Edit which uplink?' : 'Remove which uplink?',
-      options: keys.map((k) => ({
-        value: k,
-        label: `${k} (dhcp4=${uplinks[k]?.dhcp4 !== false})`,
-      })),
+      message: action === 'edit' ? 'Edit which ethernet?' : 'Remove which ethernet?',
+      options: etherKeys.map((k) => {
+        const e = interfaces[k]
+        const iface = e && e.type === 'ethernet' ? e.iface || k : k
+        const dhcp = e && e.type === 'ethernet' && e.ipv4?.dhcp ? 'dhcp' : 'no-dhcp'
+        return { value: k, label: `${k} → ${iface} (${dhcp})` }
+      }),
     })
     if (p.isCancel(which)) return /** @type {symbol} */ (which)
     const key = String(which)
 
     if (action === 'remove') {
-      if (keys.length <= 1) continue
-      delete uplinks[key]
+      if (etherKeys.length <= 1) continue
+      delete interfaces[key]
       continue
     }
 
-    const dhcp4 = await p.confirm({
-      message: `DHCP on ${key}?`,
-      initialValue: uplinks[key]?.dhcp4 !== false,
-    })
-    if (p.isCancel(dhcp4)) return /** @type {symbol} */ (dhcp4)
-    uplinks[key] = { dhcp4: Boolean(dhcp4) }
+    const cur = interfaces[key]
+    const entry = await promptEthernetEntry(
+      p,
+      key,
+      cur && cur.type === 'ethernet' ? cur : undefined,
+    )
+    if (typeof entry === 'symbol') return entry
+    interfaces[key] = entry
   }
 
-  return uplinks
+  return interfaces
 }
 
 /**
  * @param {BindingPrompts} p
- * @param {Record<string, UplinkAnswers>} uplinks
- * @returns {Promise<Record<string, VlanAnswers> | symbol>}
+ * @param {Record<string, InterfaceAnswers>} interfaces
+ * @returns {Promise<symbol | void>}
  */
-async function promptVlans(p, uplinks) {
-  /** @type {Record<string, VlanAnswers>} */
-  const vlans = {}
-  const uplinkKeys = Object.keys(uplinks)
-
+async function promptVlanOrDummy(p, interfaces) {
   const addAny = await p.confirm({
-    message: 'Add VLANs?',
+    message: 'Add VLAN or dummy interfaces?',
     initialValue: false,
   })
   if (p.isCancel(addAny)) return /** @type {symbol} */ (addAny)
-  if (!addAny) return vlans
+  if (!addAny) return
+
+  const etherKeys = ethernetLabels({ ports: {}, interfaces })
 
   let more = true
   while (more) {
-    const name = await p.text({
-      message: 'VLAN interface name',
+    const kind = await p.select({
+      message: 'Interface type',
+      options: [
+        { value: 'dummy', label: 'dummy (guest L3 only)' },
+        { value: 'vlan', label: 'vlan (parent ethernet)' },
+      ],
+      initialValue: 'dummy',
+    })
+    if (p.isCancel(kind)) return /** @type {symbol} */ (kind)
+
+    const labelRaw = await p.text({
+      message: 'Label (e.g. vlan2)',
       placeholder: 'vlan2',
       validate: (v) => {
         const err = validateIfaceName(v)
         if (err) return err
         const t = String(v).trim()
-        if (vlans[t]) return `VLAN ${t} already defined`
-        if (uplinks[t]) return `${t} collides with an uplink`
+        if (interfaces[t]) return `Label ${t} already defined`
         return undefined
       },
     })
-    if (p.isCancel(name)) return /** @type {symbol} */ (name)
-    const key = String(name).trim()
+    if (p.isCancel(labelRaw)) return /** @type {symbol} */ (labelRaw)
+    const label = String(labelRaw).trim()
 
-    const idRaw = await p.text({
-      message: `VLAN id for ${key}`,
-      placeholder: '2',
-      validate: validateVlanId,
-    })
-    if (p.isCancel(idRaw)) return /** @type {symbol} */ (idRaw)
-
-    /** @type {string | undefined} */
-    let link
-    if (uplinkKeys.length === 1) {
-      link = uplinkKeys[0]
+    if (kind === 'dummy') {
+      interfaces[label] = { type: 'dummy' }
     } else {
-      const picked = await p.select({
-        message: `Parent uplink for ${key}`,
-        options: uplinkKeys.map((u) => ({ value: u, label: u })),
+      const idRaw = await p.text({
+        message: `VLAN id for ${label}`,
+        placeholder: '2',
+        validate: validateVlanId,
       })
-      if (p.isCancel(picked)) return /** @type {symbol} */ (picked)
-      link = String(picked)
-    }
+      if (p.isCancel(idRaw)) return /** @type {symbol} */ (idRaw)
 
-    vlans[key] = {
-      id: Number(String(idRaw).trim()),
-      ...(link ? { link } : {}),
+      /** @type {string} */
+      let parent
+      if (etherKeys.length === 1) {
+        parent = /** @type {string} */ (etherKeys[0])
+      } else {
+        const picked = await p.select({
+          message: `Parent ethernet label for ${label}`,
+          options: etherKeys.map((u) => ({ value: u, label: u })),
+        })
+        if (p.isCancel(picked)) return /** @type {symbol} */ (picked)
+        parent = String(picked)
+      }
+
+      interfaces[label] = {
+        type: 'vlan',
+        id: Number(String(idRaw).trim()),
+        parent,
+      }
     }
 
     const again = await p.confirm({
-      message: 'Add another VLAN?',
+      message: 'Add another VLAN/dummy?',
       initialValue: false,
     })
     if (p.isCancel(again)) return /** @type {symbol} */ (again)
     more = Boolean(again)
   }
+}
 
-  return vlans
+/**
+ * Optional host attach on ethernet labels.
+ * @param {BindingPrompts} p
+ * @param {Record<string, InterfaceAnswers>} interfaces
+ * @returns {Promise<symbol | void>}
+ */
+async function promptOptionalVm(p, interfaces) {
+  const etherKeys = ethernetLabels({ ports: {}, interfaces })
+  const any = await p.confirm({
+    message: 'Configure host attach (ethernet.vm) now?',
+    initialValue: false,
+  })
+  if (p.isCancel(any)) return /** @type {symbol} */ (any)
+  if (!any) return
+
+  for (const label of etherKeys) {
+    const e = interfaces[label]
+    if (e?.type !== 'ethernet') continue
+
+    const mode = await p.select({
+      message: `Host attach for ${label}`,
+      options: [
+        { value: 'omit', label: 'Omit (no hypervisor NIC)' },
+        { value: 'nat', label: 'nat (userspace / passt)' },
+        { value: 'bridge', label: 'bridge' },
+      ],
+      initialValue: 'omit',
+    })
+    if (p.isCancel(mode)) return /** @type {symbol} */ (mode)
+    if (mode === 'omit') {
+      delete e.vm
+      continue
+    }
+    if (mode === 'nat') {
+      e.vm = { mode: 'nat' }
+      continue
+    }
+
+    const bridgeRaw = await p.text({
+      message: `Bridge for ${label}`,
+      initialValue: 'vmbr0',
+      validate: validateBridge,
+    })
+    if (p.isCancel(bridgeRaw)) return /** @type {symbol} */ (bridgeRaw)
+    e.vm = { mode: 'bridge', bridge: String(bridgeRaw).trim() }
+  }
 }
 
 /**
  * @param {BindingPrompts} p
- * @param {Record<string, VlanAnswers>} vlans
+ * @param {Record<string, InterfaceAnswers>} interfaces
  * @param {WizardScope | null} scope
  * @returns {Promise<Record<string, string> | symbol>}
  */
-async function promptVlanIpv4s(p, vlans, scope) {
+async function promptL3Addresses(p, interfaces, scope) {
   /** @type {Record<string, string>} */
   const out = {}
-  for (const name of Object.keys(vlans)) {
+  const labels = Object.keys(interfaces).filter((l) => {
+    const e = interfaces[l]
+    return e && (e.type === 'vlan' || e.type === 'dummy')
+  })
+  for (const label of labels) {
     const raw = await p.text({
-      message: wizardScoped(scope, `Host ipv4 on ${name} (empty = omit)`),
-      placeholder: '10.42.2.2',
-      validate: validateOptionalIpv4,
+      message: wizardScoped(scope, `IPv4 CIDR on ${label} (empty = omit)`),
+      placeholder: '10.42.2.2/24',
+      validate: validateOptionalIpv4Cidr,
     })
     if (p.isCancel(raw)) return /** @type {symbol} */ (raw)
     const t = String(raw).trim()
-    if (t) out[name] = t
+    if (t) out[label] = normalizeIpv4Cidr(t)
   }
   return out
 }
@@ -512,23 +687,30 @@ export async function promptNetworking(opts) {
   const ports = await promptPorts(p)
   if (typeof ports === 'symbol') return ports
 
-  const uplinks = await promptUplinks(p)
-  if (typeof uplinks === 'symbol') return uplinks
+  const interfaces = await promptEthernetInterfaces(p)
+  if (typeof interfaces === 'symbol') return interfaces
 
-  const vlans = await promptVlans(p, uplinks)
-  if (typeof vlans === 'symbol') return vlans
+  const extra = await promptVlanOrDummy(p, interfaces)
+  if (typeof extra === 'symbol') return extra
+
+  const vm = await promptOptionalVm(p, interfaces)
+  if (typeof vm === 'symbol') return vm
 
   /** @type {Record<string, Record<string, string>>} */
-  const ipv4ByProfile = {}
+  const l3ByProfile = {}
+  const l3Labels = Object.keys(interfaces).filter((l) => {
+    const e = interfaces[l]
+    return e && (e.type === 'vlan' || e.type === 'dummy')
+  })
 
-  if (Object.keys(vlans).length > 0) {
-    const setIpv4 = await p.confirm({
-      message: 'Set host ipv4 on VLANs?',
+  if (l3Labels.length > 0) {
+    const setL3 = await p.confirm({
+      message: 'Set IPv4 addresses on VLAN/dummy interfaces?',
       initialValue: true,
     })
-    if (p.isCancel(setIpv4)) return /** @type {symbol} */ (setIpv4)
+    if (p.isCancel(setL3)) return /** @type {symbol} */ (setL3)
 
-    if (setIpv4) {
+    if (setL3) {
       /** @type {Map<string, string[]>} */
       const profilesByTarget = new Map()
       for (const [profile, spec] of Object.entries(profiles)) {
@@ -539,19 +721,23 @@ export async function promptNetworking(opts) {
 
       if (profilesByTarget.size > 1) {
         for (const [target, profileKeys] of profilesByTarget) {
-          const ipv4s = await promptVlanIpv4s(p, vlans, { target })
-          if (typeof ipv4s === 'symbol') return ipv4s
+          const addrs = await promptL3Addresses(p, interfaces, { target })
+          if (typeof addrs === 'symbol') return addrs
           for (const profile of profileKeys) {
-            if (Object.keys(ipv4s).length) ipv4ByProfile[profile] = { ...ipv4s }
+            if (Object.keys(addrs).length) l3ByProfile[profile] = { ...addrs }
           }
         }
       } else {
         const onlyTarget = [...profilesByTarget.keys()][0]
-        const ipv4s = await promptVlanIpv4s(p, vlans, onlyTarget ? { target: onlyTarget } : null)
-        if (typeof ipv4s === 'symbol') return ipv4s
-        if (Object.keys(ipv4s).length) {
+        const addrs = await promptL3Addresses(
+          p,
+          interfaces,
+          onlyTarget ? { target: onlyTarget } : null,
+        )
+        if (typeof addrs === 'symbol') return addrs
+        if (Object.keys(addrs).length) {
           for (const profile of Object.keys(profiles)) {
-            ipv4ByProfile[profile] = { ...ipv4s }
+            l3ByProfile[profile] = { ...addrs }
           }
         }
       }
@@ -560,8 +746,8 @@ export async function promptNetworking(opts) {
 
   return {
     shared: Boolean(shareTopology),
-    topology: { ports, uplinks, vlans },
-    ipv4ByProfile,
+    topology: { ports, interfaces },
+    l3ByProfile,
   }
 }
 
@@ -628,7 +814,6 @@ export function applyNetworkingAnswers(root, answers, ctx) {
       }
       writeNetworkingIntoYamlFile(path, base)
     }
-    // No profiles yet — still write for declared envs.
     if (envsWritten.size === 0) {
       for (const env of Object.keys(ctx.environments)) {
         const path = join(provisionDir, provisionEnvFile(env))
@@ -640,8 +825,8 @@ export function applyNetworkingAnswers(root, answers, ctx) {
     }
   }
 
-  for (const [profile, ipv4ByVlan] of Object.entries(answers.ipv4ByProfile)) {
-    if (!ipv4ByVlan || Object.keys(ipv4ByVlan).length === 0) continue
+  for (const [profile, cidrByLabel] of Object.entries(answers.l3ByProfile)) {
+    if (!cidrByLabel || Object.keys(cidrByLabel).length === 0) continue
     const spec = ctx.profiles[profile]
     if (!spec) continue
     const path = join(provisionDir, provisionProfileFile(profile))
@@ -652,6 +837,6 @@ export function applyNetworkingAnswers(root, answers, ctx) {
         'utf8',
       )
     }
-    writeNetworkingIntoYamlFile(path, ipv4OverlayToPlain(ipv4ByVlan))
+    writeNetworkingIntoYamlFile(path, l3OverlayToPlain(cidrByLabel))
   }
 }

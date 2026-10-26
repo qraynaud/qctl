@@ -76,8 +76,12 @@ describe('loadEnvProvision (provision adapter)', () => {
     expect(Object.keys(sec.ports).sort()).toEqual(['cockpit', 'http', 'https', 'ssh'])
     expect(sec.ports.ssh).toMatchObject({ port: 22, forward: 2222 })
     expect(sec.ports.cockpit).toMatchObject({ port: 9090, forward: 9090 })
-    expect(sec.uplinks).toEqual({ eth0: { dhcp4: true } })
-    expect(sec.vlans).toEqual({})
+    expect(sec.interfaces.main).toMatchObject({
+      type: 'ethernet',
+      iface: 'eth0',
+      ipv4: { dhcp: true },
+    })
+    expect(sec.nets).toEqual([{ label: 'main', iface: 'eth0' }])
     expect(sec.data.disks?.data ?? {}).toEqual({})
     expect(sec.data.disks?.tanks?.tank?.vdevs?.data).toMatchObject({
       role: 'data',
@@ -160,8 +164,18 @@ describe('loadEnvProvision (provision adapter)', () => {
       api_token: 'SET_PROXMOX_API_TOKEN',
       node: 'pve',
     })
-    expect(sec.nets.length).toBeGreaterThan(0)
-    expect(sec.vlans).toEqual({})
+    expect(sec.nets).toEqual([
+      {
+        label: 'main',
+        iface: 'eth0',
+        vm: { mode: 'bridge', bridge: 'vmbr0', vlan: { mode: 'trunk', ids: [2] } },
+      },
+    ])
+    expect(
+      sec.interfaces.main.type === 'ethernet'
+        && sec.interfaces.main.vm?.mode === 'bridge'
+        && sec.interfaces.main.vm.bridge,
+    ).toBe('vmbr0')
   })
 
   test('unresolved !env throws a helpful error', async () => {
@@ -176,9 +190,6 @@ describe('loadEnvProvision (provision adapter)', () => {
   node: pve
   cpu: 2
   memory: 4096
-  net:
-    eth0:
-      bridge: vmbr0
 `,
       'utf8',
     )

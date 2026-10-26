@@ -184,7 +184,15 @@ export async function runInit(opts, deps = {}) {
     secrets,
     log,
     platform,
-    ...(seedConfig ? { seedConfig, ports: seedConfig.ports } : {}),
+    ...(seedConfig
+      ? {
+          seedConfig,
+          ...(seedConfig.networking?.ports ? { ports: seedConfig.networking.ports } : {}),
+          ...(seedConfig.networking?.interfaces
+            ? { interfaces: seedConfig.networking.interfaces }
+            : {}),
+        }
+      : {}),
     ...(osConfig ? { osConfig } : {}),
     ...ctxPatch,
   })

@@ -80,9 +80,17 @@ function sampleSeed() {
       admin: { username: 'admin', uid: 1000, gid: 1000 },
     },
     disks,
-    ports: {},
     packages: { distro: ['curl'], pipx: [], http: [] },
-    vlanParents: {},
+    networking: {
+      ports: {},
+      interfaces: {
+        vlan2: {
+          type: 'dummy',
+          iface: 'vlan2',
+          ipv4: { dhcp: false, addresses: ['10.0.2.2/24'] },
+        },
+      },
+    },
     profile: SEED_PROFILE.APPLIANCE,
     timezone: 'Europe/Paris',
     adminSshAuthorizedKeys: 'ssh-ed25519 AAAA example\n',
@@ -112,7 +120,6 @@ describe('materializeSeedSidecars', () => {
     const adminKeysPath = join(dir, 'admin_keys')
     const vlanParentsPath = join(dir, 'vlan-parents.env')
     const seed = sampleSeed()
-    seed.vlanParents = { VLAN2_PARENT: 'vlan2', VLAN2_IPV4: '10.0.2.2' }
     materializeSeedSidecars(seed, { adminKeysPath, vlanParentsPath })
     expect(readFileSync(adminKeysPath, 'utf8')).toContain('ssh-ed25519')
     expect(readFileSync(vlanParentsPath, 'utf8')).toBe('VLAN2_IPV4=10.0.2.2\nVLAN2_PARENT=vlan2\n')

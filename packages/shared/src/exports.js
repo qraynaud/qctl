@@ -124,6 +124,20 @@ export {
   seedSubidRangeSchema,
 } from './seed/config.js'
 export {
+  SEED_IFACE_TYPE,
+  applyableInterfaceEntries,
+  dummyIfaceNames,
+  isVlanParentEnvKey,
+  resolveParentIface,
+  seedInterfaceDummySchema,
+  seedInterfaceEntrySchema,
+  seedInterfaceEthernetSchema,
+  seedInterfaceVlanSchema,
+  seedInterfacesSchema,
+  vlanParentEnvLines,
+  vlanParentsFromInterfaces,
+} from './seed/interfaces.js'
+export {
   CONTAINER_REGISTRY_TAG,
   GUEST_TAG,
   VARLOCK_UNRESOLVED_PLUGIN_RE,

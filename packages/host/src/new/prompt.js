@@ -1,13 +1,12 @@
 /**
  * Interactive / `--yes` option resolution for `qctl new app|common|network|unit|env|profile`.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import * as clack from '@clack/prompts'
-import YAML from 'yaml'
 
-import { provisionEnvFile, provisionTargetFile } from '@qctl/shared'
+import { provisionTargetFile } from '@qctl/shared'
 
 import { isInteractiveTty } from '../init/quickstart.js'
 import {
@@ -28,7 +27,6 @@ import {
   targetLayerExists,
 } from './provision.js'
 
-/** @import { NetworkingTopology } from '../init/wizard/networking.js' */
 /** @import { OverlaysWizardAnswers } from '../init/wizard/overlays.js' */
 /** @import { BindingPrompts } from '../lib/binding.js' */
 /** @import { AppEngine, UnitContainerKind } from '../new.js' */
@@ -494,40 +492,6 @@ export async function resolveNewEnvOptions(flags, opts = {}) {
 }
 
 /**
- * Peek uplink / vlan topology from common + env YAML (best-effort for Proxmox net prompts).
- * @param {string} root
- * @param {string} env
- * @returns {{ topology: NetworkingTopology } | null}
- */
-export function peekNetworkingForEnv(root, env) {
-  /** @type {Partial<NetworkingTopology>} */
-  const merged = {}
-  for (const rel of ['common.yaml', provisionEnvFile(env)]) {
-    const path = join(root, 'provision', rel)
-    if (!existsSync(path)) continue
-    try {
-      const doc = /** @type {{ networking?: Partial<NetworkingTopology> }} */ (
-        YAML.parse(readFileSync(path, 'utf8')) ?? {}
-      )
-      if (doc.networking && typeof doc.networking === 'object' && !Array.isArray(doc.networking)) {
-        Object.assign(merged, doc.networking)
-      }
-    } catch {
-      // ignore parse errors; overlays fall back to eth0
-    }
-  }
-  const uplinksRaw = merged.uplinks
-  if (!uplinksRaw || typeof uplinksRaw !== 'object' || Array.isArray(uplinksRaw)) return null
-  /** @type {NetworkingTopology} */
-  const topology = {
-    ports: merged.ports ?? {},
-    uplinks: uplinksRaw,
-    vlans: merged.vlans ?? {},
-  }
-  return { topology }
-}
-
-/**
  * @param {string | undefined} raw
  * @returns {string | null}
  */
@@ -692,16 +656,13 @@ export async function resolveNewProfileOptions(flags, opts = {}) {
   /** @type {OverlaysWizardAnswers | null} */
   let overlays = null
   if (needOverlayWrite) {
-    const networking = peekNetworkingForEnv(root, env)
     if (yes || !canPrompt(opts)) {
-      const uplinkKeys = networking ? Object.keys(networking.topology.uplinks) : ['eth0']
-      if (target === 'proxmox') overlays = { proxmox: defaultProxmoxOverlay(uplinkKeys) }
+      if (target === 'proxmox') overlays = { proxmox: defaultProxmoxOverlay() }
       else overlays = { workstation: defaultWorkstationOverlay() }
     } else {
       const overlayAns = await promptOverlays({
         prompts: opts.prompts,
         profiles: { [name]: { env, target } },
-        networking,
       })
       if (typeof overlayAns === 'symbol') {
         const p = /** @type {NewPrompts} */ (asBindingPrompts(opts.prompts ?? clack))

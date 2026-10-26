@@ -122,12 +122,17 @@ describe('writeProvision', () => {
         },
         defaultProfile: 'a',
         sharedTopology: {
-          networking: { uplinks: { eth0: { dhcp4: true } } },
+          networking: {
+            interfaces: {
+              main: { type: 'ethernet', iface: 'eth0', ipv4: { dhcp: true } },
+            },
+          },
         },
       },
     })
     const common = readFileSync(join(root, 'provision', 'common.yaml'), 'utf8')
-    expect(common).toContain('uplinks:')
+    expect(common).toContain('interfaces:')
+    expect(common).toContain('main:')
     expect(existsSync(join(root, 'provision', 'env-a.yaml'))).toBe(true)
     expect(existsSync(join(root, 'provision', 'env-b.yaml'))).toBe(true)
     expect(existsSync(join(root, 'provision', 'target-workstation.yaml'))).toBe(true)

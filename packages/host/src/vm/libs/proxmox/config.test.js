@@ -40,7 +40,13 @@ describe('proxmox config', () => {
             storage: 'local-lvm',
             image_storage: 'local',
           },
-          nets: [{ bridge: 'vmbr0' }],
+          nets: [
+            {
+              label: 'main',
+              iface: 'eth0',
+              vm: { mode: 'bridge', bridge: 'vmbr0' },
+            },
+          ],
         })
       ),
     )
@@ -48,6 +54,8 @@ describe('proxmox config', () => {
     expect(cfg.apiUrl).toBe('https://pve.example')
     expect(cfg.node).toBe('pve')
     expect(cfg.storage).toBe('local-lvm')
+    expect(cfg.nets).toHaveLength(1)
+    expect(cfg.nets[0]?.vm).toMatchObject({ mode: 'bridge', bridge: 'vmbr0' })
   })
 
   test('tryLoadProxmoxConfig marks usable when fields present', async () => {

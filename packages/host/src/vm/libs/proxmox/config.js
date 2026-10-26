@@ -4,12 +4,10 @@
 import { loadEnvProvision, loadEnvProvisionSafe } from '../../../lib/load-config.js'
 import { tryGetRepoRoot } from '../../../lib/paths.js'
 import { die } from '../../../lib/util.js'
+import { VM_ATTACH_MODE } from '../../../provision/schema/networking.js'
 
-export {
-  applyNetsToForm,
-  formatNetsLabel,
-  mergeNetPreserveMac,
-} from './net.js'
+export { applyNetsToForm, formatNetsLabel, nicsSpecToAligned } from './net.js'
+export { reconcileRockyNics } from './nic-reconcile.js'
 
 /**
  * @param {{ env?: string, profile: string }} opts
@@ -41,8 +39,7 @@ export async function loadProxmoxConfig(opts) {
   const storage = (pve.storage != null && String(pve.storage).trim()) || 'local-lvm'
   const imageStorage = (pve.image_storage != null && String(pve.image_storage).trim()) || 'local'
 
-  const nets = sec.nets
-  const primary = nets[0] || { bridge: 'vmbr0' }
+  const nets = (sec.nets || []).filter((n) => n.vm?.mode === VM_ATTACH_MODE.BRIDGE)
 
   return {
     provisionDir: sec.provisionDir,
@@ -54,10 +51,6 @@ export async function loadProxmoxConfig(opts) {
     storage,
     imageStorage,
     nets,
-    bridge: primary.bridge,
-    vlan: primary.vlan,
-    trunks: primary.trunks,
-    mac: primary.mac,
     vmid: pve.vmid,
   }
 }
@@ -105,8 +98,7 @@ export async function tryLoadProxmoxConfig(opts) {
   }
   if (!node) errors.push(`proxmox.node missing in ${sec.path}`)
 
-  const nets = sec.nets
-  const primary = nets[0] || { bridge: 'vmbr0' }
+  const nets = (sec.nets || []).filter((n) => n.vm?.mode === VM_ATTACH_MODE.BRIDGE)
   const config = {
     provisionDir: sec.provisionDir,
     env,
@@ -117,10 +109,6 @@ export async function tryLoadProxmoxConfig(opts) {
     storage: (pve.storage && String(pve.storage).trim()) || 'local-lvm',
     imageStorage: (pve.image_storage && String(pve.image_storage).trim()) || 'local',
     nets,
-    bridge: primary.bridge,
-    vlan: primary.vlan,
-    trunks: primary.trunks,
-    mac: primary.mac,
     vmid: pve.vmid,
   }
 
