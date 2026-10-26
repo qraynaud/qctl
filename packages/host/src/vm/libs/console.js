@@ -169,13 +169,29 @@ export function matchInitTankFatal(line) {
 }
 
 /**
- * Appliance `vm up`: wait for cloud-final success/failure.
+ * Stamp-gated ready line from seed `wait-qctl-init.sh` (mirrored to serial).
+ * Prefer this over systemd Final Stage — Rocky 10 often never shows `[ OK ]`
+ * after `dnf upgrade` / `daemon-reexec`.
+ */
+export const QCTL_READY_RE = /^QCTL_READY\b/
+
+/** Pause after `QCTL_READY` before host tears down serial / restarts the guest. */
+export const QCTL_READY_SETTLE_MS = 3000
+
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
+export function isQctlReadyLine(line) {
+  return QCTL_READY_RE.test(stripAnsi(line).trim())
+}
+
+/**
+ * Appliance `vm up`: wait for first-boot success/failure on serial.
  *
- * Prefer systemd's Finished line (legacy description-only, or ≥257
- * `unit.service - Description`). Rocky 10 serial often never shows `[  OK  ]`
- * status (console goes elsewhere after many `systemctl daemon-reexec` during
- * `dnf upgrade`), so also accept our seed `final_message` marker — it runs as
- * the last Final Stage module and is mirrored to the serial console.
+ * Prefer stamp-gated `QCTL_READY` from wait-qctl-init. Also accept systemd's
+ * Finished Final Stage (legacy description-only, or ≥257
+ * `unit.service - Description`) when it reaches ttyS0.
  *
  * @param {string} line
  * @returns {SerialOutcome | null}
@@ -192,11 +208,10 @@ export function classifyCloudInitOutcome(line) {
   if (/rocky-(?:vw|tank|baseline):\s*ERROR:/i.test(plain)) {
     return { status: 'fail', line: plain.trim() }
   }
-  if (CLOUD_FINAL_OK.test(plain)) {
+  if (QCTL_READY_RE.test(plain.trim())) {
     return { status: 'ok', line: plain.trim() }
   }
-  // Seed final_message (packages/host/seed/cloud-init/user-data.yaml) — last Final Stage module.
-  if (/Expect disks:\s*OS \+ \/vw/i.test(plain)) {
+  if (CLOUD_FINAL_OK.test(plain)) {
     return { status: 'ok', line: plain.trim() }
   }
   return null

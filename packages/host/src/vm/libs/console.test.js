@@ -3,6 +3,7 @@ import {
   classifyContinueFirstBoot,
   classifyRebootReady,
   createSerialLineSink,
+  isQctlReadyLine,
   matchInitTankFatal,
   startSerialTcpFollow,
   stripAnsi,
@@ -34,6 +35,11 @@ describe('console helpers', () => {
   })
 
   test('classifyCloudInitOutcome ok and fail', () => {
+    expect(classifyCloudInitOutcome('QCTL_READY stamp=/var/lib/qctl/first-boot.done')).toEqual({
+      status: 'ok',
+      line: 'QCTL_READY stamp=/var/lib/qctl/first-boot.done',
+    })
+    expect(isQctlReadyLine('QCTL_READY stamp=/var/lib/qctl/first-boot.done')).toBe(true)
     expect(classifyCloudInitOutcome('[  OK  ] Finished Cloud-init: Final Stage')).toEqual({
       status: 'ok',
       line: '[  OK  ] Finished Cloud-init: Final Stage',
@@ -42,10 +48,11 @@ describe('console helpers', () => {
     expect(
       classifyCloudInitOutcome('[  OK  ] Finished cloud-final.service - Cloud-init: Final Stage.'),
     ).toMatchObject({ status: 'ok' })
-    // Seed final_message (serial-visible when [ OK ] status is not on ttyS0)
+    // Seed final_message is not a readiness proof (unconditional template text)
     expect(
       classifyCloudInitOutcome('Expect disks: OS + /vw + 5 data (raidz2) + 2 special (mirror).'),
-    ).toMatchObject({ status: 'ok' })
+    ).toBeNull()
+    expect(isQctlReadyLine('Expect disks: OS + /vw')).toBe(false)
     expect(classifyCloudInitOutcome('Failed to start Cloud-init: Final Stage')).toEqual({
       status: 'fail',
       line: 'Failed to start Cloud-init: Final Stage',

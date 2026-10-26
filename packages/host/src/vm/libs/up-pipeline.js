@@ -5,8 +5,10 @@
 import { chalk } from 'zx'
 
 import {
+  QCTL_READY_SETTLE_MS,
   classifyCloudInitOutcome,
   classifyContinueFirstBoot,
+  isQctlReadyLine,
   matchInitTankFatal,
 } from './console.js'
 import { composeScrubSeed, isInstalled, markInstalled } from './installed-lifecycle.js'
@@ -36,15 +38,15 @@ import { isAbortError, sleep, waitForSerialOutcome } from './wait.js'
 
 const CLOUD_INIT_WAIT = {
   /** @param {number} timeoutSec */
-  waiting: (timeoutSec) => `vm: waiting for cloud-init Final Stage (timeout ${timeoutSec}s)…`,
+  waiting: (timeoutSec) => `vm: waiting for QCTL_READY (first-boot stamp; timeout ${timeoutSec}s)…`,
   /** @param {number} timeoutSec */
-  timeoutLine: (timeoutSec) => `cloud-init Final Stage not seen within ${timeoutSec}s`,
+  timeoutLine: (timeoutSec) => `QCTL_READY not seen within ${timeoutSec}s`,
 }
 
 const CONTINUE_WAIT = {
   /** @param {number} timeoutSec */
   waiting: (timeoutSec) =>
-    `vm: waiting for first-boot continue (cloud-init or multi-user; timeout ${timeoutSec}s)…`,
+    `vm: waiting for first-boot continue (QCTL_READY or multi-user; timeout ${timeoutSec}s)…`,
   /** @param {number} timeoutSec */
   timeoutLine: (timeoutSec) => `first-boot continue not seen within ${timeoutSec}s`,
 }
@@ -103,6 +105,22 @@ async function waitSerial(follow, timeoutSec, signal, msgs) {
     waiting: msgs.waiting(timeoutSec),
     timeoutLine: msgs.timeoutLine(timeoutSec),
   })
+}
+
+/**
+ * After stamp-gated `QCTL_READY`, pause before tearing down serial / restarting
+ * so the guest can finish Final Stage modules and flush stamps.
+ *
+ * @param {SerialWaitOutcome} outcome
+ * @param {AbortSignal} signal
+ * @returns {Promise<void>}
+ */
+async function settleAfterQctlReady(outcome, signal) {
+  if (outcome.status !== 'ok' || !isQctlReadyLine(outcome.line)) return
+  console.log(
+    chalk.dim(`vm: QCTL_READY seen — settling ${QCTL_READY_SETTLE_MS / 1000}s before detach…`),
+  )
+  await sleep(QCTL_READY_SETTLE_MS, signal)
 }
 
 /**
@@ -319,6 +337,7 @@ async function runPersistentUp(ctx, prep, module, specs, timeoutSec, followConso
       if (!follow) throw new Error('vm up: start(serial) returned no follow')
       console.log(chalk.green('vm: started — streaming serial until first-boot continue'))
       const outcome = await waitSerial(follow, timeoutSec, signal, CONTINUE_WAIT)
+      await settleAfterQctlReady(outcome, signal)
       await follow.stop()
       follow = null
       if (
@@ -357,14 +376,15 @@ async function runPersistentUp(ctx, prep, module, specs, timeoutSec, followConso
       classify: classifyCloudInitOutcome,
     })
     if (!follow) throw new Error('vm up: start(serial) returned no follow')
-    console.log(chalk.green('vm: started — streaming serial until cloud-init Final Stage'))
+    console.log(chalk.green('vm: started — streaming serial until QCTL_READY (first-boot stamp)'))
     const outcome = await waitSerial(follow, timeoutSec, signal, CLOUD_INIT_WAIT)
+    await settleAfterQctlReady(outcome, signal)
     await follow.stop()
     follow = null
     if (
       reportSerialWaitOutcome(outcome, {
-        okTitle: 'vm: cloud-init Final Stage OK',
-        failTitle: 'vm: cloud-init Final Stage failed (or timed out)',
+        okTitle: 'vm: first-boot OK (QCTL_READY)',
+        failTitle: 'vm: first-boot failed (or timed out)',
         leaveHint: `vm: ${ctx.name} left running for diagnosis`,
       })
     ) {
