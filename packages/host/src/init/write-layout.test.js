@@ -62,7 +62,9 @@ describe('layout ensure helpers', () => {
   test('ensureRootEnvSchema appends stub when QCTL_ENV missing', () => {
     const r = ensureRootEnvSchema('# header\n')
     expect(r.text).toContain('QCTL_ENV=dev')
-    expect(r.text).toContain('APP_ROOT=')
+    expect(r.text).toContain('ENV=')
+    expect(r.text).toContain('TZ=')
+    expect(r.text).not.toContain('APP_ROOT=')
   })
 })
 

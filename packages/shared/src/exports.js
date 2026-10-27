@@ -1,6 +1,6 @@
 /** Runtime public API for `@qctl/shared`. Types: see `index.ts`. */
 
-export const QCTL_VERSION = '0.7.0'
+export const QCTL_VERSION = '0.7.1'
 
 /**
  * @param {never} value

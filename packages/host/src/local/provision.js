@@ -1,9 +1,102 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { SEED_PROFILE, osConfigSchema } from '@qctl/shared'
 
+import { getRockySeedRoot } from '../seed-root.js'
 import { execInAppliance } from './exec-in.js'
-import { log, logDim } from './util.js'
+import { die, log, logDim } from './util.js'
 
 /** @import { LocalContext } from './context.js' */
+
+/**
+ * Unit bodies from the Rocky seed kit (`first-boot/`), same as VM cloud-init / guest baseline.
+ * @returns {{ supervisor: string, appProxy: string }}
+ */
+export function qctlUnitTextsFromSeed() {
+  const root = getRockySeedRoot()
+  const supervisorPath = join(root, 'first-boot', 'qctl-supervisor.service')
+  const appProxyPath = join(root, 'first-boot', 'qctl-app@.service')
+  try {
+    return {
+      supervisor: readFileSync(supervisorPath, 'utf8'),
+      appProxy: readFileSync(appProxyPath, 'utf8'),
+    }
+  } catch (err) {
+    die(
+      `missing seed unit files under ${join(root, 'first-boot')}\n`
+        + `  ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+}
+
+/**
+ * Install `qctl-supervisor.service` + `qctl-app@.service` (system + user) and enable supervisor.
+ * Mirrors guest `host-baseline` ensureQctlSupervisorBaseline for the nested local appliance.
+ * @param {LocalContext} ctx
+ * @returns {Promise<void>}
+ */
+export async function ensureQctlSystemdUnits(ctx) {
+  const { supervisor, appProxy } = qctlUnitTextsFromSeed()
+  const user = ctx.appsUsername
+  log('install qctl-supervisor + qctl-app@; enable supervisor')
+
+  // Concatenate unit bodies so seed content cannot interpolate into this template.
+  const script = [
+    'set -euo pipefail',
+    `APPS_USER=${JSON.stringify(user)}`,
+    'uid=$(id -u "$APPS_USER")',
+    'rt=/run/user/$uid',
+    'bus=$rt/bus',
+    "cat > /etc/systemd/system/qctl-supervisor.service <<'QCTL_UNIT_EOF'",
+    supervisor.replace(/\n$/, ''),
+    'QCTL_UNIT_EOF',
+    'mkdir -p /etc/systemd/user',
+    "cat > /etc/systemd/system/qctl-app@.service <<'QCTL_UNIT_EOF'",
+    appProxy.replace(/\n$/, ''),
+    'QCTL_UNIT_EOF',
+    'cp -f /etc/systemd/system/qctl-app@.service /etc/systemd/user/qctl-app@.service',
+    'chmod 0644 /etc/systemd/system/qctl-supervisor.service \\',
+    '  /etc/systemd/system/qctl-app@.service \\',
+    '  /etc/systemd/user/qctl-app@.service',
+    'systemctl daemon-reload',
+    'systemctl start "user@${uid}.service"',
+    'for i in $(seq 1 50); do',
+    '  [ -S "$bus" ] && break',
+    '  sleep 0.2',
+    'done',
+    'runuser -u "$APPS_USER" -- env XDG_RUNTIME_DIR="$rt" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" \\',
+    '  systemctl --user daemon-reload',
+    'systemctl enable --now qctl-supervisor.service',
+    'systemctl is-active --quiet qctl-supervisor.service',
+  ].join('\n')
+
+  await execInAppliance(ctx, script)
+  logDim('qctl-supervisor active; qctl-app@ installed (system + user)')
+}
+
+/**
+ * mkdir + chown provision disk mount roots inside the appliance (not `repoDir` —
+ * that bind is the instance tree on the host).
+ * @param {LocalContext} ctx
+ * @returns {Promise<void>}
+ */
+export async function ensureLocalDiskMountOwnership(ctx) {
+  const user = ctx.appsUsername
+  const mounts = [...new Set((ctx.diskMounts ?? []).map((m) => m.mount))]
+  if (!mounts.length) return
+
+  const script = [
+    'set -euo pipefail',
+    `APPS_USER=${JSON.stringify(user)}`,
+    ...mounts.flatMap((mount) => [
+      `mkdir -p ${JSON.stringify(mount)}`,
+      `chown -R "$APPS_USER:$APPS_USER" ${JSON.stringify(mount)}`,
+    ]),
+  ].join('\n')
+
+  await execInAppliance(ctx, script)
+}
 
 /**
  * Shell fragment: ensure each type:dummy iface exists and is up.
@@ -26,7 +119,7 @@ export function dummyIfacesShell(names) {
 }
 
 /**
- * Bootstrap apps user, nested podman, volumes, provision `type:dummy` ifaces,
+ * Bootstrap apps user, nested podman, provision `type:dummy` ifaces,
  * and `/etc/qctl/config.json` (same day-2 identity contract as VM guest load-seed).
  * `/etc/subuid`+`/etc/subgid` match provision `users.apps` exactly.
  * @param {LocalContext} ctx
@@ -40,10 +133,11 @@ export async function provisionAppliance(ctx) {
   const home = `/home/${user}`
   const subUidLast = ctx.appsSubuid.start + ctx.appsSubuid.count - 1
   const subGidLast = ctx.appsSubgid.start + ctx.appsSubgid.count - 1
+  const repoDir = ctx.repoDir
 
   const os = osConfigSchema.parse({
     env: ctx.env,
-    root: '/tank/rocky',
+    root: repoDir,
     repo: ctx.repo,
     quadletUser: user,
     apps: {
@@ -63,6 +157,14 @@ export async function provisionAppliance(ctx) {
   })
   const osJson = JSON.stringify(os, null, 2)
   const dummies = dummyIfacesShell(ctx.dummyIfaces ?? [])
+  const mountChown = (ctx.diskMounts ?? [])
+    .map((m) => m.mount)
+    .filter((m, i, arr) => arr.indexOf(m) === i)
+    .map(
+      (mount) =>
+        `mkdir -p ${JSON.stringify(mount)}\nchown -R "$APPS_USER:$APPS_USER" ${JSON.stringify(mount)}`,
+    )
+    .join('\n')
 
   const script = `
 set -euo pipefail
@@ -85,13 +187,10 @@ sed -i "/^\${APPS_USER}:/d" /etc/subuid /etc/subgid 2>/dev/null || true
 usermod --add-subuids "${ctx.appsSubuid.start}-${subUidLast}" "$APPS_USER"
 usermod --add-subgids "${ctx.appsSubgid.start}-${subGidLast}" "$APPS_USER"
 mkdir -p /usr/local/lib/rocky /etc/qctl
-printf '%s\\n' "APP_ROOT=/tank/rocky/volumes" \\
-  > /usr/local/lib/rocky/local-overrides.env
 cat > /etc/qctl/config.json <<'EOF'
 ${osJson}
 EOF
 chmod 0644 /etc/qctl/config.json
-export APP_ROOT=/tank/rocky/volumes
 mkdir -p "${home}/.config/containers/containers.conf.d"
 cp /etc/containers/containers.conf.d/90-ci-uts.conf \\
   "${home}/.config/containers/containers.conf.d/90-ci-uts.conf"
@@ -100,10 +199,8 @@ loginctl enable-linger "$APPS_USER"
 systemctl start "user@$(id -u "$APPS_USER").service"
 systemctl enable --now podman.socket
 runuser -u "$APPS_USER" -- bash -lc 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user enable --now podman.socket; podman system migrate >/dev/null 2>&1 || true'
-mkdir -p /tank/rocky/volumes
-chown -R "$APPS_USER:$APPS_USER" /tank/rocky/volumes
+${mountChown}
 ${dummies}
-chown -R "$APPS_USER:$APPS_USER" /tank/rocky/volumes
 `
   await execInAppliance(ctx, script)
   logDim('provision complete')

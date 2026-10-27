@@ -49,7 +49,7 @@ describe('hostTimezone', () => {
 describe('projectToProvisionMeta / dependencies', () => {
   test('maps production envs and profiles', () => {
     const answers = defaultProjectAnswers('/tmp/x')
-    answers.environments.prod = { production: true, appRoot: '/tank/apps' }
+    answers.environments.prod = { production: true }
     answers.profiles.pve = { env: 'prod', target: 'proxmox' }
     answers.defaultProfile = 'lab'
     answers.shareTopology = true
@@ -80,8 +80,8 @@ describe('writeProject', () => {
     temps.push(join(root, '..'))
     const answers = defaultProjectAnswers(root, { initialName: 'custom-demo' })
     answers.environments = {
-      staging: { production: false, appRoot: './volumes' },
-      prod: { production: true, appRoot: '/tank/apps' },
+      staging: { production: false },
+      prod: { production: true },
     }
     answers.profiles = {
       lab: { env: 'staging', target: 'workstation' },
@@ -125,16 +125,17 @@ describe('writeProject', () => {
 
     const staging = readFileSync(join(root, '.env.staging'), 'utf8')
     expect(staging).toContain('ENV=staging')
-    expect(staging).toContain('APP_ROOT=./volumes')
     expect(staging).toContain('TZ=Europe/Paris')
+    expect(staging).not.toContain('APP_ROOT=')
 
     const prod = readFileSync(join(root, '.env.prod'), 'utf8')
-    expect(prod).toContain('APP_ROOT=/tank/apps')
+    expect(prod).not.toContain('APP_ROOT=')
     expect(prod).toContain(`@plugin(${VAULTWARDEN_PLUGIN})`)
     expect(prod).toContain('@plugin(@varlock/1password-plugin)')
 
     const schema = readFileSync(join(root, '.env.schema'), 'utf8')
     expect(schema).toMatch(/^QCTL_ENV=staging$/m)
+    expect(schema).not.toContain('APP_ROOT=')
   })
 })
 
@@ -148,7 +149,6 @@ describe('promptProject', () => {
       'wiz-app', // name
       hostTimezone(), // tz
       'dev', // env
-      './volumes', // appRoot
       'lab', // profile
       // disks: interleaved (mode → OS size → structure + member sizes)
       '20G', // OS size
@@ -224,7 +224,6 @@ describe('promptProject', () => {
     expect(answers.defaultProfile).toBeUndefined()
     expect(answers.environments.dev).toEqual({
       production: false,
-      appRoot: './volumes',
     })
     expect(answers.profiles.lab).toEqual({ env: 'dev', target: 'workstation' })
     expect(answers.disks?.sharedStructure).toBe(true)

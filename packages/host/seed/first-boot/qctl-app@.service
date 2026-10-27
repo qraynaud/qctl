@@ -1,0 +1,18 @@
+# Managed by qctl — cross-engine dependency proxy for applications/%i
+[Unit]
+Description=qctl app proxy (%i)
+Documentation=https://github.com/qctl/qctl
+Wants=qctl-supervisor.service
+After=qctl-supervisor.service
+
+[Service]
+Type=notify
+# Bun cannot sd_notify via unix_dgram; we shell out to systemd-notify (child PID).
+NotifyAccess=all
+ExecStart=/usr/local/bin/qctl _internal_app_proxy %i
+ExecStop=/usr/local/bin/qctl _internal_app_proxy --release %i
+# Main exits non-zero when the peer stamp clears/fails so Requires=/BindsTo= tear down.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

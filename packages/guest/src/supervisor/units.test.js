@@ -69,6 +69,11 @@ describe('qctl-app@ units', () => {
     expect(QCTL_APP_PROXY_UNIT).toBe('qctl-app@.service')
   })
 
+  test('seed first-boot unit matches qctlAppProxyUnitText()', () => {
+    const seedPath = join(import.meta.dir, '../../../host/seed/first-boot/qctl-app@.service')
+    expect(readFileSync(seedPath, 'utf8')).toBe(qctlAppProxyUnitText())
+  })
+
   test('install writes system+user units and daemon-reloads both buses', async () => {
     const root = makeTempDir()
     const systemDir = join(root, 'system')

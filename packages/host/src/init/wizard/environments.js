@@ -12,7 +12,6 @@ import { wizardScoped, wizardStep } from './ui.js'
 /**
  * @typedef {object} EnvironmentSpec
  * @property {boolean} production
- * @property {string} appRoot
  */
 
 /**
@@ -27,7 +26,7 @@ import { wizardScoped, wizardStep } from './ui.js'
 export function defaultEnvironmentsAnswers() {
   return {
     environments: {
-      dev: { production: false, appRoot: './volumes' },
+      dev: { production: false },
     },
     shareTopology: false,
   }
@@ -67,17 +66,8 @@ export async function promptEnvironments(opts = {}) {
     })
     if (p.isCancel(production)) return /** @type {symbol} */ (production)
 
-    const appRoot = await p.text({
-      message: wizardScoped({ env: key }, 'Application root folder (APP_ROOT)'),
-      initialValue: production ? '/tank/apps' : './volumes',
-      validate: (/** @type {string | undefined} */ v) =>
-        v && String(v).trim() ? undefined : 'Application root folder required',
-    })
-    if (p.isCancel(appRoot)) return /** @type {symbol} */ (appRoot)
-
     environments[key] = {
       production: Boolean(production),
-      appRoot: String(appRoot).trim(),
     }
     firstEnv = false
 
