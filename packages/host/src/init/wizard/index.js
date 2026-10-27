@@ -140,7 +140,6 @@ export function applyProjectRootEnv(root, answers) {
       text = `# Values for QCTL_ENV=${env}\n`
     }
     text = ensureEnvValue(text, 'ENV', env).text
-    text = ensureEnvValue(text, 'APP_ROOT', spec.appRoot).text
     text = ensureEnvValue(text, 'TZ', answers.tz).text
     if (spec.production) {
       const missing = (answers.varlockPlugins ?? []).filter(

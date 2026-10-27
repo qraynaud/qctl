@@ -132,8 +132,9 @@ describe('initInstance', () => {
     expect(resolvedNonSensitive(dev)).toMatchObject({ QCTL_ENV: 'dev' })
     expect(resolvedNonSensitive(dev, { includeInternal: true })).toMatchObject({
       ENV: 'dev',
-      APP_ROOT: './volumes',
+      TZ: 'UTC',
     })
+    expect(resolvedNonSensitive(dev, { includeInternal: true }).APP_ROOT).toBeUndefined()
     expect(resolvedNonSensitive(dev).ENV).toBeUndefined() // @internal
     expect(sensitiveKeys(dev)).not.toContain('VW_CLIENT_ID')
 
@@ -154,8 +155,9 @@ describe('initInstance', () => {
     })
     expect(resolvedNonSensitive(prod, { includeInternal: true })).toMatchObject({
       ENV: 'prod',
-      APP_ROOT: '/tank/apps',
+      TZ: 'UTC',
     })
+    expect(resolvedNonSensitive(prod, { includeInternal: true }).APP_ROOT).toBeUndefined()
   })
   test('refuses to re-init without --force', () => {
     const root = makeTempDir()

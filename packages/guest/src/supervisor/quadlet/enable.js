@@ -163,7 +163,6 @@ export async function runEnable(ctx, opts) {
   ctx.print(`dest=${paths.dest}`)
   ctx.print(`env=${renv.qctlEnv} (varlock graph: ${join(dir, '.env.schema')})`)
   if (renv.appEnvLabel) ctx.print(`app_env=${renv.appEnvLabel}`)
-  ctx.print(`APP_ROOT=${renv.scope.APP_ROOT ?? '?'}`)
   ctx.print(`instance=${ctx.root}`)
   ctx.print(
     install

@@ -1,12 +1,17 @@
 /**
  * Nested systemd appliance container: create / start / stop / wait.
  */
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { ensureLocalDiskHostDirs } from './context.js'
 import { podman, stripPodmanNoise } from './podman.js'
-import { provisionAppliance } from './provision.js'
+import {
+  ensureLocalDiskMountOwnership,
+  ensureQctlSystemdUnits,
+  provisionAppliance,
+} from './provision.js'
 import { die, log, logDim } from './util.js'
 
 /** @import { LocalContext } from './context.js' */
@@ -22,6 +27,28 @@ export function hostContainersAuthFile() {
   if (uid != null) candidates.push(join('/run/user', String(uid), 'containers/auth.json'))
   candidates.push(join(homedir(), '.config/containers/auth.json'))
   return candidates.find((p) => existsSync(p)) || null
+}
+
+/**
+ * Podman `-v` fragments for a new appliance: disk mounts (parent-first), then
+ * instance → `repoDir`, then guest tooling (+ optional encrypt helper).
+ * @param {LocalContext} ctx
+ * @returns {string[]}
+ */
+export function localApplianceVolumeArgs(ctx) {
+  /** @type {string[]} */
+  const args = []
+  for (const m of ctx.diskMounts ?? []) {
+    args.push('-v', `${join(ctx.root, m.hostRel)}:${m.mount}:Z`)
+  }
+  args.push('-v', `${ctx.root}:${ctx.repoDir}:Z`)
+  args.push('-v', `${ctx.guestBin}:/usr/local/bin/qctl:ro`)
+  args.push('-v', `${ctx.platformModulePath}:/usr/local/lib/qctl/${ctx.platformBasename}:ro`)
+  if (ctx.encryptPath) {
+    // Varlock resolves the helper beside the qctl binary (RO guest mount alone is not enough).
+    args.push('-v', `${ctx.encryptPath}:/usr/local/bin/varlock-local-encrypt:ro`)
+  }
+  return args
 }
 
 /**
@@ -79,6 +106,16 @@ export async function waitSystemd(ctx, seconds = 90) {
 }
 
 /**
+ * Disk mount ownership + supervisor units (idempotent).
+ * @param {LocalContext} ctx
+ * @returns {Promise<void>}
+ */
+async function ensureLocalDay2(ctx) {
+  await ensureLocalDiskMountOwnership(ctx)
+  await ensureQctlSystemdUnits(ctx)
+}
+
+/**
  * Start (or reuse) the nested appliance and provision once when newly created.
  * @param {LocalContext} ctx
  * @returns {Promise<void>}
@@ -86,6 +123,7 @@ export async function waitSystemd(ctx, seconds = 90) {
 export async function ensureAppliance(ctx) {
   if (await applianceRunning(ctx)) {
     logDim(`appliance already running (${ctx.name})`)
+    await ensureLocalDay2(ctx)
     return
   }
 
@@ -96,10 +134,11 @@ export async function ensureAppliance(ctx) {
       die(String(r.stderr || r.stdout).trim() || 'podman start failed')
     }
     await waitSystemd(ctx)
+    await ensureLocalDay2(ctx)
     return
   }
 
-  mkdirSync(join(ctx.root, 'volumes'), { recursive: true })
+  ensureLocalDiskHostDirs(ctx.root, ctx.diskMounts ?? [])
 
   log(`boot systemd appliance (${ctx.image})`)
   const runArgs = [
@@ -112,20 +151,13 @@ export async function ensureAppliance(ctx) {
     '--cgroupns=host',
     ...ctx.uidMapArgs,
     ...ctx.publishArgs,
-    '-v',
-    `${ctx.root}:/tank/rocky:Z`,
-    '-v',
-    `${ctx.guestBin}:/usr/local/bin/qctl:ro`,
-    '-v',
-    `${ctx.platformModulePath}:/usr/local/lib/qctl/${ctx.platformBasename}:ro`,
+    ...localApplianceVolumeArgs(ctx),
     '-e',
     'container=podman',
     '-e',
     `QCTL_PLATFORM_MODULE=/usr/local/lib/qctl/${ctx.platformBasename}`,
     '-e',
     'QCTL_LIB_DIR=/usr/local/lib/qctl',
-    '-e',
-    'APP_ROOT=/tank/rocky/volumes',
     '-e',
     'CONTAINERS_LOG_LEVEL=fatal',
     ctx.image,
@@ -160,4 +192,5 @@ export async function ensureAppliance(ctx) {
 
   await waitSystemd(ctx)
   await provisionAppliance(ctx)
+  await ensureLocalDay2(ctx)
 }

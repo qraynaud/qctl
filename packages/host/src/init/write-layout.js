@@ -172,7 +172,7 @@ export function ensureGitignore(text) {
 }
 
 /**
- * Ensure root `.env.schema` has QCTL_ENV + internal ENV/APP_ROOT/TZ stubs.
+ * Ensure root `.env.schema` has QCTL_ENV + internal ENV/TZ stubs.
  * @param {string} text
  * @returns {{ text: string, changed: boolean }}
  */
@@ -189,15 +189,13 @@ export function ensureRootEnvSchema(text) {
       '# @internal @public @optional',
       'ENV=',
       '# @internal @public @optional',
-      'APP_ROOT=',
-      '# @internal @public @optional',
       'TZ=',
     ].join('\n')
     next = next === '' || next.endsWith('\n') ? `${next}${stub}\n` : `${next}\n${stub}\n`
     return { text: next, changed: true }
   }
 
-  for (const key of ['ENV', 'APP_ROOT', 'TZ']) {
+  for (const key of ['ENV', 'TZ']) {
     if (!parseLines(next).lines.some((l) => lineMatchesKey(l, key))) {
       const block = `# @internal @public @optional\n${key}=`
       next = next.endsWith('\n') ? `${next}${block}\n` : `${next}\n${block}\n`

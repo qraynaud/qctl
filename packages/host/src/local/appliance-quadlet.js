@@ -4,31 +4,20 @@
 import { shellQuote } from '../lib/shell-quote.js'
 import { execInAppliance } from './exec-in.js'
 import { podman, stripPodmanNoise } from './podman.js'
+import { ensureLocalDiskMountOwnership } from './provision.js'
 import { die, log, logDim } from './util.js'
 
 /** @import { LocalContext } from './context.js' */
 
 /**
- * Ensure tank dirs exist for common app volume layouts (bind mounts need sources).
+ * Re-assert ownership on provision disk mount roots before quadlet up.
+ * App volume subdirs are created by unit ExecStartPre — do not invent
+ * `/tank/rocky/volumes/<app>` paths here.
  * @param {LocalContext} ctx
- * @param {string} [app]
  * @returns {Promise<void>}
  */
-export async function ensureTankDirs(ctx, app) {
-  const appPart = app
-    ? `
-mkdir -p /tank/rocky/volumes/${shellQuote(app)}/config \\
-         /tank/rocky/volumes/${shellQuote(app)}/data \\
-         /tank/rocky/volumes/${shellQuote(app)}
-`
-    : ''
-  await execInAppliance(
-    ctx,
-    `mkdir -p /tank/rocky/volumes
-${appPart}
-chown -R apps:apps /tank/rocky/volumes
-`,
-  )
+export async function ensureTankDirs(ctx) {
+  await ensureLocalDiskMountOwnership(ctx)
 }
 
 /**
@@ -40,7 +29,7 @@ export async function quadletUp(ctx, apps) {
   const list = (Array.isArray(apps) ? apps : [apps]).map(String).filter(Boolean)
   if (!list.length) return
   log(`quadlet up ${list.join(' ')}`)
-  for (const app of list) await ensureTankDirs(ctx, app)
+  await ensureTankDirs(ctx)
   await execInAppliance(ctx, `qctl quadlet up ${list.map(shellQuote).join(' ')}`)
 }
 

@@ -12,13 +12,18 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 /** @import { LocalContext } from './context.js' */
 
-/** @returns {LocalContext} */
-function fakeCtx() {
+/**
+ * @param {Partial<LocalContext>} [over]
+ * @returns {LocalContext}
+ */
+function fakeCtx(over = {}) {
   return /** @type {LocalContext} */ ({
     name: 'qctl-local-test',
     root: '/tmp/inst',
     env: 'dev',
     appsUsername: 'apps',
+    diskMounts: [],
+    ...over,
   })
 }
 
@@ -65,15 +70,28 @@ describe('quadlet up/down', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 
-  test('quadletUp ensures tank dirs then runs qctl', async () => {
+  test('quadletUp chowns disk mounts once then runs qctl', async () => {
     /** @type {string[]} */
     const scripts = []
     spyOn(execIn, 'execInAppliance').mockImplementation(async (_ctx, script) => {
       scripts.push(String(script))
       return { exitCode: 0, stdout: '', stderr: '' }
     })
-    await quadletUp(fakeCtx(), ['web'])
-    expect(scripts.some((s) => s.includes("/tank/rocky/volumes/'web'"))).toBe(true)
+    await quadletUp(
+      fakeCtx({
+        diskMounts: [
+          {
+            kind: 'tank',
+            key: 'tank',
+            hostRel: 'volumes/tank/tank',
+            mount: '/tank',
+          },
+        ],
+      }),
+      ['web'],
+    )
+    expect(scripts.some((s) => s.includes('chown -R "$APPS_USER:$APPS_USER" "/tank"'))).toBe(true)
+    expect(scripts.every((s) => !s.includes('/tank/rocky/volumes'))).toBe(true)
     expect(scripts.some((s) => s.includes("qctl quadlet up 'web'"))).toBe(true)
   })
 
@@ -99,15 +117,30 @@ describe('quadlet up/down', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 
-  test('ensureTankDirs without app only creates volumes root', async () => {
+  test('ensureTankDirs chowns disk mounts; no-ops without mounts', async () => {
     /** @type {string[]} */
     const scripts = []
-    spyOn(execIn, 'execInAppliance').mockImplementation(async (_ctx, script) => {
+    const spy = spyOn(execIn, 'execInAppliance').mockImplementation(async (_ctx, script) => {
       scripts.push(String(script))
       return { exitCode: 0, stdout: '', stderr: '' }
     })
-    await ensureTankDirs(fakeCtx())
-    expect(scripts[0]).toContain('mkdir -p /tank/rocky/volumes')
-    expect(scripts[0]).not.toContain('/volumes/web')
+    await ensureTankDirs(fakeCtx({ diskMounts: [] }))
+    expect(spy).not.toHaveBeenCalled()
+
+    await ensureTankDirs(
+      fakeCtx({
+        diskMounts: [
+          {
+            kind: 'data',
+            key: 'vw',
+            hostRel: 'volumes/data/vw',
+            mount: '/vw',
+          },
+        ],
+      }),
+    )
+    expect(scripts[0]).toContain('mkdir -p "/vw"')
+    expect(scripts[0]).toContain('chown -R "$APPS_USER:$APPS_USER" "/vw"')
+    expect(scripts[0]).not.toContain('/tank/rocky/volumes')
   })
 })

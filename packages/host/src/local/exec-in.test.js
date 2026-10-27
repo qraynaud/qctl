@@ -1,17 +1,15 @@
-import { LOCAL_APP_ROOT, applianceExecEnv } from './exec-in.js'
+import { applianceExecEnv } from './exec-in.js'
 import { describe, expect, test } from 'bun:test'
 
 describe('applianceExecEnv', () => {
-  test('exports app root constant', () => {
-    expect(LOCAL_APP_ROOT).toBe('/tank/rocky/volumes')
-  })
-
-  test('builds guest qctl env for podman exec', () => {
+  test('builds guest qctl env for podman exec (no path overrides)', () => {
     const env = applianceExecEnv({
       env: 'prod',
       platformBasename: 'qctl-platform-rocky.mjs',
       name: 'qctl-local-x',
       root: '/tmp',
+      repoDir: '/tank/rocky',
+      diskMounts: [],
       appsUsername: 'apps',
       appsUid: 900,
       appsGid: 900,
@@ -22,6 +20,7 @@ describe('applianceExecEnv', () => {
       adminGid: 1000,
       repo: { vcs: 'git' },
       guestBin: '/x',
+      encryptPath: null,
       platformModulePath: '/x',
       image: 'img',
       ports: {
@@ -34,7 +33,9 @@ describe('applianceExecEnv', () => {
     })
     expect(env.QCTL_ENV).toBeUndefined()
     expect(env.QCTL_ROOT).toBeUndefined()
+    expect(env.APP_ROOT).toBeUndefined()
+    expect(env.TANK_ROOT).toBeUndefined()
     expect(env.QCTL_PLATFORM_MODULE).toBe('/usr/local/lib/qctl/qctl-platform-rocky.mjs')
-    expect(env.APP_ROOT).toBe(LOCAL_APP_ROOT)
+    expect(env.CONTAINERS_LOG_LEVEL).toBe('fatal')
   })
 })
